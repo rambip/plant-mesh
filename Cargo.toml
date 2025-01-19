@@ -1,0 +1,25 @@
+[package]
+name = "rust-geometry"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = {version="0.15.1", default-features=false, features=[
+    "bevy_gizmos",
+    "bevy_render",
+    "bevy_window",
+    "x11",
+    # TODO: do my own lighting ?
+    "bevy_pbr",
+    # For camera ?
+    "tonemapping_luts"
+]}
+rand = "0.8.5"
+
+# Enable a small amount of optimization in the dev profile.
+[profile.dev]
+opt-level = 1
+
+# Enable a large amount of optimization in the dev profile for dependencies.
+[profile.dev.package."*"]
+opt-level = 3
