@@ -3,9 +3,8 @@
 use bevy::prelude::*;
 use std::f32::consts::PI;
 
-mod experiments;
-use experiments::*;
-
+mod tree;
+use tree::Tree;
 
 fn main() {
     App::new()
@@ -50,6 +49,7 @@ fn setup(
     commands.spawn((
         Tree::default(),
         Mesh3d::default(),
+        NeedRender(true),
         MeshMaterial3d(materials.add(Color::srgb_u8(100, 200, 0))),
     ));
 }
@@ -116,4 +116,24 @@ fn handle_input(
         camera_settings.orbit_distance += 1.;
     }
 
+}
+
+#[derive(Component)]
+struct NeedRender(bool);
+
+pub fn draw_tree(
+    mut gizmos: Gizmos,
+    mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    ) {
+
+
+    for (mut mesh, mut tree, mut need_render) in trees.iter_mut() {
+        if need_render.0 {
+            mesh.0 = meshes.add(tree.render_mesh());
+            need_render.0 = false;
+        }
+        // only debug the tree after trying to render it
+        tree.debug(&mut gizmos);
+    }
 }
