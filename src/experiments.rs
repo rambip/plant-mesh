@@ -187,6 +187,32 @@ impl Tree {
 
     fn render_mesh(&mut self) -> Mesh {
         self.cache.trajectories = self.compute_trajectories();
+        // TODO:
+        // Etape 1: calcul des trajectoires
+        // - calculer pour chaque noeud l'ensemble des points de la trajectoire.
+        // - stocker pour chaque noeud l'ensemble des points qui y passent, dans l'ordre croissant 
+        // des ID des particules -> inutile ?
+        // - penser à faire les collisions et tout
+        //   - PBR = ?
+        //
+        // Etape 2: précalculs
+        // - construire le graphe des parents
+        // - calculer la profondeur de chaque noeud
+        // - établir une fonction (temps constant) qui retourne la position interpolée d'une particule entre le
+        // noeud a et le noeud b avec une progression t
+        //
+        // Etape 2: mesh
+        // - pour chaque noeud:
+        //   - si c'est une feuille
+        //      - ne rien faire
+        //   - si ce n'est pas une feuille
+        //      - lister les particules dans ce noeud (linéaire)
+        //      - pour t entre 0 et 1
+        //        - calculer la position interpolée de chaque particule
+        //        - calculer l'envelope convexe des positions interpolées
+        //          - extension: delaunay avec seuil
+        //        - ajouter ces points à la mesh
+        //        - ajouter des triangles pour relier (couplage de graphe ?)
         dummy_mesh()
     }
 
