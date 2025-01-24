@@ -20,7 +20,7 @@ jobs:
 
       - name: Build Project 🎁
         shell: bash
-        run: trunk build --release
+        run: "trunk build --release --public-url ${{ github.event.repository.name }}"
 
       - name: upload result
         uses: actions/upload-pages-artifact@v2
