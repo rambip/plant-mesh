@@ -11,8 +11,9 @@ bevy = {version="0.15.1", default-features=false, features=[
     "x11",
     # TODO: do my own lighting ?
     "bevy_pbr",
+    "webgl2",
     # For camera ?
-    "tonemapping_luts"
+    # "tonemapping_luts"
 ]}
 rand = "0.8.5"
 

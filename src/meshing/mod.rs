@@ -3,8 +3,7 @@ use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 
-use crate::Tree;
-use crate::growing::PlantNodeProps;
+use crate::growing::{PlantNode, PlantNodeProps};
 mod meshing;
 
 pub struct MeshBuilder {
@@ -19,25 +18,24 @@ pub struct MeshBuilder {
     mesh_points: Vec<Vec3>,
     debug_points: Vec<Vec3>,
     mesh_triangles: Vec<usize>,
+    max_triangle_proportion: f32,
     mesh_normals: Vec<Vec3>,
-    mesh_colors: Vec<[f32; 4]>
+    mesh_colors: Vec<[f32; 4]>,
 }
 
 impl MeshBuilder {
-    pub fn new(tree: &Tree) -> Self {
-        let node_count = tree.node_count;
-
+    pub fn new(plant_graph: &PlantNode, node_count: usize) -> Self {
         let mut parents = vec![0; node_count];
-        tree.plant_graph.register_parents(&mut parents, 0);
+        plant_graph.register_parents(&mut parents, 0);
 
         let mut node_props = vec![PlantNodeProps::default(); node_count];
-        tree.plant_graph.register_node_properties(&mut node_props);
+        plant_graph.register_node_properties(&mut node_props);
 
         let mut depths = vec![0; node_count];
-        tree.plant_graph.register_depths(&mut depths, 0);
+        plant_graph.register_depths(&mut depths, 0);
 
         let mut leaves = vec![];
-        tree.plant_graph.register_leaves(&mut leaves);
+        plant_graph.register_leaves(&mut leaves);
 
         Self {
             node_count,
@@ -49,6 +47,7 @@ impl MeshBuilder {
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
             mesh_triangles: vec![],
+            max_triangle_proportion: 1.,
             mesh_normals: vec![],
             mesh_colors: vec![],
             debug_points: vec![],
@@ -133,6 +132,14 @@ impl MeshBuilder {
         self.mesh_triangles.extend(triangles)
     }
 
+    fn triangles(&self) -> &[usize] {
+        let target_n_triangles : f32 = 
+            // at least one triangle (3 points)
+            f32::max(1., self.max_triangle_proportion*self.mesh_triangles.len() as f32 / 3.
+        );
+        &self.mesh_triangles[0..3*(target_n_triangles as usize)]
+    }
+
     pub fn compute_each_branch(&mut self) {
         for child in 1..self.node_count{
 
@@ -146,6 +153,7 @@ impl MeshBuilder {
             let branch_length = (self.node_props[parent].position - self.node_props[child].position).length();
             let n_steps = (branch_length / dz) as usize;
 
+            // FIXME: duplicate points at nodes
             for i in 1..=n_steps {
                 let t = (i as f32) / n_steps as f32;
 
@@ -159,6 +167,14 @@ impl MeshBuilder {
                 previous_contour_ids = current_contour_ids.clone();
             }
         }
+    }
+
+    //pub fn keep_only_propotion_of_triangles(&mut self, r: f32) {
+    //    let target_length = r * self.mesh_triangles.len() as f32;
+    //    self.mesh_triangles.truncate(target_length as usize);
+    //}
+    pub fn set_triangle_proportion(&mut self, r: f32){
+        self.max_triangle_proportion = r;
     }
 
     pub fn to_mesh(&self) -> Mesh {
@@ -175,11 +191,13 @@ impl MeshBuilder {
                 Mesh::ATTRIBUTE_COLOR,
                 self.mesh_colors.clone(),
             )
-            .with_inserted_indices(Indices::U32(self.mesh_triangles.iter().map(|x| *x as u32).collect()))
+            .with_inserted_indices(Indices::U32(
+                    self.triangles().iter().map(|x| *x as u32).collect()
+            ))
     }
     
     pub fn debug(&self, gizmos: &mut bevy::gizmos::gizmos::Gizmos) {
-        for i in 0..self.mesh_triangles.len()/3 {
+        for i in 0..self.triangles().len()/3 {
             let (ia, ib, ic) = (self.mesh_triangles[3*i], self.mesh_triangles[3*i+1], self.mesh_triangles[3*i+2]);
             let (pa, pb, pc) = (self.mesh_points[ia], self.mesh_points[ib], self.mesh_points[ic]);
             let color = Color::srgb(0., 0.4, 0.);
