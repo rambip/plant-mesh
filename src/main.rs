@@ -3,8 +3,17 @@
 use bevy::prelude::*;
 use std::f32::consts::PI;
 
-mod tree;
-use tree::Tree;
+#[derive(Component)]
+struct Tree {
+    plant_graph: growing::PlantNode,
+    // including root
+    node_count: usize,
+    particle_per_leaf: usize,
+    cache: Option<meshing::MeshBuilder>,
+}
+
+mod meshing;
+mod growing;
 
 fn main() {
     App::new()
@@ -39,7 +48,7 @@ fn setup(
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(30.0, 0.0, 30.0),
+        Transform::from_xyz(5.0, 0.0, 20.0),
     ));
     // camera
     commands.spawn((
@@ -50,7 +59,7 @@ fn setup(
         Tree::default(),
         Mesh3d::default(),
         NeedRender(true),
-        MeshMaterial3d(materials.add(Color::srgb_u8(100, 200, 0))),
+        MeshMaterial3d(materials.add(Color::srgba(0.5, 1.0, 0.3, 0.8))),
     ));
 }
 
@@ -121,7 +130,7 @@ fn handle_input(
 #[derive(Component)]
 struct NeedRender(bool);
 
-pub fn draw_tree(
+fn draw_tree(
     mut gizmos: Gizmos,
     mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -137,3 +146,42 @@ pub fn draw_tree(
         tree.debug(&mut gizmos);
     }
 }
+
+
+impl Default for Tree {
+    fn default() -> Self {
+        let plant_graph = growing::PlantNode::demo();
+        let node_count = plant_graph.count_node();
+        Self {
+            plant_graph,
+            node_count,
+            particle_per_leaf: 50,
+            cache: None,
+        }
+    }
+}
+
+impl Tree {
+    pub fn render_mesh(&mut self) -> Mesh {
+        let mut cache = meshing::MeshBuilder::new(self);
+        cache.compute_trajectories(self.particle_per_leaf);
+        cache.compute_each_branch();
+
+        // FIXME: duplicate points at nodes
+        let mesh = cache.to_mesh();
+        self.cache = Some(cache);
+
+        mesh
+    }
+
+
+    // TODO: optimization = return an iterator
+
+    pub fn debug(&self, gizmos: &mut Gizmos) {
+        self.plant_graph.debug(gizmos);
+        self.cache.as_ref().unwrap().debug(gizmos);
+
+    }
+}
+
+// TODO: multiple materials for one single tree
