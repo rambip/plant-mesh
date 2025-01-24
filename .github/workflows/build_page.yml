@@ -15,9 +15,6 @@ jobs:
           override: true
 
       - uses: Swatinem/rust-cache@v2
-      - name: Install Dioxus-CLI
-        shell: bash
-        run: cargo binstall -y --force dioxus-cli --version=0.5.6
 
       - uses: jetli/trunk-action@v0.5.0
 
