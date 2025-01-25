@@ -15,9 +15,15 @@ struct Tree {
 mod meshing;
 mod growing;
 
+mod shader;
+use shader::{CustomRenderedMeshPipelinePlugin, CustomRenderedEntity};
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        //.add_plugins(bevy_pbr::MeshRenderPlugin {use_gpu_instance_buffer_builder: false})
+        .add_plugins(bevy_pbr::PbrPlugin::default())
+        .add_plugins(CustomRenderedMeshPipelinePlugin)
         .init_resource::<CameraSettings>()
         .add_systems(Startup, setup)
         .add_systems(Update, draw_tree)
@@ -29,7 +35,7 @@ fn main() {
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    //mut materials: ResMut<Assets<StandardMaterial>>,
     camera_settings: Res<CameraSettings>,
 ) {
     // draw a floor
@@ -40,16 +46,16 @@ fn setup(
     ));
     commands.spawn((
         Mesh3d(meshes.add(Circle::new(4.0))),
-        MeshMaterial3d(materials.add(Color::WHITE)),
+        //MeshMaterial3d(materials.add(Color::WHITE)),
     ));
     // light
-    commands.spawn((
-        PointLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(5.0, 0.0, 20.0),
-    ));
+    //commands.spawn((
+    //    PointLight {
+    //        shadows_enabled: true,
+    //        ..default()
+    //    },
+    //    Transform::from_xyz(5.0, 0.0, 20.0),
+    //));
     // camera
     commands.spawn((
         Camera3d::default(),
@@ -60,7 +66,8 @@ fn setup(
         Tree::default(),
         Mesh3d::default(),
         NeedRender(true),
-        MeshMaterial3d(materials.add(Color::srgba(0.5, 1.0, 0.3, 0.8))),
+        //MeshMaterial3d(materials.add(Color::srgba(0.5, 1.0, 0.3, 0.8))),
+        CustomRenderedEntity,
     ));
 }
 
@@ -153,7 +160,7 @@ fn draw_tree(
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
         need_render.0 = false;
         // only debug the tree after trying to render it
-        tree.debug(&mut gizmos);
+        //tree.debug(&mut gizmos);
     }
 }
 

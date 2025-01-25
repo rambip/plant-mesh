@@ -74,7 +74,7 @@ impl MeshBuilder {
         let n = points.len();
         self.mesh_points.extend(points);
         //self.cache.debug_points.push(points[0]);
-        self.mesh_colors.extend(vec![[1.0, 1.0, 1.0, 1.]; n]);
+        self.mesh_colors.extend(vec![[0.2, 1.0, 0.0, 1.]; n]);
 
         for i in 0..n {
             let mean = 0.4*(
