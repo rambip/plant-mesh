@@ -1,58 +1,7 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
-use bevy::math::vec3;
 pub(crate) use bevy::prelude::*;
-use bevy_render::render_resource::{BufferUsages, RawBufferVec};
-use bytemuck::{Pod, Zeroable};
 use std::f32::consts::PI;
-
-/// The CPU-side structure that describes a single vertex of the triangle.
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct Vertex {
-    /// The 3D position of the triangle vertex.
-    position: Vec3,
-    /// Padding.
-    pad0: u32,
-    /// The color of the triangle vertex.
-    color: Vec3,
-    /// Padding.
-    pad1: u32,
-}
-
-impl Vertex {
-    /// Creates a new vertex structure.
-    pub(crate) const fn new(position: Vec3, color: Vec3) -> Vertex {
-        Vertex {
-            position,
-            color,
-            pad0: 0,
-            pad1: 0,
-        }
-    }
-}
-
-#[derive(Component)]
-pub struct CustomMesh {
-    /// The vertices for the single triangle.
-    ///
-    /// This is a [`RawBufferVec`] because that's the simplest and fastest type
-    /// of GPU buffer, and [`Vertex`] objects are simple.
-    vertices: Vec<Vertex>,
-
-    /// The indices of the single triangle.
-    ///
-    /// As above, this is a [`RawBufferVec`] because `u32` values have trivial
-    /// size and alignment.
-    indices: Vec<u32>,
-}
-
-static VERTICES: [Vertex; 4] = [
-    Vertex::new(vec3(-0.866, -0.5, 0.5), vec3(1.0, 0.0, 0.0)),
-    Vertex::new(vec3(0.866, -0.5, 0.5), vec3(0.0, 1.0, 0.0)),
-    Vertex::new(vec3(0.0, 1.0, 0.5), vec3(0.0, 0.0, 1.0)),
-    Vertex::new(vec3(0.0, -1.0, 0.5), vec3(1.0, 1.0, 1.0)),
-];
 
 #[derive(Component)]
 struct Tree {
@@ -65,27 +14,20 @@ struct Tree {
 
 mod meshing;
 mod growing;
-
 mod shader;
-//use shader::{CustomRenderedMeshPipelinePlugin, CustomRenderedEntity};
-use shader::custom_phase::test_main;
 
-fn main(){
-    test_main()
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        //.add_plugins(bevy_pbr::MeshRenderPlugin {use_gpu_instance_buffer_builder: false})
+        //.add_plugins(bevy_pbr::PbrPlugin::default())
+        .add_plugins(shader::CustomMeshPipelinePlugin)
+        .init_resource::<CameraSettings>()
+        .add_systems(Startup, setup)
+        .add_systems(Update, draw_tree)
+        .add_systems(Update, (handle_input, update_view))
+        .run();
 }
-
-//fn main() {
-//    App::new()
-//        .add_plugins(DefaultPlugins)
-//        //.add_plugins(bevy_pbr::MeshRenderPlugin {use_gpu_instance_buffer_builder: false})
-//        //.add_plugins(bevy_pbr::PbrPlugin::default())
-//        .add_plugins(CustomRenderedMeshPipelinePlugin)
-//        .init_resource::<CameraSettings>()
-//        .add_systems(Startup, setup)
-//        .add_systems(Update, draw_tree)
-//        .add_systems(Update, (handle_input, update_view))
-//        .run();
-//}
 
 /// set up a simple 3D scene
 fn setup(
@@ -97,22 +39,11 @@ fn setup(
     // draw a floor
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(100., 100., 0.1))),
-        //MeshMaterial3d(materials.add(Color::srgb_u8(200, 200, 200))),
         Transform::from_translation(-Vec3::Z * 0.1)
     ));
     commands.spawn((
         Mesh3d(meshes.add(Circle::new(4.0))),
-        //MeshMaterial3d(materials.add(Color::WHITE)),
     ));
-    // light
-    //commands.spawn((
-    //    PointLight {
-    //        shadows_enabled: true,
-    //        ..default()
-    //    },
-    //    Transform::from_xyz(5.0, 0.0, 20.0),
-    //));
-    // camera
     commands.spawn((
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
@@ -122,8 +53,8 @@ fn setup(
         Tree::default(),
         Mesh3d::default(),
         NeedRender(true),
-        //MeshMaterial3d(materials.add(Color::srgba(0.5, 1.0, 0.3, 0.8))),
-        //CustomRenderedEntity,
+        shader::CustomRenderedEntity,
+        Visibility::default(),
     ));
 }
 
@@ -204,6 +135,7 @@ fn draw_tree(
     mut gizmos: Gizmos,
     mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut mem: ResMut<shader::MeshMemory>,
     time: Res<Time>,
     ) {
 
@@ -214,6 +146,8 @@ fn draw_tree(
         tree.cache.set_triangle_proportion(r);
 
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
+        // FIXME: do it automatically
+        mem.0 = mesh.0.id();
         need_render.0 = false;
         // only debug the tree after trying to render it
         //tree.debug(&mut gizmos);
@@ -257,5 +191,3 @@ impl Tree {
 
     }
 }
-
-// TODO: multiple materials for one single tree

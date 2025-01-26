@@ -8,33 +8,29 @@
 //! for better reuse of parts of Bevy's built-in mesh rendering logic.
 
 use bevy::{
-    asset::{AssetEvents, RenderAssetUsages}, core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey, CORE_3D_DEPTH_FORMAT}, ecs::{
+    asset::RenderAssetUsages, core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey, CORE_3D_DEPTH_FORMAT}, ecs::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
-    }, math::{vec3, Vec3A}, prelude::*, render::{
+    }, prelude::*, render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
-        primitives::Aabb,
         render_phase::{
             AddRenderCommand, BinnedRenderPhaseType, DrawFunctions, PhaseItem, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewBinnedRenderPhases,
         },
         render_resource::{
-            BufferUsages, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState,
-            FragmentState, IndexFormat, MultisampleState, PipelineCache, PrimitiveState,
-            RawBufferVec, RenderPipelineDescriptor, SpecializedRenderPipeline,
-            SpecializedRenderPipelines, TextureFormat, VertexAttribute, VertexBufferLayout,
-            VertexFormat, VertexState, VertexStepMode,
+            ColorTargetState, ColorWrites, CompareFunction, DepthStencilState,
+            FragmentState, MultisampleState, PipelineCache, PrimitiveState,
+            RenderPipelineDescriptor, SpecializedRenderPipeline,
+            SpecializedRenderPipelines, TextureFormat,
+            VertexState
         },
-        renderer::{RenderDevice, RenderQueue},
+        renderer::RenderDevice,
         view::{self, ExtractedView, RenderVisibleEntities, VisibilitySystems},
         Render, RenderApp, RenderSet,
     }
 };
 use bevy_ecs::system::lifetimeless::Read;
-use bevy_render::{mesh::{Indices, PrimitiveTopology}, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, view::{ViewUniform, ViewUniforms}};
-use bytemuck::{Pod, Zeroable};
-
-use crate::Vertex;
+use bevy_render::{extract_resource::{ExtractResource, ExtractResourcePlugin}, mesh::{allocator::MeshAllocator, Indices, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, view::{ViewUniform, ViewUniforms}};
 
 /// A marker component that represents an entity that is to be rendered using
 /// our custom phase item.
@@ -43,6 +39,12 @@ use crate::Vertex;
 /// tell Bevy that this object should be pulled into the render world.
 #[derive(Clone, Component, ExtractComponent)]
 struct CustomRenderedEntity;
+
+#[derive(Clone, Default, Resource, ExtractResource)]
+struct MeshMemory(AssetId<Mesh>);
+
+//#[derive(Clone, Resource, ExtractResource)]
+//struct MyMeshes(Vec<Handle<Mesh>>);
 
 /// Holds a reference to our shader.
 ///
@@ -65,7 +67,11 @@ impl<P> RenderCommand<P> for DrawCustomPhaseItem
 where
     P: PhaseItem,
 {
-    type Param = SRes<CustomPhaseItemBuffers>;
+    type Param = (
+        SRes<RenderAssets<RenderMesh>>,
+        SRes<MeshMemory>,
+        SRes<MeshAllocator>,
+    );
 
     type ViewQuery = Read<ViewBindGroup>;
 
@@ -75,74 +81,47 @@ where
         _: &P,
         views: ROQueryItem<'w, Self::ViewQuery>,
         _: Option<ROQueryItem<'w, Self::ItemQuery>>,
-        custom_phase_item_buffers: SystemParamItem<'w, '_, Self::Param>,
+        (meshes, mesh_handle, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        // Borrow check workaround.
-        let custom_phase_item_buffers = custom_phase_item_buffers.into_inner();
 
-        //let Some(mesh) = meshes else {return RenderCommandResult::Skip};
+        let mesh_allocator = mesh_allocator.into_inner();
 
+        let Some(gpu_mesh) = meshes.into_inner().get(mesh_handle.0) else {
+            return RenderCommandResult::Skip;
+        };
+        let Some(vertex_buffer_slice) =
+            mesh_allocator.mesh_vertex_slice(&mesh_handle.0)
+        else {
+            return RenderCommandResult::Skip;
+        };
 
-        println!("render the actual buffer");
+        let RenderMeshBufferInfo::Indexed {index_format, count} = &gpu_mesh.buffer_info 
+            else {return RenderCommandResult::Failure("mesh buffer is not indexed wtf")};
+
+        let index_buffer_slice = mesh_allocator.mesh_index_slice(&mesh_handle.0).unwrap();
 
         // Tell the GPU where the vertices are.
         pass.set_vertex_buffer(
             0,
-            custom_phase_item_buffers
-                .vertices
-                .buffer()
-                .unwrap()
-                .slice(..),
+            vertex_buffer_slice.buffer.slice(..)
         );
 
-        // Tell the GPU where the indices are.
-        pass.set_index_buffer(
-            custom_phase_item_buffers
-                .indices
-                .buffer()
-                .unwrap()
-                .slice(..),
-            0,
-            IndexFormat::Uint32,
-        );
+        
+        pass.set_index_buffer(index_buffer_slice.buffer.slice(..), 0, *index_format);
+
 
         pass.set_bind_group(0, &views.0, &[0]);
 
-        // Draw one triangle (3 vertices).
-        pass.draw_indexed(0..6, 0, 0..1);
+        pass.draw_indexed(
+            index_buffer_slice.range.start..(index_buffer_slice.range.start + count),
+            vertex_buffer_slice.range.start as i32,
+            0..1,
+        );
 
         RenderCommandResult::Success
     }
 }
-
-/// The GPU vertex and index buffers for our custom phase item.
-///
-/// As the custom phase item is a single triangle, these are uploaded once and
-/// then left alone.
-#[derive(Resource)]
-struct CustomPhaseItemBuffers {
-    /// The vertices for the single triangle.
-    ///
-    /// This is a [`RawBufferVec`] because that's the simplest and fastest type
-    /// of GPU buffer, and [`Vertex`] objects are simple.
-    vertices: RawBufferVec<Vertex>,
-
-    /// The indices of the single triangle.
-    ///
-    /// As above, this is a [`RawBufferVec`] because `u32` values have trivial
-    /// size and alignment.
-    indices: RawBufferVec<u32>,
-}
-
-//impl Default for CustomPhaseItemBuffers {
-//    fn default() -> Self {
-//        CustomPhaseItemBuffers {
-//            vertices: RawBufferVec::new(BufferUsages::VERTEX),
-//            indices: RawBufferVec::new(BufferUsages::INDEX),
-//        }
-//    }
-//}
 
 /// The custom draw commands that Bevy executes for each entity we enqueue into
 /// the render phase.
@@ -158,7 +137,7 @@ type WithCustomRenderedEntity = With<CustomRenderedEntity>;
 pub fn test_main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
-        .add_plugins(CustomPhasePipelinePlugin)
+        .add_plugins(CustomMeshPipelinePlugin)
         .add_systems(Startup, setup);
 
     app.run();
@@ -170,50 +149,51 @@ fn create_dummy_mesh() -> Mesh {
         Mesh::ATTRIBUTE_POSITION,
         vec![
             // top (facing towards +y)
-            [-0.5, 0.5, -0.5], // vertex with index 0
-            [0.5, 0.5, -0.5], // vertex with index 1
-            [0.5, 0.5, 0.5], // etc. until 23
-            [-0.5, 0.5, 0.5],
+            [-0.866, -0.5, 0.5], // vertex with index 0
+            [0.866, -0.5, 0.5], // vertex with index 1
+            [0.0, 1.0, 0.5    ], // etc. until 23
+            [0.0, -1.0, 0.5 ],
+        ],
+    )
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_NORMAL,
+        vec![
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ],
+    )
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_COLOR,
+        vec![
+            // top (facing towards +y)
+            [1.0, 0.0, 0.0, 1.0], // vertex with index 0
+            [0.0, 1.0, 0.0, 1.0], // vertex with index 0
+            [1.0, 0.0, 1.0, 1.0], // vertex with index 0
+            [1.0, 1.0, 1.0, 1.0], // vertex with index 0
         ],
     )
     .with_inserted_indices(Indices::U32(vec![
-        0,1,2 , 1,0,2, // triangles making up the top (+y) facing side.
+        0,1,2 , 1,0,3, // triangles making up the top (+y) facing side.
     ]))
 }
-
-static VERTICES: [Vertex; 4] = [
-    Vertex::new(vec3(-0.866, -0.5, 0.5), vec3(1.0, 0.0, 0.0)),
-    Vertex::new(vec3(0.866, -0.5, 0.5), vec3(0.0, 1.0, 0.0)),
-    Vertex::new(vec3(0.0, 1.0, 0.5), vec3(0.0, 0.0, 1.0)),
-    Vertex::new(vec3(0.0, -1.0, 0.5), vec3(1.0, 1.0, 1.0)),
-];
 
 /// Spawns the objects in the scene.
 fn setup(
     mut commands: Commands, 
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
     mut meshes: ResMut<Assets<Mesh>>,
     ) {
-    println!("setup scene");
     // Spawn a single entity that has custom rendering. It'll be extracted into
     // the render world via [`ExtractComponent`].
+
+    let mesh_asset_handle = meshes.add(create_dummy_mesh());
     commands.spawn((
         Visibility::default(),
         Transform::default(),
-        // This `Aabb` is necessary for the visibility checks to work.
-        Aabb {
-            center: Vec3A::ZERO,
-            half_extents: Vec3A::splat(0.5),
-        },
+        Mesh3d(mesh_asset_handle.clone()),
         CustomRenderedEntity,
     ));
-    //commands.spawn((
-    //    Visibility::default(),
-    //    Transform::default(),
-    //    Mesh3d(meshes.add(create_dummy_mesh())),
-    //    CustomRenderedEntity,
-    //));
 
     // Spawn the camera.
     commands.spawn((
@@ -222,32 +202,21 @@ fn setup(
         Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    //commands.insert_resource(CustomPhaseItemBuffers::demo(&render_device, &render_queue));
+    commands.insert_resource(MeshMemory(mesh_asset_handle.id()));
 }
 
-pub struct CustomPhasePipelinePlugin;
+pub struct CustomMeshPipelinePlugin;
 
-impl Plugin for CustomPhasePipelinePlugin {
+impl Plugin for CustomMeshPipelinePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_plugins(ExtractComponentPlugin::<CustomRenderedEntity>::default())
+            .add_plugins(ExtractResourcePlugin::<MeshMemory>::default())
             .add_systems(
                 PostUpdate,
                 view::check_visibility::<WithCustomRenderedEntity>
                     .in_set(VisibilitySystems::CheckVisibility),
             );
-        //render_app
-        //    .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
-        //    .add_render_command::<Opaque3d, DrawCustomPhaseItemCommands>()
-            //.add_systems(
-            //    PostUpdate,
-            //    // Make sure to tell Bevy to check our entity for visibility. Bevy won't
-            //    // do this by default, for efficiency reasons.
-            //    // This will do things like frustum culling and hierarchy visibility
-            //    view::check_visibility::<WithCustomRenderedEntity>
-            //    .in_set(VisibilitySystems::CheckVisibility),
-            //)
-            ;
 
     }
     fn finish(&self, app: &mut App) {
@@ -262,24 +231,10 @@ impl Plugin for CustomPhasePipelinePlugin {
             .add_render_command::<Opaque3d, DrawCustomPhaseItemCommands>()
             .add_systems(
                 Render,
-                (prepare_custom_phase_item_buffers.in_set(RenderSet::Prepare),
                 prepare_view_bind_groups.in_set(RenderSet::Prepare),
-                )
             )
             .add_systems(Render, queue_custom_phase_item.in_set(RenderSet::Queue));
-        ;
     }
-}
-
-///// Creates the [`CustomPhaseItemBuffers`] resource.
-/////
-///// This must be done in a startup system because it needs the [`RenderDevice`]
-///// and [`RenderQueue`] to exist, and they don't until [`App::run`] is called.
-fn prepare_custom_phase_item_buffers(
-    mut commands: Commands,
-    //meshes: Query<&Mesh3d>,
-    ) {
-    commands.init_resource::<CustomPhaseItemBuffers>();
 }
 
 /// A render-world system that enqueues the entity with custom rendering into
@@ -292,7 +247,6 @@ fn queue_custom_phase_item(
     mut specialized_render_pipelines: ResMut<SpecializedRenderPipelines<CustomMeshPipeline>>,
     views: Query<(Entity, &RenderVisibleEntities, &Msaa), With<ExtractedView>>,
 ) {
-    println!("queuing item");
     let draw_custom_phase_item = opaque_draw_functions
         .read()
         .id::<DrawCustomPhaseItemCommands>();
@@ -311,7 +265,6 @@ fn queue_custom_phase_item(
             .get::<WithCustomRenderedEntity>()
             .iter()
         {
-            println!("specialize pipeline for visible entity");
             // Ordinarily, the [`SpecializedRenderPipeline::Key`] would contain
             // some per-view settings, such as whether the view is HDR, but for
             // simplicity's sake we simply hard-code the view's characteristics,
@@ -349,6 +302,17 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
     type Key = Msaa;
 
     fn specialize(&self, msaa: Self::Key) -> RenderPipelineDescriptor {
+        // TODO: lazy static and check the layout
+        let mut l: MeshVertexBufferLayouts = Default::default();
+        let vertex_layout = Mesh::new(PrimitiveTopology::TriangleList, Default::default())
+            .with_inserted_attribute( Mesh::ATTRIBUTE_POSITION, vec![[0.,0.,0.]])
+            .with_inserted_attribute( Mesh::ATTRIBUTE_NORMAL, vec![[0.,0.,0.]])
+            .with_inserted_attribute( Mesh::ATTRIBUTE_COLOR, vec![[0.,0.,0.,0.]])
+            .get_mesh_vertex_buffer_layout(&mut l)
+            .0
+            .layout()
+            .clone();
+
         RenderPipelineDescriptor {
             label: Some("custom render pipeline".into()),
             layout: vec![
@@ -359,23 +323,7 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
                 shader: self.shader.clone(),
                 shader_defs: vec![],
                 entry_point: "vertex".into(),
-                buffers: vec![VertexBufferLayout {
-                    array_stride: size_of::<Vertex>() as u64,
-                    step_mode: VertexStepMode::Vertex,
-                    // This needs to match the layout of [`Vertex`].
-                    attributes: vec![
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 16,
-                            shader_location: 1,
-                        },
-                    ],
-                }],
+                buffers: vec![vertex_layout],
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
@@ -410,113 +358,6 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
     }
 }
 
-//static VERTICES: [Vertex; 4] = [
-//    Vertex::new(vec3(-0.866, -0.5, 0.5), vec3(1.0, 0.0, 0.0)),
-//    Vertex::new(vec3(0.866, -0.5, 0.5), vec3(0.0, 1.0, 0.0)),
-//    Vertex::new(vec3(0.0, 1.0, 0.5), vec3(0.0, 0.0, 1.0)),
-//    Vertex::new(vec3(0.0, -1.0, 0.5), vec3(1.0, 1.0, 1.0)),
-//];
-//
-fn extract_meshes_test(
-    mut buffer: ResMut<CustomPhaseItemBuffers>,
-    meshes_handles: Query<&Mesh3d>,
-    meshes: Option<Res<Assets<Mesh>>>,
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
-){
-    if meshes.is_some() {
-        println!("I can access meshes");
-    }
-    if meshes_handles.iter().count() > 0 {
-        println!("I have a mesh");
-    }
-}
-
-fn extract_meshes(
-    mut buffer: ResMut<CustomPhaseItemBuffers>,
-    meshes_handles: Query<&Mesh3d>,
-    meshes: Res<Assets<Mesh>>,
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
-){
-    println!("extracting stuff ...");
-
-    let mut vbo = RawBufferVec::new(BufferUsages::VERTEX);
-    let mut ibo = RawBufferVec::new(BufferUsages::INDEX);
-    for mesh in &meshes_handles {
-        println!("extracting a mesh ...");
-        let inner_mesh: &Mesh = match meshes.get(mesh) {
-            Some(m) => m,
-            _ => return
-        };
-        let count = inner_mesh.count_vertices();
-        let new_indices = 
-            inner_mesh.indices()
-            .unwrap()
-            .iter()
-            .map(|x| (x+ count) as u32);
-        ibo.extend(new_indices);
-        // TODO: extract info
-
-    }
-
-    vbo.extend(VERTICES);
-
-    vbo.write_buffer(&render_device, &render_queue);
-    ibo.write_buffer(&render_device, &render_queue);
-
-    *buffer = CustomPhaseItemBuffers {
-        vertices: vbo,
-        indices: ibo,
-    }
-}
-
-impl CustomPhaseItemBuffers {
-    fn demo(render_device: &RenderDevice, render_queue: &RenderQueue) -> Self {
-        println!("creating custom buffer with data");
-        let mut vbo = RawBufferVec::new(BufferUsages::VERTEX);
-        let mut ibo = RawBufferVec::new(BufferUsages::INDEX);
-
-        for vertex in &VERTICES {
-            vbo.push(*vertex);
-        }
-        ibo.extend([0u32, 1, 2, 1, 0, 3]);
-
-        // These two lines are required in order to trigger the upload to GPU.
-        vbo.write_buffer(&render_device, &render_queue);
-        ibo.write_buffer(&render_device, &render_queue);
-
-        CustomPhaseItemBuffers {
-            vertices: vbo,
-            indices: ibo,
-        }
-    }
-}
-
-impl FromWorld for CustomPhaseItemBuffers {
-    fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-        let render_queue = world.resource::<RenderQueue>();
-
-        // Create the vertex and index buffers.
-        let mut vbo = RawBufferVec::new(BufferUsages::VERTEX);
-        let mut ibo = RawBufferVec::new(BufferUsages::INDEX);
-
-        for vertex in &VERTICES {
-            vbo.push(*vertex);
-        }
-        ibo.extend([0u32, 1, 2, 1, 0, 3]);
-
-        // These two lines are required in order to trigger the upload to GPU.
-        vbo.write_buffer(render_device, render_queue);
-        ibo.write_buffer(render_device, render_queue);
-
-        CustomPhaseItemBuffers {
-            vertices: vbo,
-            indices: ibo,
-        }
-    }
-}
 
 #[derive(Component)]
 struct ViewBindGroup( BindGroup );
@@ -529,7 +370,6 @@ fn prepare_view_bind_groups(
     view_uniforms: Res<ViewUniforms>,
     views: Query< Entity>,
 ) {
-    println!("give view data to shader");
     if let Some(view_binding) = view_uniforms.uniforms.binding() {
         for entity in &views {
         let entries = DynamicBindGroupEntries::new_with_indices(((0, view_binding.clone()),));

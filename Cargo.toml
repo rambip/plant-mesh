@@ -9,19 +9,15 @@ bevy = {version="0.15.1", default-features=false, features=[
     "bevy_render",
     "bevy_window",
     "x11",
-    # TODO: do my own lighting ?
-    #"bevy_pbr",
     "webgl2",
     "bevy_core_pipeline",
 ]}
 bevy_ecs = "0.15.1"
-bevy_pbr = {path = "./bevy_pbr"}
 bevy_render = "0.15.1"
 bytemuck = "1.21.0"
 nonmax = "0.5.5"
 rand = "0.8.5"
 smallvec = "1.13.2"
-#small_pbr = {path="./small_pbr"}
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
