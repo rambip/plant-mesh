@@ -700,7 +700,7 @@ pub struct RenderMeshInstancesGpu(MainEntityHashMap<RenderMeshInstanceGpu>);
 
 impl RenderMeshInstances {
     /// Creates a new [`RenderMeshInstances`] instance.
-    fn new(use_gpu_instance_buffer_builder: bool) -> RenderMeshInstances {
+    pub fn new(use_gpu_instance_buffer_builder: bool) -> RenderMeshInstances {
         if use_gpu_instance_buffer_builder {
             RenderMeshInstances::GpuBuilding(RenderMeshInstancesGpu::default())
         } else {
