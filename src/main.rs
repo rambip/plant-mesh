@@ -23,8 +23,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(bevy_sprite::SpritePlugin {})
         .add_plugins(bevy_gizmos::GizmoPlugin)
-        //.add_plugins(bevy_pbr::MeshRenderPlugin {use_gpu_instance_buffer_builder: false})
-        //.add_plugins(bevy_pbr::PbrPlugin::default())
         .add_plugins(shader::CustomMeshPipelinePlugin)
         .init_resource::<CameraSettings>()
         .add_systems(Startup, setup)

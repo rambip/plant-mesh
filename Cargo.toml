@@ -16,7 +16,7 @@ bevy = {version="0.15.1", default-features=false, features=[
 #bevy_gizmos = {version="0.15.1", features=["bevy_render"]}
 bevy_render = "0.15.1"
 bevy_sprite = "0.15.1"
-bevy_gizmos = {version="0.15.1", features=["bevy_render", "bevy_sprite"]}
+bevy_gizmos = {version="0.15.1", features=["bevy_render", "bevy_sprite", "bevy_pbr"]}
 rand = "0.8.5"
 
 # Enable a small amount of optimization in the dev profile.
