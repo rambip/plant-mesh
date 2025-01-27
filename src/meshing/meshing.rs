@@ -131,10 +131,8 @@ pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize]) -> Vec
 
         else {
 
-            //let a1 = cosine_sim(current_p(&f1) - next_p(&f1) , current_p(&f2) - next_p(&f1));
-            //let a2 = cosine_sim(current_p(&f1) - next_p(&f2) , current_p(&f2) - next_p(&f2));
-            let d1 = f32::max(0. , (current_p(&f2) - next_p(&f1)).length());
-            let d2 = f32::max((current_p(&f1) - next_p(&f2)).length() , 0.);
+            let d1 = (current_p(&f2) - next_p(&f1)).length();
+            let d2 = (current_p(&f1) - next_p(&f2)).length();
 
             if d1 < d2 { add_point(&mut f1, &mut f2, C1) }
             else       { add_point(&mut f1, &mut f2, C2) }

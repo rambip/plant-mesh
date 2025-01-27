@@ -78,12 +78,12 @@ impl MeshBuilder {
         self.mesh_colors.extend(vec![[0.2, 1.0, 0.0, 1.]; n]);
 
         for i in 0..n {
-            let mean = 0.4*(
+            let mean = 0.25*(
                 points[(n+i-2)%n] 
                 + points[(n+i-1)%n]
                 + points[(n+i+1)%n]
                 + points[(n+i+2)%n]
-            ).normalize();
+            );
 
             self.mesh_normals.push((points[i] - mean).normalize());
         }
@@ -206,9 +206,12 @@ impl MeshBuilder {
             gizmos.line(pb, pc,  color);
             gizmos.line(pc, pa,  color);
         }
-        for &p in &self.debug_points {
+        for i in 0..self.mesh_normals.len() {
+            let p = self.mesh_points[i];
+            let normal = self.mesh_normals[i];
             let color = Color::srgb(1., 0.0, 0.);
-            gizmos.cross(Isometry3d::from_translation(p), 0.1, color);
+            //gizmos.cross(Isometry3d::from_translation(p), 0.1, color);
+            gizmos.line(p, p+0.3*normal, color);
         }
     }
 }
