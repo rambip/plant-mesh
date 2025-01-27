@@ -27,10 +27,10 @@ use bevy::{
         renderer::RenderDevice,
         view::{self, ExtractedView, RenderVisibleEntities, VisibilitySystems},
         Render, RenderApp, RenderSet,
-    }
+    }, utils::HashMap
 };
 use bevy_ecs::system::lifetimeless::Read;
-use bevy_render::{extract_resource::{ExtractResource, ExtractResourcePlugin}, mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, view::{ViewUniform, ViewUniforms}};
+use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
 
 /// A marker component that represents an entity that is to be rendered using
 /// our custom phase item.
@@ -41,8 +41,13 @@ use bevy_render::{extract_resource::{ExtractResource, ExtractResourcePlugin}, me
 #[derive(Clone, Component, ExtractComponent)]
 pub struct CustomRenderedEntity;
 
-#[derive(Clone, Default, Resource, ExtractResource)]
-pub struct MeshMemory(pub AssetId<Mesh>);
+#[derive(Clone)]
+pub struct MeshInstance {
+    id: AssetId<Mesh>,
+}
+
+#[derive(Clone, Default, Resource, Deref, DerefMut)]
+pub struct MeshInstances(pub HashMap<MainEntity, MeshInstance>);
 
 //#[derive(Clone, Resource, ExtractResource)]
 //struct MyMeshes(Vec<Handle<Mesh>>);
@@ -72,7 +77,7 @@ where
 {
     type Param = (
         SRes<RenderAssets<RenderMesh>>,
-        SRes<MeshMemory>,
+        SRes<MeshInstances>,
         SRes<MeshAllocator>,
     );
 
@@ -81,20 +86,23 @@ where
     type ItemQuery = ();
 
     fn render<'w>(
-        _: &P,
+        item: &P,
         views: ROQueryItem<'w, Self::ViewQuery>,
         _: Option<ROQueryItem<'w, Self::ItemQuery>>,
-        (meshes, mesh_handle, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
+        (meshes, mesh_instances, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
 
+        let Some(MeshInstance {id, ..}) = mesh_instances.get(&item.main_entity())
+            else {return RenderCommandResult::Skip};
+
         let mesh_allocator = mesh_allocator.into_inner();
 
-        let Some(gpu_mesh) = meshes.into_inner().get(mesh_handle.0) else {
+        let Some(gpu_mesh) = meshes.into_inner().get(*id) else {
             return RenderCommandResult::Skip;
         };
         let Some(vertex_buffer_slice) =
-            mesh_allocator.mesh_vertex_slice(&mesh_handle.0)
+            mesh_allocator.mesh_vertex_slice(&id)
         else {
             return RenderCommandResult::Skip;
         };
@@ -102,7 +110,7 @@ where
         let RenderMeshBufferInfo::Indexed {index_format, count} = &gpu_mesh.buffer_info 
             else {return RenderCommandResult::Failure("mesh buffer is not indexed wtf")};
 
-        let index_buffer_slice = mesh_allocator.mesh_index_slice(&mesh_handle.0).unwrap();
+        let index_buffer_slice = mesh_allocator.mesh_index_slice(&id).unwrap();
 
         // Tell the GPU where the vertices are.
         pass.set_vertex_buffer(
@@ -142,8 +150,6 @@ impl Plugin for CustomMeshPipelinePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_plugins(ExtractComponentPlugin::<CustomRenderedEntity>::default())
-            .add_plugins(ExtractResourcePlugin::<MeshMemory>::default())
-            .init_resource::<MeshMemory>()
             .add_systems(
                 PostUpdate,
                 view::check_visibility::<WithCustomRenderedEntity>
@@ -165,7 +171,12 @@ impl Plugin for CustomMeshPipelinePlugin {
         render_app
             .init_resource::<CustomMeshPipeline>()
             .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
+            .init_resource::<MeshInstances>()
             .add_render_command::<Opaque3d, DrawCustomPhaseItemCommands>()
+            .add_systems(
+                ExtractSchedule,
+                extract_meshes
+            )
             .add_systems(
                 Render,
                 prepare_view_bind_groups.in_set(RenderSet::Prepare),
@@ -316,6 +327,19 @@ fn prepare_view_bind_groups(
             render_device.create_bind_group("view_bind_group", layout, &entries),
         ));
         }
+    }
+}
+
+fn extract_meshes(
+    mut mesh_instances: ResMut<MeshInstances>,
+    meshes: Extract<Query<(Entity, &Mesh3d)>>,
+) {
+    for (entity, m) in &meshes {
+        // TODO: cleanup meshes
+        mesh_instances.insert(entity.into(), 
+            MeshInstance {
+                id: m.0.id()
+            });
     }
 }
 

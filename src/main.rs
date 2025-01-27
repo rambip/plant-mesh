@@ -135,7 +135,7 @@ fn draw_tree(
     mut gizmos: Gizmos,
     mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut mem: ResMut<shader::MeshMemory>,
+    //mut mem: ResMut<shader::MeshInstances>,
     time: Res<Time>,
     ) {
 
@@ -147,7 +147,7 @@ fn draw_tree(
 
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
         // FIXME: do it automatically
-        mem.0 = mesh.0.id();
+        //mem.0 = mesh.0.id();
         need_render.0 = false;
         // only debug the tree after trying to render it
         //tree.debug(&mut gizmos);
