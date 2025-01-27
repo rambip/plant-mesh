@@ -197,7 +197,7 @@ impl MeshBuilder {
             ))
     }
     
-    pub fn debug(&self, gizmos: &mut bevy::gizmos::gizmos::Gizmos) {
+    pub fn debug(&self, gizmos: &mut Gizmos) {
         for i in 0..self.triangles().len()/3 {
             let (ia, ib, ic) = (self.mesh_triangles[3*i], self.mesh_triangles[3*i+1], self.mesh_triangles[3*i+2]);
             let (pa, pb, pc) = (self.mesh_points[ia], self.mesh_points[ib], self.mesh_points[ic]);
