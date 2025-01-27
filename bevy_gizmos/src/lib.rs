@@ -47,6 +47,7 @@ pub mod light;
 
 #[cfg(all(feature = "bevy_sprite", feature = "bevy_render"))]
 mod pipeline_2d;
+
 #[cfg(feature = "bevy_render")]
 mod pipeline_3d;
 
@@ -81,7 +82,6 @@ use bevy_ecs::{
 };
 use bevy_math::Vec3;
 use bevy_reflect::TypePath;
-use pipeline_3d::ViewBindGroup;
 
 #[cfg( feature = "bevy_render")]
 use crate::config::GizmoMeshConfig;
@@ -569,7 +569,7 @@ struct SetLineGizmoBindGroup<const I: usize>;
 #[cfg(feature = "bevy_render")]
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetLineGizmoBindGroup<I> {
     type Param = SRes<LineGizmoUniformBindgroup>;
-    type ViewQuery = Read<ViewBindGroup>;
+    type ViewQuery = Read<pipeline_3d::ViewBindGroup>;
     type ItemQuery = Read<DynamicUniformIndex<LineGizmoUniform>>;
 
     #[inline]
