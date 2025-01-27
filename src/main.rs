@@ -54,7 +54,7 @@ fn setup(
         Mesh3d::default(),
         NeedRender(true),
         Visibility::default(),
-        shader::CustomEntity,
+        //shader::CustomEntity,
     ));
 }
 
