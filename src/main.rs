@@ -150,7 +150,7 @@ fn draw_tree(
         //mem.0 = mesh.0.id();
         need_render.0 = false;
         // only debug the tree after trying to render it
-        //tree.debug(&mut gizmos);
+        tree.debug(&mut gizmos);
     }
 }
 

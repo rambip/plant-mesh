@@ -29,7 +29,7 @@ impl PlantNode {
             props: PlantNodeProps::new(Vec3::ZERO, 1.1),
             children: vec![
                 PlantNode {
-                    id: 6,
+                    id: 1,
                     props: PlantNodeProps::new(Vec3::new(0., 0., 2.), 0.9),
                     children: vec![
                         PlantNode {
@@ -37,23 +37,23 @@ impl PlantNode {
                             props: PlantNodeProps::new(Vec3::new(1., 0., 3.), 0.5),
                             children: vec![
                                 PlantNode {
-                                    id: 4,
+                                    id: 3,
                                     props: PlantNodeProps::new(Vec3::new(1.5, 0., 6.), 0.3),
                                     children: vec![],
                                 },
                                 PlantNode {
-                                    id: 5,
+                                    id: 4,
                                     props: PlantNodeProps::new(Vec3::new(2., -2., 5.), 0.3),
                                     children: vec![],
                                 }
                             ],
                         },
                         PlantNode {
-                            id: 1,
+                            id: 5,
                             props: PlantNodeProps::new(Vec3::new(-1., 0., 4.5), 0.2),
                             children: vec![
                                 PlantNode {
-                                    id: 3,
+                                    id: 6,
                                     props: PlantNodeProps::new(Vec3::new(-0.5, 1., 6.), 0.1),
                                     children: vec![],
                                 } ],
