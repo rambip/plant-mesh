@@ -1,21 +1,15 @@
+use bevy_ecs::schedule::IntoSystemConfigs;
 use crate::{
-    config::{GizmoLineJoint, GizmoLineStyle, GizmoMeshConfig},
-    line_gizmo_vertex_buffer_layouts, line_joint_gizmo_vertex_buffer_layouts, DrawLineGizmo,
-    DrawLineJointGizmo, GizmoRenderSystem, GpuLineGizmo, LineGizmoUniformBindgroupLayout,
-    SetLineGizmoBindGroup, LINE_JOINT_SHADER_HANDLE, LINE_SHADER_HANDLE,
+    config::{GizmoLineJoint, GizmoLineStyle, GizmoMeshConfig}, line_gizmo_vertex_buffer_layouts, line_joint_gizmo_vertex_buffer_layouts, view::{prepare_view_bind_groups, OnlyViewLayout, SetViewBindGroup}, DrawLineGizmo, DrawLineJointGizmo, GizmoRenderSystem, GpuLineGizmo, LineGizmoUniformBindgroupLayout, SetLineGizmoBindGroup, LINE_JOINT_SHADER_HANDLE, LINE_SHADER_HANDLE
 };
 use bevy_app::{App, Plugin};
-use bevy_core_pipeline::{
-    core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT},
-    prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
-};
+use bevy_core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT};
 
 use bevy_ecs::{
-    prelude::Entity, query::Has, schedule::{IntoSystemConfigs, IntoSystemSetConfigs}, system::{Commands, Query, Res, ResMut, Resource}, world::{FromWorld, World}
+    prelude::Entity, system::{Query, Res, ResMut, Resource}, world::{FromWorld, World}
 };
-use bevy_ecs::component::Component;
 use bevy_image::BevyDefault as _;
-use bevy_render::{renderer::RenderDevice, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}};
+use bevy_render::sync_world::MainEntity;
 use bevy_render::{
     render_asset::{prepare_assets, RenderAssets},
     render_phase::{
@@ -27,8 +21,6 @@ use bevy_render::{
     Render, RenderApp, RenderSet,
 };
 use bevy_utils::tracing::error;
-use binding_types::uniform_buffer;
-
 pub struct LineGizmo3dPlugin;
 impl Plugin for LineGizmo3dPlugin {
     fn build(&self, app: &mut App) {
@@ -41,12 +33,6 @@ impl Plugin for LineGizmo3dPlugin {
             .add_render_command::<Transparent3d, DrawLineJointGizmo3d>()
             .init_resource::<SpecializedRenderPipelines<LineGizmoPipeline>>()
             .init_resource::<SpecializedRenderPipelines<LineJointGizmoPipeline>>()
-            //.configure_sets(
-            //    Render,
-            //    GizmoRenderSystem::QueueLineGizmos3d
-            //        .in_set(RenderSet::Queue)
-            //        .ambiguous_with(bevy_pbr::queue_material_meshes::<bevy_pbr::StandardMaterial>),
-            //)
             .add_systems(
                 Render,
                 (queue_line_gizmos_3d, queue_line_joint_gizmos_3d, prepare_view_bind_groups.in_set(RenderSet::Prepare))
@@ -73,20 +59,8 @@ pub(crate) struct LineGizmoPipeline {
 
 impl FromWorld for LineGizmoPipeline {
     fn from_world(render_world: &mut World) -> Self {
-        let render_device = render_world.resource::<RenderDevice>();
+        let view_layout = render_world.resource::<OnlyViewLayout>().0.clone();
 
-        let view_layout_entries: Vec<BindGroupLayoutEntry> = DynamicBindGroupLayoutEntries::new_with_indices(
-            ShaderStages::FRAGMENT,
-            (
-                (0, uniform_buffer::<ViewUniform>(true).visibility(ShaderStages::VERTEX_FRAGMENT),
-                    ),)
-            ).to_vec()
-        ;
-
-        let view_layout = render_device.create_bind_group_layout(
-            "mesh_view_layout",
-            &view_layout_entries,
-        );
         LineGizmoPipeline {
             view_layout,
             uniform_layout: render_world
@@ -175,12 +149,16 @@ impl SpecializedRenderPipeline for LineGizmoPipeline {
 
 #[derive(Clone, Resource)]
 struct LineJointGizmoPipeline {
+    view_layout: BindGroupLayout,
     uniform_layout: BindGroupLayout,
 }
 
 impl FromWorld for LineJointGizmoPipeline {
     fn from_world(render_world: &mut World) -> Self {
+        let view_layout = render_world.resource::<OnlyViewLayout>().0.clone();
+
         LineJointGizmoPipeline {
+            view_layout,
             uniform_layout: render_world
                 .resource::<LineGizmoUniformBindgroupLayout>()
                 .layout
@@ -219,7 +197,7 @@ impl SpecializedRenderPipeline for LineJointGizmoPipeline {
         // FIXME: don't store view layout ?
 
         let layout = vec![
-            //self.view_layout.clone(),
+            self.view_layout.clone(),
             self.uniform_layout.clone()
         ];
 
@@ -273,13 +251,13 @@ impl SpecializedRenderPipeline for LineJointGizmoPipeline {
 
 type DrawLineGizmo3d = (
     SetItemPipeline,
-    //SetMeshViewBindGroup<0>,
+    SetViewBindGroup<0>,
     SetLineGizmoBindGroup<1>,
     DrawLineGizmo,
 );
 type DrawLineJointGizmo3d = (
     SetItemPipeline,
-    //SetMeshViewBindGroup<0>,
+    SetViewBindGroup<0>,
     SetLineGizmoBindGroup<1>,
     DrawLineJointGizmo,
 );
@@ -415,29 +393,6 @@ fn queue_line_joint_gizmos_3d(
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex::NONE,
             });
-        }
-    }
-}
-
-#[derive(Component)]
-pub struct ViewBindGroup( pub BindGroup );
-
-// FIXME: why use `LineGizmoPipeline` and not `LineJointGizmoPipeline` ?
-pub(crate) fn prepare_view_bind_groups(
-    mut commands: Commands,
-    render_device: Res<RenderDevice>,
-    line_pipeline: Res<LineGizmoPipeline>,
-    //line_joint_pipeline: Res<LineJointGizmoPipeline>,
-    view_uniforms: Res<ViewUniforms>,
-    views: Query< Entity>,
-) {
-    if let Some(view_binding) = view_uniforms.uniforms.binding() {
-        for entity in &views {
-        let entries = DynamicBindGroupEntries::new_with_indices(((0, view_binding.clone()),));
-
-        commands.entity(entity).insert(ViewBindGroup (
-            render_device.create_bind_group("view_bind_group", &line_pipeline.view_layout, &entries),
-        ));
         }
     }
 }

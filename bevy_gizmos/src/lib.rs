@@ -41,6 +41,8 @@ pub mod gizmos;
 pub mod grid;
 pub mod primitives;
 pub mod rounded_box;
+//#[cfg(feature = "bevy_render")]
+pub mod view;
 
 #[cfg(all(feature = "bevy_pbr", feature = "bevy_render"))]
 pub mod light;
@@ -82,6 +84,7 @@ use bevy_ecs::{
 };
 use bevy_math::Vec3;
 use bevy_reflect::TypePath;
+use view::OnlyViewLayout;
 
 #[cfg( feature = "bevy_render")]
 use crate::config::GizmoMeshConfig;
@@ -167,7 +170,8 @@ impl Plugin for GizmoPlugin {
 
         #[cfg(feature = "bevy_render")]
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_systems(
+            render_app
+                .add_systems(
                 Render,
                 prepare_line_gizmo_bind_group.in_set(RenderSet::PrepareBindGroups),
             );
@@ -201,9 +205,11 @@ impl Plugin for GizmoPlugin {
             ),
         );
 
-        render_app.insert_resource(LineGizmoUniformBindgroupLayout {
-            layout: line_layout,
-        });
+        render_app
+            .init_resource::<OnlyViewLayout>()
+            .insert_resource(LineGizmoUniformBindgroupLayout {
+                layout: line_layout,
+            });
     }
 }
 
@@ -569,13 +575,13 @@ struct SetLineGizmoBindGroup<const I: usize>;
 #[cfg(feature = "bevy_render")]
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetLineGizmoBindGroup<I> {
     type Param = SRes<LineGizmoUniformBindgroup>;
-    type ViewQuery = Read<pipeline_3d::ViewBindGroup>;
+    type ViewQuery = ();
     type ItemQuery = Read<DynamicUniformIndex<LineGizmoUniform>>;
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        views: ROQueryItem<'w, Self::ViewQuery>,
+        _views: ROQueryItem<'w, Self::ViewQuery>,
         uniform_index: Option<ROQueryItem<'w, Self::ItemQuery>>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
@@ -583,8 +589,6 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetLineGizmoBindGroup<I>
         let Some(uniform_index) = uniform_index else {
             return RenderCommandResult::Skip;
         };
-        // TODO: do it in SetViewBindGroup
-        pass.set_bind_group(0, &views.0, &[0]);
         pass.set_bind_group(
             I,
             &bind_group.into_inner().bindgroup,
