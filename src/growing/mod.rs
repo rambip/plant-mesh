@@ -1,5 +1,5 @@
 use bevy::math::{Vec3, Isometry3d};
-use bevy::gizmos::gizmos::Gizmos;
+use bevy_gizmos::prelude::Gizmos;
 use bevy::color::Color;
 
 

@@ -28,7 +28,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     }, utils::HashMap
 };
-use bevy_ecs::system::lifetimeless::Read;
+use bevy::ecs::system::lifetimeless::Read;
 use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
 
 #[derive(Component)]

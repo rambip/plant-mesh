@@ -3,6 +3,8 @@
 pub(crate) use bevy::prelude::*;
 use std::f32::consts::PI;
 
+use bevy_gizmos::prelude::Gizmos;
+
 #[derive(Component)]
 struct Tree {
     plant_graph: growing::PlantNode,
@@ -19,6 +21,8 @@ mod shader;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(bevy_sprite::SpritePlugin {})
+        .add_plugins(bevy_gizmos::GizmoPlugin)
         //.add_plugins(bevy_pbr::MeshRenderPlugin {use_gpu_instance_buffer_builder: false})
         //.add_plugins(bevy_pbr::PbrPlugin::default())
         .add_plugins(shader::CustomMeshPipelinePlugin)
@@ -54,7 +58,7 @@ fn setup(
         Mesh3d::default(),
         NeedRender(true),
         Visibility::default(),
-        //shader::CustomEntity,
+        shader::CustomEntity,
     ));
 }
 

@@ -2,6 +2,7 @@ use bevy::math::{Vec3, Vec2, Isometry3d};
 use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
+use bevy_gizmos::prelude::Gizmos;
 
 use crate::growing::{PlantNode, PlantNodeProps};
 mod meshing;

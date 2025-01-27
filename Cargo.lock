@@ -2711,12 +2711,10 @@ name = "rust-geometry"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_ecs",
+ "bevy_gizmos",
  "bevy_render",
- "bytemuck",
- "nonmax",
+ "bevy_sprite",
  "rand",
- "smallvec",
 ]
 
 [[package]]

@@ -5,19 +5,19 @@ edition = "2021"
 
 [dependencies]
 bevy = {version="0.15.1", default-features=false, features=[
-    "bevy_gizmos",
+    #"bevy_gizmos",
+    #"bevy_sprite",
     "bevy_render",
     "bevy_window",
     "x11",
     "webgl2",
     "bevy_core_pipeline",
 ]}
-bevy_ecs = "0.15.1"
+#bevy_gizmos = {version="0.15.1", features=["bevy_render"]}
 bevy_render = "0.15.1"
-bytemuck = "1.21.0"
-nonmax = "0.5.5"
+bevy_sprite = "0.15.1"
+bevy_gizmos = "0.15.1"
 rand = "0.8.5"
-smallvec = "1.13.2"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
