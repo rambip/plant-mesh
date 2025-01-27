@@ -12,7 +12,6 @@ use bevy::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     }, prelude::*, render::{
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_phase::{
             AddRenderCommand, BinnedRenderPhaseType, DrawFunctions, PhaseItem, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewBinnedRenderPhases,
@@ -25,21 +24,15 @@ use bevy::{
             VertexState
         },
         renderer::RenderDevice,
-        view::{self, ExtractedView, RenderVisibleEntities, VisibilitySystems},
+        view::{ExtractedView, RenderVisibleEntities},
         Render, RenderApp, RenderSet,
     }, utils::HashMap
 };
 use bevy_ecs::system::lifetimeless::Read;
 use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
 
-/// A marker component that represents an entity that is to be rendered using
-/// our custom phase item.
-///
-/// Note the [`ExtractComponent`] trait implementation. This is necessary to
-/// tell Bevy that this object should be pulled into the render world.
-/// TODO: don't use it
-#[derive(Clone, Component, ExtractComponent)]
-pub struct CustomRenderedEntity;
+#[derive(Component)]
+pub struct CustomEntity;
 
 #[derive(Clone)]
 pub struct MeshInstance {
@@ -138,23 +131,12 @@ where
 /// the render phase.
 type DrawCustomPhaseItemCommands = (SetItemPipeline, DrawCustomPhaseItem);
 
-/// A query filter that tells [`view::check_visibility`] about our custom
-/// rendered entity.
-type WithCustomRenderedEntity = With<CustomRenderedEntity>;
-
 /// A single sraure's worth of vertices, for demonstration purposes.
 
 pub struct CustomMeshPipelinePlugin;
 
 impl Plugin for CustomMeshPipelinePlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_plugins(ExtractComponentPlugin::<CustomRenderedEntity>::default())
-            .add_systems(
-                PostUpdate,
-                view::check_visibility::<WithCustomRenderedEntity>
-                    .in_set(VisibilitySystems::CheckVisibility),
-            );
         let mut shaders = app.world_mut().resource_mut::<Assets<Shader>>();
         shaders.insert(
             &SHADER_HANDLE,
@@ -210,7 +192,7 @@ fn queue_custom_phase_item(
         // Find all the custom rendered entities that are visible from this
         // view.
         for &entity in view_visible_entities
-            .get::<WithCustomRenderedEntity>()
+            .get::<With<Mesh3d>>()
             .iter()
         {
             // Ordinarily, the [`SpecializedRenderPipeline::Key`] would contain
@@ -332,7 +314,7 @@ fn prepare_view_bind_groups(
 
 fn extract_meshes(
     mut mesh_instances: ResMut<MeshInstances>,
-    meshes: Extract<Query<(Entity, &Mesh3d)>>,
+    meshes: Extract<Query<(Entity, &Mesh3d), With<CustomEntity>>>,
 ) {
     for (entity, m) in &meshes {
         // TODO: cleanup meshes

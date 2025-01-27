@@ -53,8 +53,8 @@ fn setup(
         Tree::default(),
         Mesh3d::default(),
         NeedRender(true),
-        shader::CustomRenderedEntity,
         Visibility::default(),
+        shader::CustomEntity,
     ));
 }
 
