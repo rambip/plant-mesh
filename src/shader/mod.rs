@@ -52,9 +52,11 @@ pub struct MeshMemory(pub AssetId<Mesh>);
 /// This is loaded at app creation time.
 #[derive(Resource)]
 struct CustomMeshPipeline {
-    shader: Handle<Shader>,
     view_layout: BindGroupLayout,
 }
+
+pub const SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(13828845428412094821);
 
 /// A [`RenderCommand`] that binds the vertex and index buffers and issues the
 /// draw command for our custom phase item.
@@ -147,6 +149,11 @@ impl Plugin for CustomMeshPipelinePlugin {
                 view::check_visibility::<WithCustomRenderedEntity>
                     .in_set(VisibilitySystems::CheckVisibility),
             );
+        let mut shaders = app.world_mut().resource_mut::<Assets<Shader>>();
+        shaders.insert(
+            &SHADER_HANDLE,
+            Shader::from_wgsl(include_str!("shader.wgsl"), file!())
+        );
 
     }
     fn finish(&self, app: &mut App) {
@@ -250,13 +257,13 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
             ],
             push_constant_ranges: vec![],
             vertex: VertexState {
-                shader: self.shader.clone(),
+                shader: SHADER_HANDLE,
                 shader_defs: vec![],
                 entry_point: "vertex".into(),
                 buffers: vec![vertex_layout],
             },
             fragment: Some(FragmentState {
-                shader: self.shader.clone(),
+                shader: SHADER_HANDLE,
                 shader_defs: vec![],
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
@@ -315,7 +322,6 @@ fn prepare_view_bind_groups(
 impl FromWorld for CustomMeshPipeline {
     fn from_world(world: &mut World) -> Self {
         // Load and compile the shader in the background.
-        let asset_server = world.resource::<AssetServer>();
         let render_device = world.resource::<RenderDevice>();
 
         let view_layout_entries: Vec<BindGroupLayoutEntry> = DynamicBindGroupLayoutEntries::new_with_indices(
@@ -332,7 +338,6 @@ impl FromWorld for CustomMeshPipeline {
         );
 
         CustomMeshPipeline {
-            shader: asset_server.load("custom_phase_item.wgsl"),
             view_layout,
         }
     }
