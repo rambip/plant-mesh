@@ -58,13 +58,13 @@ pub const SHADER_HANDLE: Handle<Shader> =
 
 /// A [`RenderCommand`] that binds the vertex and index buffers and issues the
 /// draw command for our custom phase item.
-struct DrawCustomPhaseItem;
+struct DrawCustomMesh;
 
 
 /// FIXME: prepare the view uniforms before passing them to the pass ?
 /// https://docs.rs/bevy_pbr/0.15.1/src/bevy_pbr/render/mesh_view_bindings.rs.html#715
 /// I don't know why SRes does not work with ViewUniforms
-impl<P> RenderCommand<P> for DrawCustomPhaseItem
+impl<P> RenderCommand<P> for DrawCustomMesh
 where
     P: PhaseItem,
 {
@@ -129,9 +129,7 @@ where
 
 /// The custom draw commands that Bevy executes for each entity we enqueue into
 /// the render phase.
-type DrawCustomPhaseItemCommands = (SetItemPipeline, DrawCustomPhaseItem);
-
-/// A single sraure's worth of vertices, for demonstration purposes.
+type DrawCustomMeshCommands = (SetItemPipeline, DrawCustomMesh);
 
 pub struct CustomMeshPipelinePlugin;
 
@@ -154,24 +152,27 @@ impl Plugin for CustomMeshPipelinePlugin {
             .init_resource::<CustomMeshPipeline>()
             .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
             .init_resource::<MeshInstances>()
-            .add_render_command::<Opaque3d, DrawCustomPhaseItemCommands>()
+            .add_render_command::<Opaque3d, DrawCustomMeshCommands>()
             .add_systems(
                 ExtractSchedule,
                 extract_meshes
             )
             .add_systems(
                 Render,
-                prepare_view_bind_groups.in_set(RenderSet::Prepare),
+                (   
+                    prepare_view_bind_groups.in_set(RenderSet::Prepare),
+                    queue_meshes.in_set(RenderSet::Queue)
+                )
             )
-            .add_systems(Render, queue_custom_phase_item.in_set(RenderSet::Queue));
+            ;
     }
 }
 
 /// A render-world system that enqueues the entity with custom rendering into
 /// the opaque render phases of each view.
-fn queue_custom_phase_item(
+fn queue_meshes(
     pipeline_cache: Res<PipelineCache>,
-    custom_phase_pipeline: Res<CustomMeshPipeline>,
+    custom_mesh_pipeline: Res<CustomMeshPipeline>,
     mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
     opaque_draw_functions: Res<DrawFunctions<Opaque3d>>,
     mut specialized_render_pipelines: ResMut<SpecializedRenderPipelines<CustomMeshPipeline>>,
@@ -179,7 +180,7 @@ fn queue_custom_phase_item(
 ) {
     let draw_custom_phase_item = opaque_draw_functions
         .read()
-        .id::<DrawCustomPhaseItemCommands>();
+        .id::<DrawCustomMeshCommands>();
 
     // Render phases are per-view, so we need to iterate over all views so that
     // the entity appears in them. (In this example, we have only one view, but
@@ -201,7 +202,7 @@ fn queue_custom_phase_item(
             // with the exception of number of MSAA samples.
             let pipeline_id = specialized_render_pipelines.specialize(
                 &pipeline_cache,
-                &custom_phase_pipeline,
+                &custom_mesh_pipeline,
                 *msaa,
             );
 
