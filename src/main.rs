@@ -66,6 +66,7 @@ struct CameraSettings {
     pub orbit_angle: f32,
     pub sensibility: f32,
     z: f32,
+    debug_shapes: bool,
 }
 
 impl Default for CameraSettings {
@@ -75,6 +76,7 @@ impl Default for CameraSettings {
             orbit_angle: 0.,
             sensibility: 1.,
             z: 5.,
+            debug_shapes: false,
         }
     }
 
@@ -127,6 +129,9 @@ fn handle_input(
             r.0 = true
         }
     }
+    if keyboard.just_pressed(KeyCode::KeyD) {
+        camera_settings.debug_shapes ^= true;
+    }
 
 }
 
@@ -137,7 +142,7 @@ fn draw_tree(
     mut gizmos: Gizmos,
     mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
-    //mut mem: ResMut<shader::MeshInstances>,
+    camera_settings: Res<CameraSettings>,
     time: Res<Time>,
     ) {
 
@@ -152,7 +157,9 @@ fn draw_tree(
         //mem.0 = mesh.0.id();
         need_render.0 = false;
         // only debug the tree after trying to render it
-        tree.debug(&mut gizmos);
+        if camera_settings.debug_shapes {
+            tree.debug(&mut gizmos);
+        }
     }
 }
 

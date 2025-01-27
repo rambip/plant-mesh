@@ -57,7 +57,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // Use an orthographic projection.
     var vertex_output: VertexOutput;
     vertex_output.clip_position = view.clip_from_world * vec4(vertex.position.xyz, 1.0);
-    vertex_output.color = vertex.color;
+
+    // hardcoded light direction
+    var intensity: f32 = 1.+dot(vertex.normal, vec3(0., 1., 1.));
+    vertex_output.color = 0.5*intensity*vertex.color;
     return vertex_output;
 }
 
