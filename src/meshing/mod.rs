@@ -1,4 +1,4 @@
-use bevy::math::{Vec3, Vec2, Isometry3d};
+use bevy::math::{Isometry3d, Quat, Vec2, Vec3};
 use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
@@ -59,10 +59,11 @@ impl MeshBuilder {
         let PlantNodeProps {
             position,
             radius,
-            ..
+            orientation,
         } = self.node_props[current_node];
-        let p = position + uniform_disk(radius).extend(0.);
-        trajectory.push(p);
+        let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
+        let relative_pos = rotation * sample_uniform_disk(radius).extend(0.);
+        trajectory.push(position + relative_pos);
         self.particles_per_node[current_node].push(particle_id);
     }
     fn particle_position(&self, particle_id: usize, bottom_node: usize, t: f32) -> Vec3 {
@@ -226,7 +227,7 @@ impl MeshBuilder {
 }
 
 
-fn uniform_disk(radius: f32) -> Vec2 {
+fn sample_uniform_disk(radius: f32) -> Vec2 {
     Vec2::from_angle(rand::random::<f32>()*std::f32::consts::TAU) * radius*(rand::random::<f32>()).sqrt()
 }
 
