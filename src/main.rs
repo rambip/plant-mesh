@@ -67,6 +67,7 @@ struct CameraSettings {
     pub sensibility: f32,
     z: f32,
     debug_shapes: bool,
+    animate: bool,
 }
 
 impl Default for CameraSettings {
@@ -77,6 +78,7 @@ impl Default for CameraSettings {
             sensibility: 1.,
             z: 5.,
             debug_shapes: false,
+            animate: true,
         }
     }
 
@@ -132,6 +134,9 @@ fn handle_input(
     if keyboard.just_pressed(KeyCode::KeyD) {
         camera_settings.debug_shapes ^= true;
     }
+    if keyboard.just_pressed(KeyCode::KeyA) {
+        camera_settings.animate ^= true;
+    }
 
 }
 
@@ -150,7 +155,12 @@ fn draw_tree(
     for (mut mesh, mut tree, mut need_render) in trees.iter_mut() {
         let t = time.elapsed_secs();
         let r: f32 = t/5. - (t / 5.).floor();
-        tree.cache.set_triangle_proportion(r);
+        if camera_settings.animate {
+            tree.cache.set_triangle_proportion(r);
+        }
+        else {
+            tree.cache.set_triangle_proportion(1.0);
+        }
 
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
         // FIXME: do it automatically
