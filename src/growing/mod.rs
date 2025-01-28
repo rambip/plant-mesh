@@ -112,6 +112,14 @@ impl PlantNode {
         }
     }
 
+    pub fn compute_depth(&self) -> usize {
+        1 + self.children
+            .iter()
+            .map(|x| x.compute_depth())
+            .max()
+            .unwrap_or_default()
+    }
+
     pub fn register_depths(&self, acc: &mut Vec<usize>, start_depth: usize) {
         acc[self.id] = start_depth;
         for c in &self.children {

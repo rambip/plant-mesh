@@ -22,6 +22,7 @@ pub struct MeshBuilder {
     mesh_triangles: Vec<usize>,
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
+    tree_depth: usize,
 }
 
 impl MeshBuilder {
@@ -44,6 +45,7 @@ impl MeshBuilder {
             parents,
             node_props,
             leaves,
+            tree_depth: plant_graph.compute_depth(),
             trajectories: vec![vec![]; node_count],
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
@@ -53,6 +55,11 @@ impl MeshBuilder {
             debug_points: vec![],
         }
     }
+
+    fn depth(&self) -> usize {
+        self.tree_depth
+    }
+
     fn register_particle_position_for_leaf(&mut self, particle_id: usize, trajectory: &mut Vec<Vec3>, current_node: usize) {
         let PlantNodeProps {
             position,
@@ -68,18 +75,24 @@ impl MeshBuilder {
         trajectory.push(position);
         self.particles_per_node[current_node].push(particle_id);
     }
-    fn particle_position(&self, particle_id: usize, bottom_node: usize, t: f32) -> Vec3 {
-        let global_t = self.depths[bottom_node] as f32 + t;
-        meshing::extended_catmull_spline(&self.trajectories[particle_id], 
-            global_t
-            )
+
+    fn global_t(&self, bottom_node: usize, t: f32) -> f32 {
+        self.depths[bottom_node] as f32 + t
     }
-    pub fn register_points_on_contour(&mut self, points: &[Vec3], orientation: Vec3) -> Vec<usize> {
+
+    fn particle_position(&self, particle_id: usize, bottom_node: usize, t: f32) -> Vec3 {
+        meshing::extended_catmull_spline(&self.trajectories[particle_id], 
+            self.global_t(bottom_node, t)
+        )
+    }
+    pub fn register_points_on_contour(&mut self, points: &[Vec3], global_depth: f32, orientation: Vec3) -> Vec<usize> {
         let i0 = self.mesh_points.len();
         let n = points.len();
         self.mesh_points.extend(points);
         //self.cache.debug_points.push(points[0]);
-        self.mesh_colors.extend(vec![[0.2, 1.0, 0.0, 1.]; n]);
+        let r = global_depth / self.depth() as f32;
+        let color = [1. - r, r, 0.2, 1.0];
+        self.mesh_colors.extend(vec![color; n]);
 
         for i in 0..n {
             let v1 = points[(n+i-1)%n] - points[(n+i-2)%n];
@@ -164,7 +177,11 @@ impl MeshBuilder {
 
 
             let new_points = self.branch_contour(child, 0.);
-            let mut previous_contour_ids = self.register_points_on_contour(&new_points, self.node_props[parent].orientation);
+            let mut previous_contour_ids = self.register_points_on_contour(
+                &new_points, 
+                self.global_t(parent, 0.),
+                self.node_props[parent].orientation
+            );
 
             let radius = self.node_props[parent].radius;
             let dz = 2.0*radius * std::f32::consts::PI / new_points.len() as f32;
@@ -177,7 +194,11 @@ impl MeshBuilder {
                 let orientation = lerp(self.node_props[parent].orientation, self.node_props[child].orientation, t);
 
                 let current_contour = self.branch_contour(child, t);
-                let current_contour_ids = self.register_points_on_contour(&current_contour, orientation);
+                let current_contour_ids = self.register_points_on_contour(
+                    &current_contour,
+                    self.global_t(parent, t),
+                    orientation
+                );
 
                 let triangles = meshing::mesh_between_contours(&self.mesh_points, &current_contour_ids, &previous_contour_ids); 
 

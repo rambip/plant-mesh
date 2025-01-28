@@ -7,6 +7,8 @@ use bevy_gizmos::prelude::Gizmos;
 
 #[derive(Component)]
 struct Tree {
+    // TODO: color on nodes ?
+    max_depth: usize,
     plant_graph: growing::PlantNode,
     // including root
     node_count: usize,
@@ -170,6 +172,7 @@ impl Default for Tree {
         let node_count = plant_graph.count_node();
         let cache = meshing::MeshBuilder::new(&plant_graph, node_count);
         Self {
+            max_depth: plant_graph.compute_depth(),
             plant_graph,
             node_count,
             particle_per_leaf: 50,
