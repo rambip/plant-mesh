@@ -86,7 +86,7 @@ impl Default for CameraSettings {
 impl CameraSettings {
     fn transform(&self, time: f32) -> Transform {
         let mut camera = Transform::default();
-        let angle = self.orbit_angle + if self.animate {0.2*time} else {0.};
+        let angle = self.orbit_angle + if self.animate {0.5*time} else {0.};
         camera.rotation = Quat::from_rotation_z(angle)
                         * Quat::from_rotation_x(0.5*PI) // swap y and z
         ;

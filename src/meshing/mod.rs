@@ -60,7 +60,7 @@ impl MeshBuilder {
             orientation,
         } = self.node_props[current_node];
         let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
-        let relative_pos = rotation * sample_uniform_disk(radius).extend(0.);
+        let relative_pos = rotation * sample_uniform_circle(radius).extend(0.);
         trajectory.push(position + relative_pos);
         self.particles_per_node[current_node].push(particle_id);
     }
@@ -231,4 +231,7 @@ fn sample_uniform_disk(radius: f32) -> Vec2 {
     Vec2::from_angle(rand::random::<f32>()*std::f32::consts::TAU) * radius*(rand::random::<f32>()).sqrt()
 }
 
+fn sample_uniform_circle(radius: f32) -> Vec2 {
+    Vec2::from_angle(rand::random::<f32>()*std::f32::consts::TAU) * radius
+}
 
