@@ -78,10 +78,10 @@ impl MeshBuilder {
         self.mesh_colors.extend(vec![[0.2, 1.0, 0.0, 1.]; n]);
 
         for i in 0..n {
-            let v1 = points[(n+i-1)%n] - points[i];
-            let v2 = points[i] - points[(n+i+1)%n];
+            let v1 = points[i] - points[(n+i-1)%n];
+            let v2 = points[(n+i+1)%n] - points[i];
 
-            self.mesh_normals.push(-(v1.normalize() - v2.normalize()).normalize());
+            self.mesh_normals.push((v1.normalize() - v2.normalize()).normalize());
         }
 
         (i0..i0+n)
