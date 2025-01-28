@@ -1,4 +1,4 @@
-use bevy::math::{Isometry3d, Quat, Vec2, Vec3};
+use bevy::math::{Quat, Vec2, Vec3};
 use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
@@ -20,7 +20,6 @@ pub struct MeshBuilder {
     mesh_points: Vec<Vec3>,
     debug_points: Vec<Vec3>,
     mesh_triangles: Vec<usize>,
-    max_triangle_proportion: f32,
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
 }
@@ -49,7 +48,6 @@ impl MeshBuilder {
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
             mesh_triangles: vec![],
-            max_triangle_proportion: 1.,
             mesh_normals: vec![],
             mesh_colors: vec![],
             debug_points: vec![],
@@ -159,14 +157,6 @@ impl MeshBuilder {
         self.mesh_triangles.extend(triangles)
     }
 
-    fn triangles(&self) -> &[usize] {
-        let target_n_triangles : f32 = 
-            // at least one triangle (3 points)
-            f32::max(1., self.max_triangle_proportion*self.mesh_triangles.len() as f32 / 3.
-        );
-        &self.mesh_triangles[0..3*(target_n_triangles as usize)]
-    }
-
     pub fn compute_each_branch(&mut self) {
         for child in 1..self.node_count{
 
@@ -198,14 +188,6 @@ impl MeshBuilder {
         }
     }
 
-    //pub fn keep_only_propotion_of_triangles(&mut self, r: f32) {
-    //    let target_length = r * self.mesh_triangles.len() as f32;
-    //    self.mesh_triangles.truncate(target_length as usize);
-    //}
-    pub fn set_triangle_proportion(&mut self, r: f32){
-        self.max_triangle_proportion = r;
-    }
-
     pub fn to_mesh(&self) -> Mesh {
         Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
             .with_inserted_attribute(
@@ -221,12 +203,12 @@ impl MeshBuilder {
                 self.mesh_colors.clone(),
             )
             .with_inserted_indices(Indices::U32(
-                    self.triangles().iter().map(|x| *x as u32).collect()
+                    self.mesh_triangles.iter().map(|x| *x as u32).collect()
             ))
     }
     
     pub fn debug(&self, gizmos: &mut Gizmos) {
-        for i in 0..self.triangles().len()/3 {
+        for i in 0..self.mesh_triangles.len()/3 {
             let (ia, ib, ic) = (self.mesh_triangles[3*i], self.mesh_triangles[3*i+1], self.mesh_triangles[3*i+2]);
             let (pa, pb, pc) = (self.mesh_points[ia], self.mesh_points[ib], self.mesh_points[ic]);
             let color = Color::srgb(0., 0.4, 0.);

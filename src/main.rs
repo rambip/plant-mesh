@@ -150,23 +150,11 @@ fn draw_tree(
     mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera_settings: Res<CameraSettings>,
-    time: Res<Time>,
     ) {
 
 
     for (mut mesh, mut tree, mut need_render) in trees.iter_mut() {
-        let t = time.elapsed_secs();
-        let r: f32 = t/5. - (t / 5.).floor();
-        if camera_settings.animate {
-            tree.cache.set_triangle_proportion(r);
-        }
-        else {
-            tree.cache.set_triangle_proportion(1.0);
-        }
-
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
-        // FIXME: do it automatically
-        //mem.0 = mesh.0.id();
         need_render.0 = false;
         // only debug the tree after trying to render it
         if camera_settings.debug_shapes {
