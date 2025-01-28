@@ -44,7 +44,7 @@ impl PlantNode {
                                 },
                                 PlantNode {
                                     id: 4,
-                                    props: PlantNodeProps::new(Vec3::new(2., -2., 5.), 0.3, Vec3::new(0., 0., 1.)),
+                                    props: PlantNodeProps::new(Vec3::new(2., -2., 5.), 0.3, Vec3::new(0., -2., 1.)),
                                     children: vec![],
                                 }
                             ],

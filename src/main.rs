@@ -49,7 +49,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
-        camera_settings.transform(),
+        camera_settings.transform(0.),
     ));
     commands.spawn((
         Tree::default(),
@@ -84,9 +84,10 @@ impl Default for CameraSettings {
 
 }
 impl CameraSettings {
-    fn transform(&self) -> Transform {
+    fn transform(&self, time: f32) -> Transform {
         let mut camera = Transform::default();
-        camera.rotation = Quat::from_rotation_z(self.orbit_angle)
+        let angle = self.orbit_angle + if self.animate {0.2*time} else {0.};
+        camera.rotation = Quat::from_rotation_z(angle)
                         * Quat::from_rotation_x(0.5*PI) // swap y and z
         ;
 
@@ -101,8 +102,9 @@ impl CameraSettings {
 fn update_view(
     camera_settings: Res<CameraSettings>,
     mut camera: Single<&mut Transform, With<Camera>>,
+    time: Res<Time>,
 ){
-    **camera = camera_settings.transform();
+    **camera = camera_settings.transform(time.elapsed_secs());
 }
 
 fn handle_input(
