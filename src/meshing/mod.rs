@@ -177,7 +177,7 @@ impl MeshBuilder {
             let mut previous_contour_ids = self.register_points_on_contour(&new_points, self.node_props[parent].orientation);
 
             let radius = self.node_props[parent].radius;
-            let dz = radius * std::f32::consts::PI / new_points.len() as f32;
+            let dz = 2.0*radius * std::f32::consts::PI / new_points.len() as f32;
             let branch_length = (self.node_props[parent].position - self.node_props[child].position).length();
             let n_steps = (branch_length / dz) as usize;
 
