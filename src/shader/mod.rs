@@ -8,13 +8,13 @@
 //! for better reuse of parts of Bevy's built-in mesh rendering logic.
 
 use bevy::{
-    core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey, CORE_3D_DEPTH_FORMAT}, ecs::{
+    core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT}, ecs::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     }, prelude::*, render::{
         render_phase::{
-            AddRenderCommand, BinnedRenderPhaseType, DrawFunctions, PhaseItem, RenderCommand,
-            RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewBinnedRenderPhases,
+            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand,
+            RenderCommandResult, SetItemPipeline, TrackedRenderPass, 
         },
         render_resource::{
             ColorTargetState, ColorWrites, CompareFunction, DepthStencilState,
@@ -29,7 +29,7 @@ use bevy::{
     }, utils::HashMap
 };
 use bevy::ecs::system::lifetimeless::Read;
-use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
+use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases}, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
 
 #[derive(Component)]
 pub struct CustomEntity;
@@ -152,7 +152,7 @@ impl Plugin for CustomMeshPipelinePlugin {
             .init_resource::<CustomMeshPipeline>()
             .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
             .init_resource::<MeshInstances>()
-            .add_render_command::<Opaque3d, DrawCustomMeshCommands>()
+            .add_render_command::<Transparent3d, DrawCustomMeshCommands>()
             .add_systems(
                 ExtractSchedule,
                 extract_meshes
@@ -173,12 +173,12 @@ impl Plugin for CustomMeshPipelinePlugin {
 fn queue_meshes(
     pipeline_cache: Res<PipelineCache>,
     custom_mesh_pipeline: Res<CustomMeshPipeline>,
-    mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
-    opaque_draw_functions: Res<DrawFunctions<Opaque3d>>,
+    mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
+    transparent_draw_functions: Res<DrawFunctions<Transparent3d>>,
     mut specialized_render_pipelines: ResMut<SpecializedRenderPipelines<CustomMeshPipeline>>,
     views: Query<(Entity, &RenderVisibleEntities, &Msaa), With<ExtractedView>>,
 ) {
-    let draw_custom_phase_item = opaque_draw_functions
+    let draw_function = transparent_draw_functions
         .read()
         .id::<DrawCustomMeshCommands>();
 
@@ -186,7 +186,7 @@ fn queue_meshes(
     // the entity appears in them. (In this example, we have only one view, but
     // it's good practice to loop over all views anyway.)
     for (view_entity, view_visible_entities, msaa) in views.iter() {
-        let Some(opaque_phase) = opaque_render_phases.get_mut(&view_entity) else {
+        let Some(transparent_phase) = transparent_render_phases.get_mut(&view_entity) else {
             continue;
         };
 
@@ -200,7 +200,7 @@ fn queue_meshes(
             // some per-view settings, such as whether the view is HDR, but for
             // simplicity's sake we simply hard-code the view's characteristics,
             // with the exception of number of MSAA samples.
-            let pipeline_id = specialized_render_pipelines.specialize(
+            let pipeline = specialized_render_pipelines.specialize(
                 &pipeline_cache,
                 &custom_mesh_pipeline,
                 *msaa,
@@ -214,17 +214,15 @@ fn queue_meshes(
             // The asset ID is arbitrary; we simply use [`AssetId::invalid`],
             // but you can use anything you like. Note that the asset ID need
             // not be the ID of a [`Mesh`].
-            opaque_phase.add(
-                Opaque3dBinKey {
-                    draw_function: draw_custom_phase_item,
-                    pipeline: pipeline_id,
-                    asset_id: AssetId::<Mesh>::invalid().untyped(),
-                    material_bind_group_id: None,
-                    lightmap_image: None,
-                },
+
+            transparent_phase.add(Transparent3d {
                 entity,
-                BinnedRenderPhaseType::NonMesh,
-            );
+                draw_function,
+                pipeline,
+                distance: 0.,
+                batch_range: 0..1,
+                extra_index: PhaseItemExtraIndex::NONE,
+            });
         }
     }
 }
@@ -274,8 +272,8 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
             // changed.
             depth_stencil: Some(DepthStencilState {
                 format: CORE_3D_DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: CompareFunction::Always,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Greater,
                 stencil: default(),
                 bias: default(),
             }),

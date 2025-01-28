@@ -1,36 +1,5 @@
-// `custom_phase_item.wgsl`
-//
-// This shader goes with the `custom_phase_item` example. It demonstrates how to
-// enqueue custom rendering logic in a `RenderPhase`.
 
-struct ColorGrading {
-    balance: mat3x3<f32>,
-    saturation: vec3<f32>,
-    contrast: vec3<f32>,
-    gamma: vec3<f32>,
-    gain: vec3<f32>,
-    lift: vec3<f32>,
-    midtone_range: vec2<f32>,
-    exposure: f32,
-    hue: f32,
-    post_saturation: f32,
-}
-struct View {
-    clip_from_world: mat4x4<f32>,
-    unjittered_clip_from_world: mat4x4<f32>,
-    world_from_clip: mat4x4<f32>,
-    world_from_view: mat4x4<f32>,
-    view_from_world: mat4x4<f32>,
-    clip_from_view: mat4x4<f32>,
-    view_from_clip: mat4x4<f32>,
-    world_position: vec3<f32>,
-    exposure: f32,
-    // viewport(x_origin, y_origin, width, height)
-    viewport: vec4<f32>,
-    frustum: array<vec4<f32>, 6>,
-    color_grading: ColorGrading,
-    mip_bias: f32,
-};
+#import bevy_render::view::View
 
 @group(0) @binding(0) var<uniform> view: View;
 
@@ -56,11 +25,15 @@ struct VertexOutput {
 fn vertex(vertex: Vertex) -> VertexOutput {
     // Use an orthographic projection.
     var vertex_output: VertexOutput;
-    vertex_output.clip_position = view.clip_from_world * vec4(vertex.position.xyz, 1.0);
+    let clip = view.clip_from_world * vec4(vertex.position.xyz, 1.0);
+    vertex_output.clip_position = clip;
 
     // hardcoded light direction
-    var intensity: f32 = 1.+dot(vertex.normal, vec3(0., 1., 1.));
-    vertex_output.color = 0.5*intensity*vertex.color;
+    //var intensity: f32 = 1.+dot(vertex.normal, vec3(0., 0.5, 0.5));
+    // FIXME: always same z position
+//    var intensity: f32 = 0.1*vertex_output.clip_position.z;
+    //vertex_output.color = intensity*vertex.color;
+    vertex_output.color = vec4(0.1*clip.z, clip.w, 0., 1.);
     return vertex_output;
 }
 
