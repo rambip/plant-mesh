@@ -1,7 +1,7 @@
 use bevy::math::Vec3;
 
 
-fn lerp<T>(a: T, b: T, t: f32) -> T 
+pub fn lerp<T>(a: T, b: T, t: f32) -> T 
 where T: std::ops::Mul<f32, Output=T> + std::ops::Add<Output=T>
 {
     a*(1.-t) + b*t

@@ -14,11 +14,12 @@ pub struct PlantNode {
 pub struct PlantNodeProps {
     pub position: Vec3,
     pub radius: f32,
+    pub orientation: Vec3,
 }
 
 impl PlantNodeProps {
-    fn new(position: Vec3, radius: f32) -> Self {
-        Self {position, radius }
+    fn new(position: Vec3, radius: f32, orientation: Vec3) -> Self {
+        Self {position, radius, orientation: orientation.normalize()}
     }
 }
 
@@ -26,35 +27,35 @@ impl PlantNode {
     pub fn demo() -> Self {
         Self {
             id: 0,
-            props: PlantNodeProps::new(Vec3::ZERO, 1.1),
+            props: PlantNodeProps::new(Vec3::ZERO, 1.1, Vec3::new(0., 0., 1.)),
             children: vec![
                 PlantNode {
                     id: 1,
-                    props: PlantNodeProps::new(Vec3::new(0., 0., 2.), 0.9),
+                    props: PlantNodeProps::new(Vec3::new(0., 0., 2.), 0.9, Vec3::new(0., 0., 1.)),
                     children: vec![
                         PlantNode {
                             id: 2,
-                            props: PlantNodeProps::new(Vec3::new(1., 0., 3.), 0.5),
+                            props: PlantNodeProps::new(Vec3::new(1., 0., 3.), 0.5, Vec3::new(0., 0., 1.)),
                             children: vec![
                                 PlantNode {
                                     id: 3,
-                                    props: PlantNodeProps::new(Vec3::new(1.5, 0., 6.), 0.3),
+                                    props: PlantNodeProps::new(Vec3::new(1.5, 0., 6.), 0.3, Vec3::new(0., 0., 1.)),
                                     children: vec![],
                                 },
                                 PlantNode {
                                     id: 4,
-                                    props: PlantNodeProps::new(Vec3::new(2., -2., 5.), 0.3),
+                                    props: PlantNodeProps::new(Vec3::new(2., -2., 5.), 0.3, Vec3::new(0., 0., 1.)),
                                     children: vec![],
                                 }
                             ],
                         },
                         PlantNode {
                             id: 5,
-                            props: PlantNodeProps::new(Vec3::new(-1., 0., 4.5), 0.2),
+                            props: PlantNodeProps::new(Vec3::new(-1., 0., 4.5), 0.2, Vec3::new(0., 1., 1.)),
                             children: vec![
                                 PlantNode {
                                     id: 6,
-                                    props: PlantNodeProps::new(Vec3::new(-0.5, 1., 6.), 0.1),
+                                    props: PlantNodeProps::new(Vec3::new(-0.5, 1., 6.), 0.1, Vec3::new(0., 0., 1.)),
                                     children: vec![],
                                 } ],
                         } ],
@@ -65,11 +66,11 @@ impl PlantNode {
     pub fn _skew() -> Self {
         Self {
             id: 0,
-            props: PlantNodeProps::new(Vec3::new(0., 0., 3.), 2.0),
+            props: PlantNodeProps::new(Vec3::new(0., 0., 3.), 2.0, Vec3::new(0., 0., 1.)),
             children: vec![
                 PlantNode {
                     id: 1,
-                    props: PlantNodeProps::new(Vec3::new(3., 0., 5.), 1.0),
+                    props: PlantNodeProps::new(Vec3::new(3., 0., 5.), 1.0, Vec3::new(0., 0., 1.)),
                     children: vec![]
                 }
             ],

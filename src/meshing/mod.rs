@@ -3,6 +3,7 @@ use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy_gizmos::prelude::Gizmos;
+use meshing::lerp;
 
 use crate::growing::{PlantNode, PlantNodeProps};
 mod meshing;
@@ -70,7 +71,7 @@ impl MeshBuilder {
             global_t
             )
     }
-    pub fn register_points_on_contour(&mut self, points: &[Vec3]) -> Vec<usize> {
+    pub fn register_points_on_contour(&mut self, points: &[Vec3], orientation: Vec3) -> Vec<usize> {
         let i0 = self.mesh_points.len();
         let n = points.len();
         self.mesh_points.extend(points);
@@ -88,7 +89,7 @@ impl MeshBuilder {
             let curv3 = v3.normalize() - v4.normalize();
 
             let mut curv = (curv1+2.*curv2+curv3);
-            curv.z = 0.;
+            curv = curv - curv.dot(orientation)*orientation;
             // TODO: project on branch direction
 
             self.mesh_normals.push(curv.normalize());
@@ -152,8 +153,9 @@ impl MeshBuilder {
 
             let parent = self.parents[child];
 
+
             let new_points = self.branch_contour(child, 0.);
-            let mut previous_contour_ids = self.register_points_on_contour(&new_points);
+            let mut previous_contour_ids = self.register_points_on_contour(&new_points, self.node_props[parent].orientation);
 
             let radius = self.node_props[parent].radius;
             let dz = radius * std::f32::consts::PI / new_points.len() as f32;
@@ -163,9 +165,10 @@ impl MeshBuilder {
             // FIXME: duplicate points at nodes
             for i in 1..=n_steps {
                 let t = (i as f32) / n_steps as f32;
+                let orientation = lerp(self.node_props[parent].orientation, self.node_props[child].orientation, t);
 
                 let current_contour = self.branch_contour(child, t);
-                let current_contour_ids = self.register_points_on_contour(&current_contour);
+                let current_contour_ids = self.register_points_on_contour(&current_contour, orientation);
 
                 let triangles = meshing::mesh_between_contours(&self.mesh_points, &current_contour_ids, &previous_contour_ids); 
 
