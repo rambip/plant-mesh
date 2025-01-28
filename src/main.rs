@@ -113,10 +113,10 @@ fn handle_input(
 
 
     if keyboard.pressed(KeyCode::ArrowRight) {
-        camera_settings.orbit_angle += camera_settings.sensibility * time.delta_secs()
+        camera_settings.orbit_angle -= camera_settings.sensibility * time.delta_secs()
     }
     if keyboard.pressed(KeyCode::ArrowLeft) {
-        camera_settings.orbit_angle -= camera_settings.sensibility * time.delta_secs()
+        camera_settings.orbit_angle += camera_settings.sensibility * time.delta_secs()
     }
     if keyboard.just_pressed(KeyCode::NumpadAdd) {
         camera_settings.orbit_distance -= 1.;
