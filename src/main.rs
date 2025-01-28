@@ -184,7 +184,7 @@ impl Default for Tree {
         Self {
             plant_graph,
             node_count,
-            particle_per_leaf: 500,
+            particle_per_leaf: 50,
             cache,
         }
     }

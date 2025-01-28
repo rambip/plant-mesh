@@ -55,7 +55,7 @@ impl MeshBuilder {
             debug_points: vec![],
         }
     }
-    fn register_particle_position(&mut self, particle_id: usize, trajectory: &mut Vec<Vec3>, current_node: usize) {
+    fn register_particle_position_for_leaf(&mut self, particle_id: usize, trajectory: &mut Vec<Vec3>, current_node: usize) {
         let PlantNodeProps {
             position,
             radius,
@@ -64,6 +64,10 @@ impl MeshBuilder {
         let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
         let relative_pos = rotation * sample_uniform_disk(radius).extend(0.);
         trajectory.push(position + relative_pos);
+        self.particles_per_node[current_node].push(particle_id);
+    }
+    fn register_particle_position_for_node(&mut self, particle_id: usize, position: Vec3, trajectory: &mut Vec<Vec3>, current_node: usize) {
+        trajectory.push(position);
         self.particles_per_node[current_node].push(particle_id);
     }
     fn particle_position(&self, particle_id: usize, bottom_node: usize, t: f32) -> Vec3 {
@@ -89,9 +93,8 @@ impl MeshBuilder {
             let curv2 = v2.normalize() - v3.normalize();
             let curv3 = v3.normalize() - v4.normalize();
 
-            let mut curv = (curv1+2.*curv2+curv3);
+            let mut curv = curv1+2.*curv2+curv3;
             curv = curv - curv.dot(orientation)*orientation;
-            // TODO: project on branch direction
 
             self.mesh_normals.push(curv.normalize());
         }
@@ -108,11 +111,26 @@ impl MeshBuilder {
                 let mut new_traj = Vec::new();
                 let mut node = l;
 
-                self.register_particle_position(particle_id, &mut new_traj, node);
+                self.register_particle_position_for_leaf(particle_id, &mut new_traj, node);
 
                 while node != 0 {
-                    node = self.parents[node];
-                    self.register_particle_position(particle_id, &mut new_traj, node);
+                    let parent = self.parents[node];
+                    let child = node;
+                    let origin = self.node_props[parent].position;
+                    let normal = self.node_props[parent].orientation;
+                    let r_parent = self.node_props[parent].radius;
+                    let p_child = self.node_props[child].position;
+
+                    let d = (origin - p_child).normalize();
+                    let previous_pos = *new_traj.last().unwrap();
+                    let u = previous_pos - origin;
+
+                    let l = normal.dot(u) / normal.dot(d.normalize());
+                    assert!(!l.is_nan());
+                    let projected = origin + r_parent*(u - l * d.normalize()).normalize();
+
+                    self.register_particle_position_for_node(particle_id, projected, &mut new_traj, parent);
+                    node = parent;
                 }
                 new_traj.reverse();
                 self.trajectories.push(new_traj);
