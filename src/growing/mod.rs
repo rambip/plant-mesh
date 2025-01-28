@@ -1,4 +1,4 @@
-use bevy::math::{Vec3, Isometry3d};
+use bevy::math::{Isometry3d, Quat, Vec3};
 use bevy_gizmos::prelude::Gizmos;
 use bevy::color::Color;
 
@@ -78,7 +78,11 @@ impl PlantNode {
     }
 
     pub fn debug(&self, gizmos: &mut Gizmos) {
-        gizmos.circle(Isometry3d::from_translation(self.props.position), 1.1*self.props.radius, Color::srgb(0., 0.8, 0.5));
+        let isometry = Isometry3d {
+            translation: self.props.position.into(),
+            rotation: Quat::from_rotation_arc(Vec3::Z, self.props.orientation)
+        };
+        gizmos.circle(isometry, 1.1*self.props.radius, Color::srgb(0., 0.8, 0.5));
         for c in &self.children {
             c.debug(gizmos)
         }
