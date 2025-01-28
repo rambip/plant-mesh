@@ -87,7 +87,11 @@ impl MeshBuilder {
             let curv2 = v2.normalize() - v3.normalize();
             let curv3 = v3.normalize() - v4.normalize();
 
-            self.mesh_normals.push((curv1+2.*curv2+curv3).normalize());
+            let mut curv = (curv1+2.*curv2+curv3);
+            curv.z = 0.;
+            // TODO: project on branch direction
+
+            self.mesh_normals.push(curv.normalize());
         }
 
         (i0..i0+n)
