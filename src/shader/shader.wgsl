@@ -29,7 +29,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     vertex_output.clip_position = clip;
 
     // hardcoded light direction
-    var intensity: f32 = 1.+dot(vertex.normal, vec3(0., 0.5, 0.5));
+    var intensity: f32 = 1.+dot(vertex.normal, vec3(0., sqrt(0.5), sqrt(0.5)));
     // FIXME: always same z position
     vertex_output.color = 0.5*intensity*vertex.color;
     return vertex_output;
