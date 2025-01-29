@@ -91,7 +91,7 @@ impl MeshBuilder {
         self.mesh_points.extend(points);
         //self.cache.debug_points.push(points[0]);
         let r = global_depth / self.depth() as f32;
-        let color = [1. - r, r, 0.2, 1.0];
+        let color = [1. - r, 0.5+0.5*r, 0.2, 1.0];
         self.mesh_colors.extend(vec![color; n]);
 
         for i in 0..n {

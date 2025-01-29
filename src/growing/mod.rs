@@ -27,7 +27,7 @@ impl PlantNode {
     pub fn demo() -> Self {
         Self {
             id: 0,
-            props: PlantNodeProps::new(Vec3::ZERO, 1.1, Vec3::new(0., 0., 1.)),
+            props: PlantNodeProps::new(Vec3::new(0., 0., -2.), 1.1, Vec3::new(0., 0., 1.)),
             children: vec![
                 PlantNode {
                     id: 1,
