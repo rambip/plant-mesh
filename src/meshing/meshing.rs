@@ -56,6 +56,7 @@ fn det(a: Vec3, b: Vec3) -> f32 {
 /// once projected on a 2D plane.
 pub fn convex_hull_graham(points: &[Vec3]) -> Vec<usize> {
     let n = points.len();
+    assert!(n >= 3);
     let p0 = (0..n)
         .into_iter()
         .min_by(|&i, &j| cmp(points[i].y, points[j].y)).unwrap();

@@ -80,6 +80,25 @@ impl PlantNode {
 
     }
 
+    pub fn register_node_postfix(&self, count: &mut usize, acc: &mut Vec<usize>) {
+        let my_id = *count;
+        *count+=1;
+        for c in &self.children {
+            c.register_node_postfix(count, acc)
+        }
+        acc.push(my_id);
+    }
+
+    pub fn register_node_children(&self, acc: &mut Vec<Vec<usize>>) {
+        let self_id = acc.len();
+        acc.push(Vec::new());
+        for c in &self.children {
+            let children_id = acc.len();
+            acc[self_id].push(children_id);
+            c.register_node_children(acc)
+        }
+    }
+
     pub fn register_node_properties(&self, acc: &mut Vec<PlantNodeProps>) {
         acc.push(self.props);
         for c in &self.children {

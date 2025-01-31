@@ -8,6 +8,7 @@ use meshing::lerp;
 use crate::growing::{PlantNode, PlantNodeProps};
 mod meshing;
 
+// TODO: no heap allocation
 pub struct MeshBuilder {
     node_count: usize,
     // reversed: from bottom to top
@@ -23,6 +24,8 @@ pub struct MeshBuilder {
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
     tree_depth: usize,
+    children: Vec<Vec<usize>>,
+    topological_sort: Vec<usize>,
 }
 
 impl MeshBuilder {
@@ -39,6 +42,12 @@ impl MeshBuilder {
         let mut leaves = Vec::new();
         plant_graph.register_leaves(&mut 0, &mut leaves);
 
+        let mut topological_sort = Vec::new();
+        plant_graph.register_node_postfix(&mut 0, &mut topological_sort);
+
+        let mut children = Vec::new();
+        plant_graph.register_node_children(&mut children);
+
         Self {
             node_count,
             depths,
@@ -53,6 +62,8 @@ impl MeshBuilder {
             mesh_normals: vec![],
             mesh_colors: vec![],
             debug_points: vec![],
+            topological_sort,
+            children,
         }
     }
 
@@ -60,19 +71,24 @@ impl MeshBuilder {
         self.tree_depth
     }
 
-    fn register_particle_position_for_leaf(&mut self, particle_id: usize, trajectory: &mut Vec<Vec3>, current_node: usize) {
+    fn register_particle_position_for_leaf(&mut self, leaf_id: usize) {
         let PlantNodeProps {
             position,
             radius,
             orientation,
-        } = self.node_props[current_node];
+        } = self.node_props[leaf_id];
+        let particle_id = self.trajectories.len();
         let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
         let relative_pos = rotation * sample_uniform_circle(radius).extend(0.);
-        trajectory.push(position + relative_pos);
-        self.particles_per_node[current_node].push(particle_id);
+        self.particles_per_node[leaf_id].push(particle_id);
+        let mut empty_trajectory = vec![Vec3::ZERO; self.depths[leaf_id]];
+        empty_trajectory.push(position+relative_pos);
+
+        self.trajectories.push(empty_trajectory);
     }
-    fn register_particle_position_for_node(&mut self, particle_id: usize, position: Vec3, trajectory: &mut Vec<Vec3>, current_node: usize) {
-        trajectory.push(position);
+
+    fn register_particle_position_for_node(&mut self, particle_id: usize, position: Vec3, current_node: usize) {
+        self.trajectories[particle_id][self.depths[current_node]] = position;
         self.particles_per_node[current_node].push(particle_id);
     }
 
@@ -114,38 +130,59 @@ impl MeshBuilder {
             .into_iter()
             .collect()
     }
+
+    fn project_particles(&mut self, parent: usize, child: usize, offset: bool) {
+        let origin = self.node_props[parent].position;
+        let normal = self.node_props[parent].orientation;
+        let r_parent = self.node_props[parent].radius;
+        let p_child = self.node_props[child].position;
+
+        let d = (origin - p_child).normalize();
+
+        // FIXME: no clone
+        for p in self.particles_per_node[child].clone() {
+            let pos_particle = self.trajectories[p][self.depths[child]];
+            let u = pos_particle - origin;
+
+            let projected_offset = p_child - origin - (p_child - origin).dot(normal)*normal;
+
+            let l = normal.dot(u) / normal.dot(d.normalize());
+            assert!(!l.is_nan());
+            let o = if offset {0.5*projected_offset} else {Vec3::ZERO};
+            let projected = origin + r_parent*(o + (u - l * d.normalize())).normalize();
+
+            self.register_particle_position_for_node(p, projected, parent);
+            //self.trajectories[p].push(projected);
+        }
+    }
+
+
     pub fn compute_trajectories(&mut self, particle_per_leaf: usize) {
-        for l in self.leaves.clone() {
-            for _ in 0..particle_per_leaf {
-                let particle_id = self.trajectories.len();
-
-                let mut new_traj = Vec::new();
-                let mut node = l;
-
-                self.register_particle_position_for_leaf(particle_id, &mut new_traj, node);
-
-                while node != 0 {
-                    let parent = self.parents[node];
-                    let child = node;
-                    let origin = self.node_props[parent].position;
-                    let normal = self.node_props[parent].orientation;
-                    let r_parent = self.node_props[parent].radius;
-                    let p_child = self.node_props[child].position;
-
-                    let d = (origin - p_child).normalize();
-                    let previous_pos = *new_traj.last().unwrap();
-                    let u = previous_pos - origin;
-
-                    let l = normal.dot(u) / normal.dot(d.normalize());
-                    assert!(!l.is_nan());
-                    let projected = origin + r_parent*(u - l * d.normalize()).normalize();
-
-                    self.register_particle_position_for_node(particle_id, projected, &mut new_traj, parent);
-                    node = parent;
+        // FIXME: don't clone
+        for parent in self.topological_sort.clone() {
+            println!("parent: {}", parent);
+            assert!(self.particles_per_node[parent].len()==0);
+            match &self.children[parent][..] {
+                [] => {
+                    for _ in 0..particle_per_leaf {
+                        self.register_particle_position_for_leaf(parent);
+                    }
+                },
+                &[child] => {
+                    self.project_particles(parent, child, false);
+                },
+                &[child1, child2] => {
+                    let mut big_child = child1;
+                    let mut small_child = child2;
+                    if self.particles_per_node[big_child].len() < self.particles_per_node[small_child].len() {
+                        std::mem::swap(&mut big_child, &mut small_child);
+                    }
+                    self.project_particles(parent, small_child, false);
+                    self.project_particles(parent, big_child, true);
                 }
-                new_traj.reverse();
-                self.trajectories.push(new_traj);
+                _ => panic!("did not expect more than 2 childs for node {parent}")
             }
+            dbg!(&self.particles_per_node);
         }
     }
     pub fn branch_contour(&self, top_node: usize, t: f32) -> Vec<Vec3> {
