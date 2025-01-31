@@ -27,17 +27,17 @@ pub struct MeshBuilder {
 
 impl MeshBuilder {
     pub fn new(plant_graph: &PlantNode, node_count: usize) -> Self {
-        let mut parents = vec![0; node_count];
+        let mut parents = Vec::new();
         plant_graph.register_parents(&mut parents, 0);
 
-        let mut node_props = vec![PlantNodeProps::default(); node_count];
+        let mut node_props = Vec::new();
         plant_graph.register_node_properties(&mut node_props);
 
-        let mut depths = vec![0; node_count];
+        let mut depths = Vec::new();
         plant_graph.register_depths(&mut depths, 0);
 
-        let mut leaves = vec![];
-        plant_graph.register_leaves(&mut leaves);
+        let mut leaves = Vec::new();
+        plant_graph.register_leaves(&mut 0, &mut leaves);
 
         Self {
             node_count,
@@ -46,7 +46,7 @@ impl MeshBuilder {
             node_props,
             leaves,
             tree_depth: plant_graph.compute_depth(),
-            trajectories: vec![vec![]; node_count],
+            trajectories: vec![],
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
             mesh_triangles: vec![],

@@ -2,11 +2,11 @@ use bevy::math::{Isometry3d, Quat, Vec3};
 use bevy_gizmos::prelude::Gizmos;
 use bevy::color::Color;
 
+mod simple_generation;
 
 pub struct PlantNode {
     children: Vec<PlantNode>,
     props: PlantNodeProps,
-    id: usize,
 
 }
 
@@ -26,35 +26,28 @@ impl PlantNodeProps {
 impl PlantNode {
     pub fn demo() -> Self {
         Self {
-            id: 0,
             props: PlantNodeProps::new(Vec3::new(0., 0., -2.), 1.1, Vec3::new(0., 0., 1.)),
             children: vec![
                 PlantNode {
-                    id: 1,
                     props: PlantNodeProps::new(Vec3::new(0., 0., 2.), 0.9, Vec3::new(0., 0., 1.)),
                     children: vec![
                         PlantNode {
-                            id: 2,
                             props: PlantNodeProps::new(Vec3::new(1., 0., 3.), 0.5, Vec3::new(0., 0., 1.)),
                             children: vec![
                                 PlantNode {
-                                    id: 3,
                                     props: PlantNodeProps::new(Vec3::new(1.5, 0., 6.), 0.3, Vec3::new(0., 0., 1.)),
                                     children: vec![],
                                 },
                                 PlantNode {
-                                    id: 4,
                                     props: PlantNodeProps::new(Vec3::new(2., -2., 5.), 0.3, Vec3::new(0., -2., 1.)),
                                     children: vec![],
                                 }
                             ],
                         },
                         PlantNode {
-                            id: 5,
                             props: PlantNodeProps::new(Vec3::new(-1., 0., 4.5), 0.2, Vec3::new(0., 1., 1.)),
                             children: vec![
                                 PlantNode {
-                                    id: 6,
                                     props: PlantNodeProps::new(Vec3::new(-0.5, 1., 6.), 0.1, Vec3::new(0., 0., 1.)),
                                     children: vec![],
                                 } ],
@@ -65,11 +58,9 @@ impl PlantNode {
 
     pub fn _skew() -> Self {
         Self {
-            id: 0,
             props: PlantNodeProps::new(Vec3::new(0., 0., 3.), 2.0, Vec3::new(0., 0., 1.)),
             children: vec![
                 PlantNode {
-                    id: 1,
                     props: PlantNodeProps::new(Vec3::new(3., 0., 5.), 1.0, Vec3::new(0., 0., 1.)),
                     children: vec![]
                 }
@@ -90,25 +81,27 @@ impl PlantNode {
     }
 
     pub fn register_node_properties(&self, acc: &mut Vec<PlantNodeProps>) {
-        acc[self.id] = self.props;
+        acc.push(self.props);
         for c in &self.children {
             c.register_node_properties(acc)
         }
     }
 
     pub fn register_parents(&self, acc: &mut Vec<usize>, parent: usize) {
-        acc[self.id] = parent;
+        let my_id = acc.len();
+        acc.push(parent);
         for c in &self.children {
-            c.register_parents(acc, self.id)
+            c.register_parents(acc, my_id)
         }
     }
 
-    pub fn register_leaves(&self, acc: &mut Vec<usize>) {
+    pub fn register_leaves(&self, count: &mut usize, acc: &mut Vec<usize>) {
         if self.children.len() == 0 {
-            acc.push(self.id);
+            acc.push(*count);
         }
+        *count += 1;
         for c in &self.children {
-            c.register_leaves(acc);
+            c.register_leaves(count, acc);
         }
     }
 
@@ -121,7 +114,7 @@ impl PlantNode {
     }
 
     pub fn register_depths(&self, acc: &mut Vec<usize>, start_depth: usize) {
-        acc[self.id] = start_depth;
+        acc.push(start_depth);
         for c in &self.children {
             c.register_depths(acc, start_depth+1)
         }
