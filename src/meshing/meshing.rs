@@ -14,14 +14,12 @@ pub fn extended_catmull_spline(points: &[Vec3], r: f32) -> Vec3 {
     // edge case, we might get an index error
     let i0 = usize::min(r as usize, n-2);
 
-    let points_to_interpolate: [Vec3; 4] = {
-        let mut p = [Vec3::ZERO; 4];
-        p[0] = if i0 == 0 {2.*points[1] - points[0]} else {points[i0-1]};
-        p[1] = points[i0+0];
-        p[2] = points[i0+1];
-        p[3] = if i0 == n-2 {2.*points[n-2] - points[n-1]} else {points[i0+2]};
-        p
-    };
+    let points_to_interpolate = [
+        if i0 == 0 {2.*points[0] - points[1]} else {points[i0-1]},
+        points[i0+0],
+        points[i0+1],
+        if i0 == n-2 {2.*points[n-1] - points[n-2]} else {points[i0+2]},
+    ];
     let mut knot_sequence = [0.; 4];
     knot_sequence[0] = 0.;
     for i in 1..4 {

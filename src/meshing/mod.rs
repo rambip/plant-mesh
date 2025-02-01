@@ -265,21 +265,46 @@ impl MeshBuilder {
             ))
     }
     
-    pub fn debug(&self, gizmos: &mut Gizmos) {
-        for i in 0..self.mesh_triangles.len()/3 {
-            let (ia, ib, ic) = (self.mesh_triangles[3*i], self.mesh_triangles[3*i+1], self.mesh_triangles[3*i+2]);
-            let (pa, pb, pc) = (self.mesh_points[ia], self.mesh_points[ib], self.mesh_points[ic]);
-            let color = Color::srgb(0., 0.4, 0.);
-            gizmos.line(pa, pb,  color);
-            gizmos.line(pb, pc,  color);
-            gizmos.line(pc, pa,  color);
+    pub fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
+        if debug_flags.mesh {
+            for i in 0..self.mesh_triangles.len()/3 {
+                let (ia, ib, ic) = (self.mesh_triangles[3*i], self.mesh_triangles[3*i+1], self.mesh_triangles[3*i+2]);
+                let (pa, pb, pc) = (self.mesh_points[ia], self.mesh_points[ib], self.mesh_points[ic]);
+                let color = Color::srgb(0., 0.4, 0.);
+                gizmos.line(pa, pb,  color);
+                gizmos.line(pb, pc,  color);
+                gizmos.line(pc, pa,  color);
+            }
         }
-        for i in 0..self.mesh_normals.len() {
-            let p = self.mesh_points[i];
-            let normal = self.mesh_normals[i];
-            let color = Color::srgb(1., 0.0, 0.);
-            //gizmos.cross(Isometry3d::from_translation(p), 0.1, color);
-            gizmos.line(p, p+0.3*normal, color);
+
+        if debug_flags.normals {
+            for i in 0..self.mesh_normals.len() {
+                let p = self.mesh_points[i];
+                let normal = self.mesh_normals[i];
+                let color = Color::srgb(1., 0.0, 0.);
+                //gizmos.cross(Isometry3d::from_translation(p), 0.1, color);
+                gizmos.line(p, p+0.3*normal, color);
+            }
+        }
+        if debug_flags.strands {
+            println!("number of trajectories: {}", &self.trajectories.len());
+            for traj in &self.trajectories {
+                // TODO: create function
+                for i in 1..100 {
+                    let t1 = i as f32 / 100.;
+                    let t2 = (i+1) as f32 / 100.;
+                    let n_nodes = traj.len() as f32;
+                    let pos1 = meshing::extended_catmull_spline(traj,
+                        t1 * n_nodes
+                    );
+                    let pos2 = meshing::extended_catmull_spline(traj,
+                        t2 * n_nodes
+                    );
+                    let color = Color::srgb(1., 0.5, 0.5);
+                    gizmos.line(pos1, pos2, color);
+                }
+
+            }
         }
     }
 }

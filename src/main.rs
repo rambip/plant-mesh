@@ -1,6 +1,7 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
 pub(crate) use bevy::prelude::*;
+use shader::CustomEntity;
 use std::f32::consts::PI;
 
 use bevy_gizmos::prelude::Gizmos;
@@ -13,6 +14,14 @@ struct Tree {
     node_count: usize,
     particle_per_leaf: usize,
     cache: meshing::MeshBuilder,
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+struct DebugFlags {
+    normals: bool,
+    mesh: bool,
+    strands: bool,
+    skeleton: bool,
 }
 
 mod meshing;
@@ -56,10 +65,11 @@ fn setup(
         Tree::default(),
         Mesh3d::default(),
         NeedRender(true),
-        Visibility::default(),
+        //Visibility::default(),
         shader::CustomEntity,
     ));
 }
+
 
 #[derive(Resource, Debug)]
 struct CameraSettings {
@@ -67,8 +77,9 @@ struct CameraSettings {
     pub orbit_angle: f32,
     pub sensibility: f32,
     z: f32,
-    debug_shapes: bool,
+    debug: DebugFlags,
     animate: bool,
+    show_mesh: bool,
 }
 
 impl Default for CameraSettings {
@@ -78,8 +89,9 @@ impl Default for CameraSettings {
             orbit_angle: 0.,
             sensibility: 1.,
             z: 5.,
-            debug_shapes: false,
+            debug: Default::default(),
             animate: true,
+            show_mesh: true,
         }
     }
 
@@ -134,8 +146,20 @@ fn handle_input(
             r.0 = true
         }
     }
-    if keyboard.just_pressed(KeyCode::KeyD) {
-        camera_settings.debug_shapes ^= true;
+    if keyboard.just_pressed(KeyCode::Numpad0) {
+        camera_settings.show_mesh ^= true;
+    }
+    if keyboard.just_pressed(KeyCode::Numpad1) {
+        camera_settings.debug.normals ^= true;
+    }
+    if keyboard.just_pressed(KeyCode::Numpad2) {
+        camera_settings.debug.mesh ^= true;
+    }
+    if keyboard.just_pressed(KeyCode::Numpad3) {
+        camera_settings.debug.strands ^= true;
+    }
+    if keyboard.just_pressed(KeyCode::Numpad4) {
+        camera_settings.debug.skeleton ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyA) {
         camera_settings.animate ^= true;
@@ -147,19 +171,23 @@ fn handle_input(
 struct NeedRender(bool);
 
 fn draw_tree(
+    mut commands: Commands,
     mut gizmos: Gizmos,
-    mut trees: Query<(&mut Mesh3d, &mut Tree, &mut NeedRender)>,
+    mut trees: Query<(Entity, &mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera_settings: Res<CameraSettings>,
     ) {
-
-
-    for (mut mesh, mut tree, mut need_render) in trees.iter_mut() {
+    for (e, mut mesh, mut tree, mut need_render) in trees.iter_mut() {
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
         need_render.0 = false;
         // only debug the tree after trying to render it
-        if camera_settings.debug_shapes {
-            tree.debug(&mut gizmos);
+        tree.debug(&mut gizmos, camera_settings.debug);
+
+        if camera_settings.show_mesh {
+            commands.entity(e).insert(CustomEntity);
+        }
+        else {
+            commands.entity(e).remove::<CustomEntity>();
         }
     }
 }
@@ -195,9 +223,10 @@ impl Tree {
 
     // TODO: optimization = return an iterator
 
-    pub fn debug(&self, gizmos: &mut Gizmos) {
-        self.plant_graph.debug(gizmos);
-        self.cache.debug(gizmos);
-
+    pub fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags) {
+        if debug_flags.skeleton {
+            self.plant_graph.debug(gizmos);
+        }
+        self.cache.debug(gizmos, debug_flags);
     }
 }
