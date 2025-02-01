@@ -2,7 +2,7 @@ use bevy::math::{Isometry3d, Quat, Vec3};
 use bevy_gizmos::prelude::Gizmos;
 use bevy::color::Color;
 
-mod simple_generation;
+//mod simple_generation;
 
 pub struct PlantNode {
     children: Vec<PlantNode>,
