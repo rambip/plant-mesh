@@ -287,13 +287,12 @@ impl MeshBuilder {
             }
         }
         if debug_flags.strands {
-            println!("number of trajectories: {}", &self.trajectories.len());
             for traj in &self.trajectories {
                 // TODO: create function
                 for i in 1..100 {
                     let t1 = i as f32 / 100.;
                     let t2 = (i+1) as f32 / 100.;
-                    let n_nodes = traj.len() as f32;
+                    let n_nodes = (traj.len()-1) as f32;
                     let pos1 = meshing::extended_catmull_spline(traj,
                         t1 * n_nodes
                     );

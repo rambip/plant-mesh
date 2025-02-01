@@ -75,6 +75,7 @@ impl PlantNode {
         };
         gizmos.circle(isometry, 1.1*self.props.radius, Color::srgb(0., 0.8, 0.5));
         for c in &self.children {
+            gizmos.line(self.props.position, c.props.position, Color::srgb(0.1, 0.1, 0.1));
             c.debug(gizmos)
         }
 
