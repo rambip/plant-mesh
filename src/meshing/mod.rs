@@ -160,7 +160,6 @@ impl MeshBuilder {
     pub fn compute_trajectories(&mut self, particle_per_leaf: usize) {
         // FIXME: don't clone
         for parent in self.topological_sort.clone() {
-            println!("parent: {}", parent);
             assert!(self.particles_per_node[parent].len()==0);
             match &self.children[parent][..] {
                 [] => {
@@ -197,7 +196,15 @@ impl MeshBuilder {
         if points.len() == 0 {
             println!("node {} has no particles", top_node);
         }
-        meshing::convex_hull_graham(&points)
+
+        let projected_points: Vec<Vec2> = points
+            .iter()
+            // TODO: smarter projection
+            .map(|&x| Quat::from_rotation_arc(self.node_props[parent].orientation, Vec3::Z) * x)
+            .map(|x: Vec3| x.truncate())
+            .collect();
+
+        meshing::convex_hull_graham(&projected_points)
             .into_iter()
             .map(|i| points[i])
             .collect()

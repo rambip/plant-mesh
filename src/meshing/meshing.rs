@@ -1,4 +1,4 @@
-use bevy::math::Vec3;
+use bevy::math::{Vec2, Vec3};
 
 
 pub fn lerp<T>(a: T, b: T, t: f32) -> T 
@@ -46,13 +46,13 @@ fn cmp(a: f32, b: f32) -> std::cmp::Ordering {
     a.partial_cmp(&b).expect("cannot compare NaN")
 }
 
-fn det(a: Vec3, b: Vec3) -> f32 {
+fn det(a: Vec2, b: Vec2) -> f32 {
     a.x * b.y - a.y * b.x
 }
 
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
-pub fn convex_hull_graham(points: &[Vec3]) -> Vec<usize> {
+pub fn convex_hull_graham(points: &[Vec2]) -> Vec<usize> {
     let n = points.len();
     assert!(n >= 3);
     let p0 = (0..n)
@@ -151,14 +151,14 @@ mod test {
 
     #[test]
     fn convex_hull_square(){
-        let points: Vec<Vec3> = [
+        let points: Vec<Vec2> = [
             (0.0, 0.0),
             (1.0, 0.0),
             (0.8, 0.8),
             (1.0, 1.0),
             (0.0, 1.0),
         ].into_iter()
-            .map(|(a, b)| Vec3::new(a, b, 0.))
+            .map(|(a, b)| Vec2::new(a, b))
             .collect();
 
         let convex = convex_hull_graham(&points);
@@ -167,7 +167,7 @@ mod test {
 
     #[test]
     fn convex_hull_polygon(){
-        let points: Vec<Vec3> = [
+        let points: Vec<Vec2> = [
             (2.0, 2.0),
             (1.0, 1.0),
             (0.8, 1.0),
@@ -177,7 +177,7 @@ mod test {
             (1.0, -1.0),
             (2.0, 0.0),
         ].into_iter()
-            .map(|(a, b)| Vec3::new(a-10., b, 0.))
+            .map(|(a, b)| Vec2::new(a-10., b))
             .collect();
 
         let convex = convex_hull_graham(&points);
@@ -188,9 +188,9 @@ mod test {
     fn test_random() {
         for i in 0..10 {
             let mut rng = StdRng::seed_from_u64(i);
-            let points: Vec<Vec3> = (0..10)
+            let points: Vec<Vec2> = (0..10)
                 .into_iter()
-                .map(|_| Vec3::new(rng.gen_range(0..10) as f32, rng.gen_range(0..10) as f32, rng.gen_range(0..10) as f32))
+                .map(|_| Vec2::new(rng.gen_range(0..10) as f32, rng.gen_range(0..10) as f32))
                 .collect();
 
             dbg!(&points);
