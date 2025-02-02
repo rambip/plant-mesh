@@ -5,17 +5,16 @@ use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy_gizmos::prelude::Gizmos;
 use meshing::lerp;
 
-use crate::growing::{PlantNode, PlantNodeProps};
+use crate::growing::{PlantNode, PlantNodeProps, NodeInfo};
 mod meshing;
+
 
 // TODO: no heap allocation
 pub struct MeshBuilder {
+    node_info: Vec<NodeInfo>,
     node_count: usize,
     // reversed: from bottom to top
     trajectories: Vec<Vec<Vec3>>,
-    depths: Vec<usize>,
-    parents: Vec<usize>,
-    leaves: Vec<usize>,
     particles_per_node: Vec<Vec<usize>>,
     node_props: Vec<PlantNodeProps>,
     mesh_points: Vec<Vec3>,
@@ -24,37 +23,30 @@ pub struct MeshBuilder {
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
     tree_depth: usize,
-    children: Vec<Vec<usize>>,
-    topological_sort: Vec<usize>,
+}
+
+pub fn topological_sort(infos: &[NodeInfo], root: usize, acc: &mut Vec<usize>) {
+    for c in &infos[root].children {
+        topological_sort(infos, *c, acc)
+    }
+    acc.push(root)
 }
 
 impl MeshBuilder {
-    pub fn new(plant_graph: &PlantNode, node_count: usize) -> Self {
-        let mut parents = Vec::new();
-        plant_graph.register_parents(&mut parents, 0);
-
+    pub fn new(plant_graph: &PlantNode) -> Self {
         let mut node_props = Vec::new();
         plant_graph.register_node_properties(&mut node_props);
+        let mut node_info = Vec::new();
+        plant_graph.register_node_info(&mut node_info, 0);
 
-        let mut depths = Vec::new();
-        plant_graph.register_depths(&mut depths, 0);
-
-        let mut leaves = Vec::new();
-        plant_graph.register_leaves(&mut 0, &mut leaves);
-
-        let mut topological_sort = Vec::new();
-        plant_graph.register_node_postfix(&mut 0, &mut topological_sort);
-
-        let mut children = Vec::new();
-        plant_graph.register_node_children(&mut children);
+        let node_count = node_info.len();
+        let tree_depth = plant_graph.compute_depth();
 
         Self {
             node_count,
-            depths,
-            parents,
             node_props,
-            leaves,
-            tree_depth: plant_graph.compute_depth(),
+            node_info,
+            tree_depth,
             trajectories: vec![],
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
@@ -62,8 +54,6 @@ impl MeshBuilder {
             mesh_normals: vec![],
             mesh_colors: vec![],
             debug_points: vec![],
-            topological_sort,
-            children,
         }
     }
 
@@ -81,19 +71,19 @@ impl MeshBuilder {
         let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
         let relative_pos = rotation * sample_uniform_circle(radius).extend(0.);
         self.particles_per_node[leaf_id].push(particle_id);
-        let mut empty_trajectory = vec![Vec3::ZERO; self.depths[leaf_id]];
+        let mut empty_trajectory = vec![Vec3::ZERO; self.node_info[leaf_id].depth];
         empty_trajectory.push(position+relative_pos);
 
         self.trajectories.push(empty_trajectory);
     }
 
     fn register_particle_position_for_node(&mut self, particle_id: usize, position: Vec3, current_node: usize) {
-        self.trajectories[particle_id][self.depths[current_node]] = position;
+        self.trajectories[particle_id][self.node_info[current_node].depth] = position;
         self.particles_per_node[current_node].push(particle_id);
     }
 
     fn global_t(&self, bottom_node: usize, t: f32) -> f32 {
-        self.depths[bottom_node] as f32 + t
+        self.node_info[bottom_node].depth as f32 + t
     }
 
     fn particle_position(&self, particle_id: usize, bottom_node: usize, t: f32) -> Vec3 {
@@ -141,7 +131,7 @@ impl MeshBuilder {
 
         // FIXME: no clone
         for p in self.particles_per_node[child].clone() {
-            let pos_particle = self.trajectories[p][self.depths[child]];
+            let pos_particle = self.trajectories[p][self.node_info[child].depth];
             let u = pos_particle - origin;
 
             let projected_offset = p_child - origin - (p_child - origin).dot(normal)*normal;
@@ -158,10 +148,11 @@ impl MeshBuilder {
 
 
     pub fn compute_trajectories(&mut self, particle_per_leaf: usize) {
-        // FIXME: don't clone
-        for parent in self.topological_sort.clone() {
+        let mut node_order = Vec::new();
+        topological_sort(&self.node_info, 0, &mut node_order);
+        for parent in node_order {
             assert!(self.particles_per_node[parent].len()==0);
-            match &self.children[parent][..] {
+            match &self.node_info[parent].children[..] {
                 [] => {
                     for _ in 0..particle_per_leaf {
                         self.register_particle_position_for_leaf(parent);
@@ -185,7 +176,7 @@ impl MeshBuilder {
         }
     }
     pub fn branch_contour(&self, top_node: usize, t: f32) -> Vec<Vec3> {
-        let parent = self.parents[top_node];
+        let parent = self.node_info[top_node].parent.unwrap();
         let particles = &self.particles_per_node[top_node];
 
         let points: Vec<Vec3> = particles
@@ -217,7 +208,7 @@ impl MeshBuilder {
     pub fn compute_each_branch(&mut self) {
         for child in 1..self.node_count{
 
-            let parent = self.parents[child];
+            let parent = self.node_info[child].parent.unwrap();
 
 
             let new_points = self.branch_contour(child, 0.);

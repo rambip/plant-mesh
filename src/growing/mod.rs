@@ -2,12 +2,20 @@ use bevy::math::{Isometry3d, Quat, Vec3};
 use bevy_gizmos::prelude::Gizmos;
 use bevy::color::Color;
 
+#[derive(Clone)]
+pub struct NodeInfo {
+    pub depth: usize,
+    pub parent: Option<usize>,
+    // id in prefix traversal order of tree
+    pub id: usize,
+    pub children: Vec<usize>,
+}
+
 //mod simple_generation;
 
 pub struct PlantNode {
     children: Vec<PlantNode>,
     props: PlantNodeProps,
-
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -81,22 +89,19 @@ impl PlantNode {
 
     }
 
-    pub fn register_node_postfix(&self, count: &mut usize, acc: &mut Vec<usize>) {
-        let my_id = *count;
-        *count+=1;
-        for c in &self.children {
-            c.register_node_postfix(count, acc)
-        }
-        acc.push(my_id);
-    }
-
-    pub fn register_node_children(&self, acc: &mut Vec<Vec<usize>>) {
-        let self_id = acc.len();
-        acc.push(Vec::new());
+    pub fn register_node_info(&self, acc: &mut Vec<NodeInfo>, parent_id: usize) {
+        let id = acc.len();
+        let parent = acc.get(parent_id);
+        acc.push(NodeInfo {
+            depth: 1+parent.map(|x| x.depth).unwrap_or(0),
+            parent: parent.map(|x| x.id),
+            id,
+            children: Vec::new(),
+        });
         for c in &self.children {
             let children_id = acc.len();
-            acc[self_id].push(children_id);
-            c.register_node_children(acc)
+            acc[id].children.push(children_id);
+            c.register_node_info(acc, id)
         }
     }
 
@@ -107,45 +112,11 @@ impl PlantNode {
         }
     }
 
-    pub fn register_parents(&self, acc: &mut Vec<usize>, parent: usize) {
-        let my_id = acc.len();
-        acc.push(parent);
-        for c in &self.children {
-            c.register_parents(acc, my_id)
-        }
-    }
-
-    pub fn register_leaves(&self, count: &mut usize, acc: &mut Vec<usize>) {
-        if self.children.len() == 0 {
-            acc.push(*count);
-        }
-        *count += 1;
-        for c in &self.children {
-            c.register_leaves(count, acc);
-        }
-    }
-
     pub fn compute_depth(&self) -> usize {
         1 + self.children
             .iter()
             .map(|x| x.compute_depth())
             .max()
             .unwrap_or_default()
-    }
-
-    pub fn register_depths(&self, acc: &mut Vec<usize>, start_depth: usize) {
-        acc.push(start_depth);
-        for c in &self.children {
-            c.register_depths(acc, start_depth+1)
-        }
-    }
-
-    pub fn count_node(&self) -> usize {
-        let n_node_child: usize = 
-            self.children.iter()
-            .map(|x| x.count_node())
-            .sum();
-
-        n_node_child + 1
     }
 }

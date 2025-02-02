@@ -10,8 +10,6 @@ use bevy_gizmos::prelude::Gizmos;
 struct Tree {
     // TODO: color on nodes ?
     plant_graph: growing::PlantNode,
-    // including root
-    node_count: usize,
     particle_per_leaf: usize,
     cache: meshing::MeshBuilder,
 }
@@ -196,11 +194,9 @@ fn draw_tree(
 impl Default for Tree {
     fn default() -> Self {
         let plant_graph = growing::PlantNode::demo();
-        let node_count = plant_graph.count_node();
-        let cache = meshing::MeshBuilder::new(&plant_graph, node_count);
+        let cache = meshing::MeshBuilder::new(&plant_graph);
         Self {
             plant_graph,
-            node_count,
             particle_per_leaf: 20,
             cache,
         }
@@ -212,7 +208,7 @@ impl Tree {
     // https://github.com/bevyengine/bevy/blob/main/examples/shader/specialized_mesh_pipeline.rs
     pub fn render_mesh(&mut self, recompute: bool) -> Mesh {
         if recompute {
-            self.cache = meshing::MeshBuilder::new(&self.plant_graph, self.node_count);
+            self.cache = meshing::MeshBuilder::new(&self.plant_graph);
             self.cache.compute_trajectories(self.particle_per_leaf);
             self.cache.compute_each_branch();
         }
