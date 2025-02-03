@@ -3,10 +3,11 @@ use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy_gizmos::prelude::Gizmos;
-use meshing::lerp;
 
 use crate::growing::{PlantNode, PlantNodeProps, NodeInfo};
 mod meshing;
+
+use meshing::{extended_catmull_spline, SplineIndex};
 
 
 // TODO: no heap allocation
@@ -25,13 +26,6 @@ pub struct MeshBuilder {
     tree_depth: usize,
 }
 
-pub fn topological_sort(infos: &[NodeInfo], root: usize, acc: &mut Vec<usize>) {
-    for c in &infos[root].children {
-        topological_sort(infos, *c, acc)
-    }
-    acc.push(root)
-}
-
 impl MeshBuilder {
     pub fn new(plant_graph: &PlantNode) -> Self {
         let mut node_props = Vec::new();
@@ -41,8 +35,6 @@ impl MeshBuilder {
 
         let node_count = node_info.len();
         let tree_depth = plant_graph.compute_depth();
-
-        let depths: Vec<usize> = node_info.iter().map(|x| x.depth).collect();
 
         Self {
             node_count,
@@ -59,8 +51,12 @@ impl MeshBuilder {
         }
     }
 
-    fn depth(&self) -> usize {
+    fn max_depth(&self) -> usize {
         self.tree_depth
+    }
+
+    fn depth(&self, node_id: usize) -> usize {
+        self.node_info[node_id].depth
     }
 
     fn register_particle_position_for_leaf(&mut self, leaf_id: usize) {
@@ -73,7 +69,7 @@ impl MeshBuilder {
         let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
         let relative_pos = rotation * sample_uniform_circle(radius).extend(0.);
         self.particles_per_node[leaf_id].push(particle_id);
-        let mut empty_trajectory = vec![Vec3::ZERO; self.node_info[leaf_id].depth];
+        let mut empty_trajectory = vec![Vec3::ZERO; self.depth(leaf_id)];
         empty_trajectory.push(position+relative_pos);
 
         self.trajectories.push(empty_trajectory);
@@ -84,21 +80,15 @@ impl MeshBuilder {
         self.particles_per_node[current_node].push(particle_id);
     }
 
-    fn global_t(&self, bottom_node: usize, t: f32) -> f32 {
-        self.node_info[bottom_node].depth as f32 + t
-    }
-
-    fn particle_position(&self, particle_id: usize, bottom_node: usize, t: f32) -> Vec3 {
-        meshing::extended_catmull_spline(&self.trajectories[particle_id], 
-            self.global_t(bottom_node, t)
-        )
-    }
-    pub fn register_points_on_contour(&mut self, points: &[Vec3], global_depth: f32, orientation: Vec3) -> Vec<usize> {
+    pub fn register_points_on_contour(&mut self, points: &[Vec3], particle_position: SplineIndex, orientation: Vec3) -> Vec<usize> {
         let i0 = self.mesh_points.len();
         let n = points.len();
         self.mesh_points.extend(points);
-        //self.cache.debug_points.push(points[0]);
-        let r = global_depth / self.depth() as f32;
+
+        let r = match particle_position {
+            SplineIndex::Global(t) => t,
+            SplineIndex::Local(i, r) => (i as f32 + r)/ self.max_depth() as f32
+        };
         let color = [1. - r, 0.5+0.5*r, 0.2, 1.0];
         self.mesh_colors.extend(vec![color; n]);
 
@@ -133,7 +123,7 @@ impl MeshBuilder {
 
         // FIXME: no clone
         for p in self.particles_per_node[child].clone() {
-            let pos_particle = self.trajectories[p][self.node_info[child].depth];
+            let pos_particle = self.trajectories[p][self.depth(child)];
             let u = pos_particle - origin;
 
             let projected_offset = p_child - origin - (p_child - origin).dot(normal)*normal;
@@ -149,40 +139,43 @@ impl MeshBuilder {
     }
 
 
-    pub fn compute_trajectories(&mut self, particle_per_leaf: usize) {
-        let mut node_order = Vec::new();
-        topological_sort(&self.node_info, 0, &mut node_order);
-        for parent in node_order {
-            assert!(self.particles_per_node[parent].len()==0);
-            match &self.node_info[parent].children[..] {
-                [] => {
-                    for _ in 0..particle_per_leaf {
-                        self.register_particle_position_for_leaf(parent);
-                    }
-                },
-                &[child] => {
-                    self.project_particles(parent, child, false);
-                },
-                &[child1, child2] => {
-                    let mut big_child = child1;
-                    let mut small_child = child2;
-                    if self.particles_per_node[big_child].len() < self.particles_per_node[small_child].len() {
-                        std::mem::swap(&mut big_child, &mut small_child);
-                    }
-                    self.project_particles(parent, small_child, false);
-                    self.project_particles(parent, big_child, true);
+    pub fn compute_trajectories(&mut self, root: usize, particle_per_leaf: usize) {
+        for c in self.node_info[root].children.clone() {
+            self.compute_trajectories(c, particle_per_leaf);
+        };
+
+        assert!(self.particles_per_node[root].len()==0);
+
+        match &self.node_info[root].children[..] {
+            [] => {
+                for _ in 0..particle_per_leaf {
+                    self.register_particle_position_for_leaf(root);
                 }
-                _ => panic!("did not expect more than 2 childs for node {parent}")
+            },
+            &[child] => {
+                self.project_particles(root, child, false);
+            },
+            &[child1, child2] => {
+                let mut big_child = child1;
+                let mut small_child = child2;
+                if self.particles_per_node[big_child].len() < self.particles_per_node[small_child].len() {
+                    std::mem::swap(&mut big_child, &mut small_child);
+                }
+                self.project_particles(root, small_child, false);
+                self.project_particles(root, big_child, true);
             }
+            _ => panic!("did not expect more than 2 childs for node {root}")
         }
     }
+
     pub fn branch_contour(&self, top_node: usize, t: f32) -> Vec<Vec3> {
         let parent = self.node_info[top_node].parent.unwrap();
         let particles = &self.particles_per_node[top_node];
 
         let points: Vec<Vec3> = particles
             .iter()
-            .map(|&p| self.particle_position(p, parent, t))
+            .map(|&p| 
+                extended_catmull_spline(&self.trajectories[p], SplineIndex::Local(self.depth(parent), t)))
             .collect();
 
         if points.len() == 0 {
@@ -210,37 +203,31 @@ impl MeshBuilder {
         for child in 1..self.node_count{
 
             let parent = self.node_info[child].parent.unwrap();
-
-
-            let new_points = self.branch_contour(child, 0.);
-            let mut previous_contour_ids = self.register_points_on_contour(
-                &new_points, 
-                self.global_t(parent, 0.),
-                self.node_props[parent].orientation
-            );
+            let depth = self.depth(parent);
 
             let radius = self.node_props[parent].radius;
-            let dz = 2.0*radius * std::f32::consts::PI / new_points.len() as f32;
+            // FIXME
+            let dz = 2.0*radius * std::f32::consts::PI / 10.;
             let branch_length = (self.node_props[parent].position - self.node_props[child].position).length();
             let n_steps = (branch_length / dz) as usize;
 
+            let contours: Vec<Vec<usize>> = (0..=n_steps)
+                .into_iter()
+                .map(|x| x as f32 / n_steps as f32)
+                .map(|t|
+                    self.register_points_on_contour(
+                        &self.branch_contour(child, t),
+                        SplineIndex::Local(depth, t),
+                        self.node_props[parent].orientation
+                    ))
+                .collect();
+
+
             // FIXME: duplicate points at nodes
-            for i in 1..=n_steps {
-                let t = (i as f32) / n_steps as f32;
-                let orientation = lerp(self.node_props[parent].orientation, self.node_props[child].orientation, t);
-
-                let current_contour = self.branch_contour(child, t);
-                let current_contour_ids = self.register_points_on_contour(
-                    &current_contour,
-                    self.global_t(parent, t),
-                    orientation
-                );
-
-                let triangles = meshing::mesh_between_contours(&self.mesh_points, &current_contour_ids, &previous_contour_ids); 
-
+            for i in 0..n_steps {
+                let t = i as f32 / n_steps as f32;
+                let triangles = meshing::mesh_between_contours(&self.mesh_points, &contours[i], &contours[i+1]); 
                 self.register_triangles(&triangles);
-
-                previous_contour_ids = current_contour_ids.clone();
             }
         }
     }
@@ -287,17 +274,11 @@ impl MeshBuilder {
         }
         if debug_flags.strands {
             for traj in &self.trajectories {
-                // TODO: create function
                 for i in 1..100 {
                     let t1 = i as f32 / 100.;
                     let t2 = (i+1) as f32 / 100.;
-                    let n_nodes = (traj.len()-1) as f32;
-                    let pos1 = meshing::extended_catmull_spline(traj,
-                        t1 * n_nodes
-                    );
-                    let pos2 = meshing::extended_catmull_spline(traj,
-                        t2 * n_nodes
-                    );
+                    let pos1 = meshing::extended_catmull_spline(traj, SplineIndex::Global(t1));
+                    let pos2 = meshing::extended_catmull_spline(traj, SplineIndex::Global(t2));
                     let color = Color::srgb(1., 0.5, 0.5);
                     gizmos.line(pos1, pos2, color);
                 }

@@ -209,7 +209,7 @@ impl Tree {
     pub fn render_mesh(&mut self, recompute: bool) -> Mesh {
         if recompute {
             self.cache = meshing::MeshBuilder::new(&self.plant_graph);
-            self.cache.compute_trajectories(self.particle_per_leaf);
+            self.cache.compute_trajectories(0, self.particle_per_leaf);
             self.cache.compute_each_branch();
         }
 

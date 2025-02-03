@@ -1,18 +1,31 @@
-use bevy::math::{Vec2, Vec3};
+use bevy::math::{FloatExt, Vec2, Vec3};
 
-
-pub fn lerp<T>(a: T, b: T, t: f32) -> T 
-where T: std::ops::Mul<f32, Output=T> + std::ops::Add<Output=T>
-{
-    a*(1.-t) + b*t
+#[derive(Copy, Clone, Debug)]
+pub enum SplineIndex {
+    /// real number between 0 and 1
+    Global(f32),
+    /// index of the point pair to consider and real number between 0 and 1
+    Local(usize, f32),
 }
 
 // r is between 0 and points.len()-1
-pub fn extended_catmull_spline(points: &[Vec3], r: f32) -> Vec3 {
+pub fn extended_catmull_spline(points: &[Vec3], pos: SplineIndex) -> Vec3 {
     let n = points.len();
 
     // edge case, we might get an index error
-    let i0 = usize::min(r as usize, n-2);
+    let (i0, r) = match pos {
+        SplineIndex::Global(1.) => {
+            (n-2, 1.)
+        },
+        SplineIndex::Global(t) => {
+            let step = f32::floor((n-1) as f32 * t);
+            (step as usize, t*(n-1) as f32 - step)
+        },
+        SplineIndex::Local(i, 0.) if i==n-1 => (n-2, 1.),
+        SplineIndex::Local(i0, r)  => (i0, r)
+    };
+
+    assert!(i0 <= n-2, "{pos:?}, n={n}");
 
     let points_to_interpolate = [
         if i0 == 0 {2.*points[0] - points[1]} else {points[i0-1]},
@@ -27,19 +40,19 @@ pub fn extended_catmull_spline(points: &[Vec3], r: f32) -> Vec3 {
             (points_to_interpolate[i] - points_to_interpolate[i-1]).length()
             .sqrt();
     }
-    let t = lerp(knot_sequence[1], knot_sequence[2], r - (i0 as f32));
+    let t = knot_sequence[1].lerp(knot_sequence[2], r);
 
     let ratio = |i: usize, j: usize| (t - knot_sequence[i]) / (knot_sequence[j] - knot_sequence[i]);
 
     let mut a_points = [Vec3::ZERO; 3];
     for i in 0..3 {
-        a_points[i] = lerp(points_to_interpolate[i], points_to_interpolate[i+1], ratio(i, i+1));
+        a_points[i] = points_to_interpolate[i].lerp(points_to_interpolate[i+1], ratio(i, i+1));
     }
 
-    let b1 = lerp(a_points[0], a_points[1], ratio(0, 2));
-    let b2 = lerp(a_points[1], a_points[2], ratio(1, 3));
+    let b1 = a_points[0].lerp(a_points[1], ratio(0, 2));
+    let b2 = a_points[1].lerp(a_points[2], ratio(1, 3));
 
-    lerp(b1, b2, ratio(1, 2))
+    b1.lerp(b2, ratio(1, 2))
 }
 
 fn cmp(a: f32, b: f32) -> std::cmp::Ordering {
