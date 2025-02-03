@@ -42,6 +42,8 @@ impl MeshBuilder {
         let node_count = node_info.len();
         let tree_depth = plant_graph.compute_depth();
 
+        let depths: Vec<usize> = node_info.iter().map(|x| x.depth).collect();
+
         Self {
             node_count,
             node_props,
@@ -172,7 +174,6 @@ impl MeshBuilder {
                 }
                 _ => panic!("did not expect more than 2 childs for node {parent}")
             }
-            dbg!(&self.particles_per_node);
         }
     }
     pub fn branch_contour(&self, top_node: usize, t: f32) -> Vec<Vec3> {

@@ -93,7 +93,7 @@ impl PlantNode {
         let id = acc.len();
         let parent = acc.get(parent_id);
         acc.push(NodeInfo {
-            depth: 1+parent.map(|x| x.depth).unwrap_or(0),
+            depth: parent.map(|x| x.depth+1).unwrap_or(0),
             parent: parent.map(|x| x.id),
             id,
             children: Vec::new(),
