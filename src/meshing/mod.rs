@@ -11,7 +11,7 @@ use meshing::{extended_catmull_spline, SplineIndex};
 
 #[derive(Copy, Clone)]
 struct BranchSectionPosition {
-    child: usize,
+    parent: usize,
     depth: usize,
     t: f32,
 }
@@ -29,7 +29,6 @@ impl From<BranchSectionPosition> for SplineIndex {
 }
 
 
-// TODO: no heap allocation
 pub struct MeshBuilder {
     node_info: Vec<NodeInfo>,
     node_count: usize,
@@ -80,6 +79,10 @@ impl MeshBuilder {
         self.node_info[node_id].depth
     }
 
+    fn position(&self, node_id: usize) -> Vec3 {
+        self.node_props[node_id].position
+    }
+
     fn register_particle_trajectory(&mut self, leaf_id: usize) {
         let PlantNodeProps {
             position,
@@ -102,7 +105,7 @@ impl MeshBuilder {
     }
 
     fn register_points_on_contour(&mut self, points: &[Vec3], section_position: BranchSectionPosition) -> Vec<usize> {
-        let parent = self.node_info[section_position.child].parent.unwrap();
+        let parent = section_position.parent;
         let orientation = self.node_props[parent].orientation;
         let i0 = self.mesh_points.len();
         let n = points.len();
@@ -157,12 +160,29 @@ impl MeshBuilder {
         }
     }
 
+    fn collide(&self, 
+        parent: usize, 
+        child_1: usize, 
+        child_2: usize, 
+        t: f32
+    ) -> bool {
+        // FIXME: change `BranchSectionPosition` to specify either children or parent
+        let particles_1 = self.branch_contour(BranchSectionPosition {parent: child_1, depth: self.depth(parent), t:t-1.});
+        let particles_2 = self.branch_contour(BranchSectionPosition {parent: child_2, depth: self.depth(parent), t:t-1.});
+
+        let center_1 = self.position(parent).lerp(self.position(child_1), t);
+        let center_2 = self.position(parent).lerp(self.position(child_2), t);
+
+
+        let pos_along_dir = |a: &Vec3| a.dot(center_2 - center_1);
+        let relative_pos_1 = particles_1.iter().map(pos_along_dir);
+        let relative_pos_2 = particles_2.iter().map(pos_along_dir);
+
+        relative_pos_1.reduce(f32::max) > relative_pos_2.reduce(f32::min)
+    }
+
 
     pub fn compute_trajectories(&mut self, root: usize, particle_per_leaf: usize) {
-        for c in self.node_info[root].children.clone() {
-            self.compute_trajectories(c, particle_per_leaf);
-        };
-
         assert!(self.particles_per_node[root].len()==0);
 
         match &self.node_info[root].children[..] {
@@ -172,11 +192,14 @@ impl MeshBuilder {
                 }
             },
             &[child] => {
+                self.compute_trajectories(child, particle_per_leaf);
                 self.project_particles(root, child, false);
             },
             &[child1, child2] => {
                 let mut big_child = child1;
                 let mut small_child = child2;
+                self.compute_trajectories(child1, particle_per_leaf);
+                self.compute_trajectories(child2, particle_per_leaf);
                 if self.particles_per_node[big_child].len() < self.particles_per_node[small_child].len() {
                     std::mem::swap(&mut big_child, &mut small_child);
                 }
@@ -188,8 +211,8 @@ impl MeshBuilder {
     }
 
     fn branch_contour(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
-        let parent = self.node_info[pos.child].parent.unwrap();
-        let particles = &self.particles_per_node[pos.child];
+        let parent = pos.parent;
+        let particles = &self.particles_per_node[pos.parent];
 
         let points: Vec<Vec3> = particles
             .iter()
@@ -198,7 +221,7 @@ impl MeshBuilder {
             .collect();
 
         if points.len() == 0 {
-            println!("node {} has no particles", pos.child);
+            println!("node {} has no particles", pos.parent);
         }
 
         let projected_points: Vec<Vec2> = points
@@ -219,31 +242,58 @@ impl MeshBuilder {
     }
 
     pub fn compute_each_branch(&mut self) {
-        // FIXME: what if no child ?
-        let pos_root = BranchSectionPosition {child:1, t: 0., depth: 0};
+        let pos_root = BranchSectionPosition {parent:0, t: 0., depth: 0};
         let root_section = self.register_points_on_contour(&self.branch_contour(pos_root), pos_root);
         self.section_per_node[0].extend(root_section);
 
-        for child in 1..self.node_count {
+        self.compute_each_branch_recursive(0)
+    }
 
-            let parent = self.node_info[child].parent.unwrap();
-            let depth = self.depth(parent);
+    fn compute_each_branch_recursive(&mut self, root: usize) {
+        let depth = self.depth(root);
+        let mut previous_contour = self.section_per_node[root].clone();
+        let points = previous_contour.iter().map(|&i| self.mesh_points[i]);
+        self.debug_points.extend(points);
 
-            let mut previous_contour = self.section_per_node[parent].clone();
+        let radius = self.node_props[root].radius;
+        let dz = 2.0*radius * std::f32::consts::PI / previous_contour.len() as f32;
 
-            let radius = self.node_props[parent].radius;
-            let dz = 2.0*radius * std::f32::consts::PI / previous_contour.len() as f32;
-            let branch_length = (self.node_props[parent].position - self.node_props[child].position).length();
-            let n_steps = (branch_length / dz) as usize;
+        match &self.node_info[root].children[..] {
+            [] => {},
+            &[child] => {
+                let branch_length = (self.position(root) - self.position(child)).length();
+                let n_steps = (branch_length / dz) as usize;
 
-            for i in 1..=n_steps {
-                let p = BranchSectionPosition {t: i as f32 / n_steps as f32, child, depth};
-                let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
-                let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
-                self.register_triangles(&triangles);
-                previous_contour = current_contour;
-            }
-            self.section_per_node[child] = previous_contour;
+                for i in 1..=n_steps {
+                    let p = BranchSectionPosition {t: i as f32 / n_steps as f32, parent: root, depth};
+                    let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
+                    let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
+                    self.register_triangles(&triangles);
+                    previous_contour = current_contour;
+                }
+                self.section_per_node[child] = previous_contour;
+
+                self.compute_each_branch_recursive(child)
+            },
+            &[child1, child2] => {
+                let branch_length = 0.5*((self.position(root) - self.position(child1)).length()
+                    + (self.position(root) - self.position(child2)).length());
+                let n_steps = (branch_length / dz) as usize;
+
+                for i in 1..=n_steps {
+                    let p = BranchSectionPosition {t: i as f32 / n_steps as f32, parent: root, depth};
+                    let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
+                    let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
+                    self.register_triangles(&triangles);
+                    previous_contour = current_contour;
+                }
+                self.section_per_node[child1] = previous_contour.clone();
+                self.section_per_node[child2] = previous_contour;
+
+                self.compute_each_branch_recursive(child1);
+                self.compute_each_branch_recursive(child2);
+            },
+            _ => panic!("did not expect more than 2 childs for node {root}")
         }
     }
 
@@ -300,6 +350,12 @@ impl MeshBuilder {
                     gizmos.line(pos1, pos2, color);
                 }
 
+            }
+        }
+        if debug_flags.other {
+            for p in &self.debug_points {
+                let color = Color::srgb(1., 0.5, 0.5);
+                gizmos.cross(*p, 0.2, color);
             }
         }
     }

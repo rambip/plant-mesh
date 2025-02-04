@@ -20,6 +20,7 @@ struct DebugFlags {
     mesh: bool,
     strands: bool,
     skeleton: bool,
+    other: bool,
 }
 
 mod meshing;
@@ -158,6 +159,9 @@ fn handle_input(
     }
     if keyboard.just_pressed(KeyCode::Numpad4) {
         camera_settings.debug.skeleton ^= true;
+    }
+    if keyboard.just_pressed(KeyCode::Numpad5) {
+        camera_settings.debug.other ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyA) {
         camera_settings.animate ^= true;
