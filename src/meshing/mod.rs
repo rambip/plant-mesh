@@ -37,7 +37,7 @@ pub struct MeshBuilder {
     particles_per_node: Vec<Vec<usize>>,
     node_props: Vec<PlantNodeProps>,
     mesh_points: Vec<Vec3>,
-    debug_points: Vec<Vec3>,
+    debug_points: Vec<(Vec3, Color)>,
     mesh_triangles: Vec<usize>,
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
@@ -158,25 +158,26 @@ impl MeshBuilder {
         }
     }
 
-    fn collide(&self, 
+    fn split(&mut self, 
         parent: usize, 
-        child_1: usize, 
-        child_2: usize, 
         t: f32
     ) -> bool {
+        if self.node_info[parent].children.len() != 2 {return false};
+        let child1 = self.node_info[parent].children[0];
+        let child2 = self.node_info[parent].children[1];
         // FIXME: change `BranchSectionPosition` to specify either children or parent
-        let particles_1 = self.branch_contour(BranchSectionPosition {parent: child_1, depth: self.depth(parent), t});
-        let particles_2 = self.branch_contour(BranchSectionPosition {parent: child_2, depth: self.depth(parent), t});
+        let particles_1 = self.branch_contour(BranchSectionPosition {parent: child1, depth: self.depth(parent), t});
+        let particles_2 = self.branch_contour(BranchSectionPosition {parent: child2, depth: self.depth(parent), t});
 
-        let center_1 = self.position(parent).lerp(self.position(child_1), t);
-        let center_2 = self.position(parent).lerp(self.position(child_2), t);
-
+        let center_1 = self.position(parent).lerp(self.position(child1), t);
+        let center_2 = self.position(parent).lerp(self.position(child2), t);
 
         let pos_along_dir = |a: &Vec3| a.dot(center_2 - center_1);
         let relative_pos_1 = particles_1.iter().map(pos_along_dir);
         let relative_pos_2 = particles_2.iter().map(pos_along_dir);
 
-        relative_pos_1.reduce(f32::max) > relative_pos_2.reduce(f32::min)
+        let result = relative_pos_1.reduce(f32::max) < relative_pos_2.reduce(f32::min);
+        result
     }
 
 
@@ -246,7 +247,7 @@ impl MeshBuilder {
         self.compute_each_branch_recursive(0, root_section)
     }
 
-    fn compute_branch_until(&mut self, root: usize, depth: usize, i0: usize, mut previous_contour: Vec<usize>, n_steps: usize, condition: impl Fn(f32, &Self)->bool) -> Result<Vec<usize>, usize> {
+    fn compute_branch_until(&mut self, root: usize, depth: usize, i0: usize, mut previous_contour: Vec<usize>, n_steps: usize, condition: impl Fn(f32, &mut Self)->bool) -> Result<Vec<usize>, usize> {
         for i in i0..=n_steps {
             let t = i as f32 / n_steps as f32;
             if condition(t, self) {return Err(i)};
@@ -262,8 +263,6 @@ impl MeshBuilder {
     fn compute_each_branch_recursive(&mut self, root: usize, start_section: Vec<usize>) {
         let depth = self.depth(root);
         let previous_contour = start_section;
-        let points = previous_contour.iter().map(|&i| self.mesh_points[i]);
-        self.debug_points.extend(points);
 
         let radius = self.node_props[root].radius;
         let dz = 2.0*radius * std::f32::consts::PI / previous_contour.len() as f32;
@@ -285,7 +284,7 @@ impl MeshBuilder {
 
                 let i_split = self.compute_branch_until(root, depth, 1, previous_contour.clone(), n_steps, |t, me| 
                     // FIXME: don't pass self as argument
-                    me.collide(root, child1, child2, t)
+                    me.split(root, t)
                     ).err().unwrap();
 
                 for c in [child1, child2] {
@@ -355,9 +354,8 @@ impl MeshBuilder {
             }
         }
         if debug_flags.other {
-            for p in &self.debug_points {
-                let color = Color::srgb(1., 0.5, 0.5);
-                gizmos.cross(*p, 0.2, color);
+            for &(p, c) in &self.debug_points {
+                gizmos.cross(p, 0.2, c);
             }
         }
     }
