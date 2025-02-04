@@ -1,6 +1,7 @@
 use bevy::math::{Isometry3d, Quat, Vec3};
 use bevy_gizmos::prelude::Gizmos;
 use bevy::color::Color;
+use smallvec::SmallVec;
 
 #[derive(Clone)]
 pub struct NodeInfo {
@@ -8,7 +9,7 @@ pub struct NodeInfo {
     pub parent: Option<usize>,
     // id in prefix traversal order of tree
     pub id: usize,
-    pub children: Vec<usize>,
+    pub children: SmallVec<[usize; 2]>,
 }
 
 //mod simple_generation;
@@ -96,7 +97,7 @@ impl PlantNode {
             depth: parent.map(|x| x.depth+1).unwrap_or(0),
             parent: parent.map(|x| x.id),
             id,
-            children: Vec::new(),
+            children: SmallVec::new(),
         });
         for c in &self.children {
             let children_id = acc.len();

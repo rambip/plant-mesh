@@ -2735,6 +2735,7 @@ dependencies = [
  "bevy_render",
  "bevy_sprite",
  "rand",
+ "smallvec",
 ]
 
 [[package]]

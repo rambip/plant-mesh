@@ -80,7 +80,7 @@ impl MeshBuilder {
         self.node_info[node_id].depth
     }
 
-    fn register_particle_position_for_leaf(&mut self, leaf_id: usize) {
+    fn register_particle_trajectory(&mut self, leaf_id: usize) {
         let PlantNodeProps {
             position,
             radius,
@@ -168,7 +168,7 @@ impl MeshBuilder {
         match &self.node_info[root].children[..] {
             [] => {
                 for _ in 0..particle_per_leaf {
-                    self.register_particle_position_for_leaf(root);
+                    self.register_particle_trajectory(root);
                 }
             },
             &[child] => {
@@ -236,34 +236,36 @@ impl MeshBuilder {
             let branch_length = (self.node_props[parent].position - self.node_props[child].position).length();
             let n_steps = (branch_length / dz) as usize;
 
-            for i in 0..n_steps {
+            for i in 1..=n_steps {
                 let p = BranchSectionPosition {t: i as f32 / n_steps as f32, child, depth};
                 let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
                 let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
                 self.register_triangles(&triangles);
                 previous_contour = current_contour;
             }
-            self.section_per_node[child].extend(previous_contour);
+            self.section_per_node[child] = previous_contour;
         }
     }
 
     pub fn to_mesh(&self) -> Mesh {
-        Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        let mut result = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
             .with_inserted_attribute(
                 Mesh::ATTRIBUTE_POSITION,
                 self.mesh_points.clone(),
             )
-            .with_inserted_attribute(
-                Mesh::ATTRIBUTE_NORMAL,
-                self.mesh_normals.clone(),
-            )
+            //.with_inserted_attribute(
+            //    Mesh::ATTRIBUTE_NORMAL,
+            //    self.mesh_normals.clone(),
+            //)
             .with_inserted_attribute(
                 Mesh::ATTRIBUTE_COLOR,
                 self.mesh_colors.clone(),
             )
             .with_inserted_indices(Indices::U32(
                     self.mesh_triangles.iter().map(|x| *x as u32).collect()
-            ))
+            ));
+            result.compute_smooth_normals();
+            result
     }
     
     pub fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {

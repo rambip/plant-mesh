@@ -17,6 +17,7 @@ bevy_render = "0.15.1"
 bevy_sprite = "0.15.1"
 bevy_gizmos = {path="./bevy_gizmos", features=["bevy_render", "webgl"]}
 rand = "0.8.5"
+smallvec = "1.13.2"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
