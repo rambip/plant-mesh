@@ -35,7 +35,6 @@ pub struct MeshBuilder {
     // reversed: from bottom to top
     trajectories: Vec<Vec<Vec3>>,
     particles_per_node: Vec<Vec<usize>>,
-    section_per_node: Vec<Vec<usize>>,
     node_props: Vec<PlantNodeProps>,
     mesh_points: Vec<Vec3>,
     debug_points: Vec<Vec3>,
@@ -62,7 +61,6 @@ impl MeshBuilder {
             tree_depth,
             trajectories: vec![],
             particles_per_node: vec![vec![]; node_count],
-            section_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
             mesh_triangles: vec![],
             mesh_normals: vec![],
@@ -167,8 +165,8 @@ impl MeshBuilder {
         t: f32
     ) -> bool {
         // FIXME: change `BranchSectionPosition` to specify either children or parent
-        let particles_1 = self.branch_contour(BranchSectionPosition {parent: child_1, depth: self.depth(parent), t:t-1.});
-        let particles_2 = self.branch_contour(BranchSectionPosition {parent: child_2, depth: self.depth(parent), t:t-1.});
+        let particles_1 = self.branch_contour(BranchSectionPosition {parent: child_1, depth: self.depth(parent), t});
+        let particles_2 = self.branch_contour(BranchSectionPosition {parent: child_2, depth: self.depth(parent), t});
 
         let center_1 = self.position(parent).lerp(self.position(child_1), t);
         let center_2 = self.position(parent).lerp(self.position(child_2), t);
@@ -195,6 +193,7 @@ impl MeshBuilder {
                 self.compute_trajectories(child, particle_per_leaf);
                 self.project_particles(root, child, false);
             },
+            // TODO: assume child1 is the main branch
             &[child1, child2] => {
                 let mut big_child = child1;
                 let mut small_child = child2;
@@ -244,14 +243,25 @@ impl MeshBuilder {
     pub fn compute_each_branch(&mut self) {
         let pos_root = BranchSectionPosition {parent:0, t: 0., depth: 0};
         let root_section = self.register_points_on_contour(&self.branch_contour(pos_root), pos_root);
-        self.section_per_node[0].extend(root_section);
-
-        self.compute_each_branch_recursive(0)
+        self.compute_each_branch_recursive(0, root_section)
     }
 
-    fn compute_each_branch_recursive(&mut self, root: usize) {
+    fn compute_branch_until(&mut self, root: usize, depth: usize, i0: usize, mut previous_contour: Vec<usize>, n_steps: usize, condition: impl Fn(f32, &Self)->bool) -> Result<Vec<usize>, usize> {
+        for i in i0..=n_steps {
+            let t = i as f32 / n_steps as f32;
+            if condition(t, self) {return Err(i)};
+            let p = BranchSectionPosition {t, parent: root, depth};
+            let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
+            let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
+            self.register_triangles(&triangles);
+            previous_contour = current_contour;
+        }
+        Ok(previous_contour)
+    }
+
+    fn compute_each_branch_recursive(&mut self, root: usize, start_section: Vec<usize>) {
         let depth = self.depth(root);
-        let mut previous_contour = self.section_per_node[root].clone();
+        let previous_contour = start_section;
         let points = previous_contour.iter().map(|&i| self.mesh_points[i]);
         self.debug_points.extend(points);
 
@@ -264,34 +274,26 @@ impl MeshBuilder {
                 let branch_length = (self.position(root) - self.position(child)).length();
                 let n_steps = (branch_length / dz) as usize;
 
-                for i in 1..=n_steps {
-                    let p = BranchSectionPosition {t: i as f32 / n_steps as f32, parent: root, depth};
-                    let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
-                    let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
-                    self.register_triangles(&triangles);
-                    previous_contour = current_contour;
-                }
-                self.section_per_node[child] = previous_contour;
-
-                self.compute_each_branch_recursive(child)
+                let last_contour = self.compute_branch_until(root, depth, 1, previous_contour.clone(), n_steps, |_,_| false).unwrap();
+                self.compute_each_branch_recursive(child, last_contour)
             },
+            // TODO: assume child1 is the main branch
             &[child1, child2] => {
                 let branch_length = 0.5*((self.position(root) - self.position(child1)).length()
                     + (self.position(root) - self.position(child2)).length());
                 let n_steps = (branch_length / dz) as usize;
 
-                for i in 1..=n_steps {
-                    let p = BranchSectionPosition {t: i as f32 / n_steps as f32, parent: root, depth};
-                    let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
-                    let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
-                    self.register_triangles(&triangles);
-                    previous_contour = current_contour;
-                }
-                self.section_per_node[child1] = previous_contour.clone();
-                self.section_per_node[child2] = previous_contour;
+                let i_split = self.compute_branch_until(root, depth, 1, previous_contour.clone(), n_steps, |t, me| 
+                    // FIXME: don't pass self as argument
+                    me.collide(root, child1, child2, t)
+                    ).err().unwrap();
 
-                self.compute_each_branch_recursive(child1);
-                self.compute_each_branch_recursive(child2);
+                for c in [child1, child2] {
+                    let p = BranchSectionPosition {t: i_split as f32 / n_steps as f32, parent: c, depth};
+                    let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
+                    let last_contour = self.compute_branch_until(c, depth, i_split+1, current_contour, n_steps, |_,_| false).unwrap();
+                    self.compute_each_branch_recursive(c, last_contour);
+                }
             },
             _ => panic!("did not expect more than 2 childs for node {root}")
         }

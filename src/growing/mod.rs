@@ -9,6 +9,7 @@ pub struct NodeInfo {
     pub parent: Option<usize>,
     // id in prefix traversal order of tree
     pub id: usize,
+    // TODO: bigger children first
     pub children: SmallVec<[usize; 2]>,
 }
 
