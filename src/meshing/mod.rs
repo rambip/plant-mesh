@@ -9,6 +9,25 @@ mod meshing;
 
 use meshing::{extended_catmull_spline, SplineIndex};
 
+#[derive(Copy, Clone)]
+struct BranchSectionPosition {
+    child: usize,
+    depth: usize,
+    t: f32,
+}
+
+impl BranchSectionPosition {
+    fn to_relative_depth(&self, max_depth: usize) -> f32 {
+        (self.depth as f32 + self.t) / max_depth as f32
+    }
+}
+
+impl From<BranchSectionPosition> for SplineIndex {
+    fn from(value: BranchSectionPosition) -> Self {
+        SplineIndex::Local(value.depth, value.t)
+    }
+}
+
 
 // TODO: no heap allocation
 pub struct MeshBuilder {
@@ -17,6 +36,7 @@ pub struct MeshBuilder {
     // reversed: from bottom to top
     trajectories: Vec<Vec<Vec3>>,
     particles_per_node: Vec<Vec<usize>>,
+    section_per_node: Vec<Vec<usize>>,
     node_props: Vec<PlantNodeProps>,
     mesh_points: Vec<Vec3>,
     debug_points: Vec<Vec3>,
@@ -43,6 +63,7 @@ impl MeshBuilder {
             tree_depth,
             trajectories: vec![],
             particles_per_node: vec![vec![]; node_count],
+            section_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
             mesh_triangles: vec![],
             mesh_normals: vec![],
@@ -80,15 +101,14 @@ impl MeshBuilder {
         self.particles_per_node[current_node].push(particle_id);
     }
 
-    pub fn register_points_on_contour(&mut self, points: &[Vec3], particle_position: SplineIndex, orientation: Vec3) -> Vec<usize> {
+    fn register_points_on_contour(&mut self, points: &[Vec3], section_position: BranchSectionPosition) -> Vec<usize> {
+        let parent = self.node_info[section_position.child].parent.unwrap();
+        let orientation = self.node_props[parent].orientation;
         let i0 = self.mesh_points.len();
         let n = points.len();
         self.mesh_points.extend(points);
 
-        let r = match particle_position {
-            SplineIndex::Global(t) => t,
-            SplineIndex::Local(i, r) => (i as f32 + r)/ self.max_depth() as f32
-        };
+        let r = section_position.to_relative_depth(self.max_depth());
         let color = [1. - r, 0.5+0.5*r, 0.2, 1.0];
         self.mesh_colors.extend(vec![color; n]);
 
@@ -134,7 +154,6 @@ impl MeshBuilder {
             let projected = origin + r_parent*(o + (u - l * d.normalize())).normalize();
 
             self.register_particle_position_for_node(p, projected, parent);
-            //self.trajectories[p].push(projected);
         }
     }
 
@@ -168,18 +187,18 @@ impl MeshBuilder {
         }
     }
 
-    pub fn branch_contour(&self, top_node: usize, t: f32) -> Vec<Vec3> {
-        let parent = self.node_info[top_node].parent.unwrap();
-        let particles = &self.particles_per_node[top_node];
+    fn branch_contour(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
+        let parent = self.node_info[pos.child].parent.unwrap();
+        let particles = &self.particles_per_node[pos.child];
 
         let points: Vec<Vec3> = particles
             .iter()
             .map(|&p| 
-                extended_catmull_spline(&self.trajectories[p], SplineIndex::Local(self.depth(parent), t)))
+                extended_catmull_spline(&self.trajectories[p], pos.into()))
             .collect();
 
         if points.len() == 0 {
-            println!("node {} has no particles", top_node);
+            println!("node {} has no particles", pos.child);
         }
 
         let projected_points: Vec<Vec2> = points
@@ -200,35 +219,31 @@ impl MeshBuilder {
     }
 
     pub fn compute_each_branch(&mut self) {
-        for child in 1..self.node_count{
+        // FIXME: what if no child ?
+        let pos_root = BranchSectionPosition {child:1, t: 0., depth: 0};
+        let root_section = self.register_points_on_contour(&self.branch_contour(pos_root), pos_root);
+        self.section_per_node[0].extend(root_section);
+
+        for child in 1..self.node_count {
 
             let parent = self.node_info[child].parent.unwrap();
             let depth = self.depth(parent);
 
+            let mut previous_contour = self.section_per_node[parent].clone();
+
             let radius = self.node_props[parent].radius;
-            // FIXME
-            let dz = 2.0*radius * std::f32::consts::PI / 10.;
+            let dz = 2.0*radius * std::f32::consts::PI / previous_contour.len() as f32;
             let branch_length = (self.node_props[parent].position - self.node_props[child].position).length();
             let n_steps = (branch_length / dz) as usize;
 
-            let contours: Vec<Vec<usize>> = (0..=n_steps)
-                .into_iter()
-                .map(|x| x as f32 / n_steps as f32)
-                .map(|t|
-                    self.register_points_on_contour(
-                        &self.branch_contour(child, t),
-                        SplineIndex::Local(depth, t),
-                        self.node_props[parent].orientation
-                    ))
-                .collect();
-
-
-            // FIXME: duplicate points at nodes
             for i in 0..n_steps {
-                let t = i as f32 / n_steps as f32;
-                let triangles = meshing::mesh_between_contours(&self.mesh_points, &contours[i], &contours[i+1]); 
+                let p = BranchSectionPosition {t: i as f32 / n_steps as f32, child, depth};
+                let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
+                let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
                 self.register_triangles(&triangles);
+                previous_contour = current_contour;
             }
+            self.section_per_node[child].extend(previous_contour);
         }
     }
 

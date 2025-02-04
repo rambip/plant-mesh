@@ -104,6 +104,8 @@ pub fn convex_hull_graham(points: &[Vec2]) -> Vec<usize> {
 
 // c1 is above c2, both contours are clockwise
 pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize]) -> Vec<usize> {
+    assert!(c1.len() > 0);
+    assert!(c2.len() > 0);
     let mut f1 = c1.iter();
     let mut f2 = c2.iter();
     let mut result: Vec<usize> = Vec::new();
