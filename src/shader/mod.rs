@@ -29,7 +29,7 @@ use bevy::{
     }, utils::HashMap
 };
 use bevy::ecs::system::lifetimeless::Read;
-use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases}, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
+use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases}, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
 
 #[derive(Component)]
 pub struct CustomEntity;
@@ -267,7 +267,10 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
-            primitive: PrimitiveState::default(),
+            primitive: PrimitiveState {
+                cull_mode: Some(Face::Front),
+                ..PrimitiveState::default()
+            },
             // Note that if your view has no depth buffer this will need to be
             // changed.
             depth_stencil: Some(DepthStencilState {
