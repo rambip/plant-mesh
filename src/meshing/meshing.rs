@@ -102,8 +102,8 @@ pub fn convex_hull_graham(points: &[Vec2]) -> Vec<usize> {
     result
 }
 
-// c1 is above c2, both contours are clockwise
-pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize]) -> Vec<usize> {
+// c2 is above c1, both contours are clockwise
+pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize], close_contour: bool) -> Vec<usize> {
     assert!(c1.len() > 0);
     assert!(c2.len() > 0);
     let mut f1 = c1.iter();
@@ -153,8 +153,11 @@ pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize]) -> Vec
         }
 
     }
-    result.extend([current(&f1), current(&f2), i1_0]);
-    result.extend([i1_0, current(&f2), i2_0]);
+
+    if close_contour {
+        result.extend([current(&f1), current(&f2), i1_0]);
+        result.extend([i1_0, current(&f2), i2_0]);
+    }
 
     result
 }

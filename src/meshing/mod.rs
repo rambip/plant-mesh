@@ -11,6 +11,49 @@ mod meshing;
 
 use meshing::{extended_catmull_spline, SplineIndex};
 
+// TODO: move to tool module
+pub fn min_by_key<I, T, F>(iter: I, mut f: F) -> Option<T>
+where
+    I: IntoIterator<Item = T>,
+    F: FnMut(&T) -> f32,
+{
+    iter.into_iter().reduce(|a, b| {
+        let a_key = f(&a);
+        let b_key = f(&b);
+        
+        // Handle NaN cases - treat NaN as greater than everything
+        match (a_key.is_nan(), b_key.is_nan()) {
+            (true, true) => a,   // If both are NaN, keep first
+            (true, false) => b,  // If a is NaN, choose b
+            (false, true) => a,  // If b is NaN, choose a
+            (false, false) => {
+                if a_key <= b_key { a } else { b }
+            }
+        }
+    })
+}
+
+pub fn max_by_key<I, T, F>(iter: I, mut f: F) -> Option<T>
+where
+    I: IntoIterator<Item = T>,
+    F: FnMut(&T) -> f32,
+{
+    iter.into_iter().reduce(|a, b| {
+        let a_key = f(&a);
+        let b_key = f(&b);
+        
+        // Handle NaN cases - treat NaN as greater than everything
+        match (a_key.is_nan(), b_key.is_nan()) {
+            (true, true) => a,   // If both are NaN, keep first
+            (true, false) => b,  // If a is NaN, choose b
+            (false, true) => a,  // If b is NaN, choose a
+            (false, false) => {
+                if a_key >= b_key { a } else { b }
+            }
+        }
+    })
+}
+
 #[derive(Copy, Clone, Debug)]
 struct BranchSectionPosition {
     // the node being considered
@@ -50,6 +93,21 @@ impl BranchSectionPosition {
         Self {node, t}
     }
 }
+
+// TODO: use iterator
+// source[end] is included in the result
+fn circular_slice<A: Copy>(source: &[A], start: usize, end: usize) -> Vec<A> {
+    let mut result = Vec::new();
+    let n = source.len();
+    let mut i = start;
+    while i%n != end {
+        result.push(source[i%n]);
+        i += 1;
+    }
+    result.push(source[end]);
+    result
+}
+
 
 pub struct MeshBuilder {
     node_info: Vec<NodeInfo>,
@@ -181,15 +239,6 @@ impl MeshBuilder {
         let floor = pos.t.floor();
         let depth = (self.depth(pos.node) as i32) + floor as i32;
         let spline_index = SplineIndex::Local(depth as usize, pos.t - floor);
-        //if (self.node_info[pos.node].children.len() == 0) {
-        //    return vec![]
-        //}
-        println!("
-            node is {}, at depth {}.
-            It has an offset of {}.
-            The calculated spline index is {:?}
-
-        ", pos.node, self.depth(pos.node), pos.t, spline_index);
 
         self.particles_per_node[pos.node]
             .iter()
@@ -273,26 +322,98 @@ impl MeshBuilder {
         self.compute_each_branch_recursive(0, root_section)
     }
 
+    fn compute_branch_join(&mut self, p: BranchSectionPosition, previous_contour: Vec<usize>) -> ((BranchSectionPosition, Vec<usize>), (BranchSectionPosition, Vec<usize>)){
+        assert!(self.node_info[p.node].children.len() == 2);
+        let c1 = self.node_info[p.node].children[0];
+        let c2 = self.node_info[p.node].children[1];
+
+        let p1 = BranchSectionPosition::new(c1, p.t - 1.);
+        let p2 = BranchSectionPosition::new(c2, p.t - 1.);
+        let cont1 = self.register_points_on_contour(&self.branch_contour(p1), p1);
+        let n1 = cont1.len();
+        let cont2 = self.register_points_on_contour(&self.branch_contour(p2), p2);
+        let n2 = cont2.len();
+
+        let center_1 = self.position(p.node).lerp(self.position(c1), p.t);
+        let center_2 = self.position(p.node).lerp(self.position(c2), p.t);
+
+        let i_p = max_by_key(0..n1, |&i| self.mesh_points[cont1[i]].dot(center_2 - center_1)).unwrap();
+        let i_q = min_by_key(0..n2, |&i| self.mesh_points[cont2[i]].dot(center_2 - center_1)).unwrap();
+
+        let i_a = (i_p+n1+1)%n1;
+        let i_z = (i_p+n1-1)%n1;
+
+        let i_y = (i_q+n2+1)%n2;
+        let i_b = (i_q+n2-1)%n2;
+
+        let i_c = min_by_key(0..previous_contour.len(),
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[cont1[i_a]]).length() 
+               + (self.mesh_points[previous_contour[i]] - self.mesh_points[cont2[i_b]]).length()
+        ).unwrap();
+        let i_x = min_by_key(0..previous_contour.len(),
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[cont1[i_z]]).length() 
+               + (self.mesh_points[previous_contour[i]] - self.mesh_points[cont2[i_y]]).length()
+        ).unwrap();
+
+        dbg!(n1, n2,i_p, i_q,
+            i_a, i_b, i_c,
+            i_x, i_y, i_z);
+
+        self.mesh_triangles.extend(
+            meshing::mesh_between_contours(&self.mesh_points, 
+            &circular_slice(&previous_contour, i_c, i_x), 
+            &circular_slice(&cont1, i_a, i_z),
+            false
+        ));
+        self.mesh_triangles.extend(meshing::mesh_between_contours(&self.mesh_points, 
+            &circular_slice(&previous_contour, i_x, i_c),
+            &circular_slice(&cont2, i_y, i_b),
+            false)
+        );
+
+        //self.mesh_triangles.extend([
+        //    cont1[i_a], cont2[i_b], previous_contour[i_c],
+        //    cont2[i_q], cont2[i_b], cont1[i_a],
+        //    cont2[i_q], cont1[i_a], cont1[i_p],
+        //    cont1[i_z], cont2[i_y], previous_contour[i_x],
+        //    cont1[i_z], cont2[i_y], cont1[i_p],
+        //    cont1[i_p], cont2[i_y], cont2[i_q],
+        //]);
+
+        self.debug_points.push((self.mesh_points[cont1[i_p]], Color::srgb(1.0, 0.5, 0.5)));
+        self.debug_points.push((self.mesh_points[cont1[i_a]], Color::srgb(0.5, 0.5, 0.5)));
+        self.debug_points.push((self.mesh_points[cont1[i_z]], Color::srgb(0.5, 0.5, 0.5)));
+
+        self.debug_points.push((self.mesh_points[cont2[i_q]], Color::srgb(1.0, 0.5, 0.5)));
+        self.debug_points.push((self.mesh_points[cont2[i_y]], Color::srgb(0.5, 0.5, 0.5)));
+        self.debug_points.push((self.mesh_points[cont2[i_b]], Color::srgb(0.5, 0.5, 0.5)));
+
+        self.debug_points.push((self.mesh_points[previous_contour[i_x]], Color::srgb(1.0, 1.0, 1.0)));
+        self.debug_points.push((self.mesh_points[previous_contour[i_c]], Color::srgb(1.0, 1.0, 1.0)));
+
+        ((p1, cont1), (p2, cont2))
+    }
+
     fn compute_branch_until(&mut self, 
         pos: BranchSectionPosition, 
-        mut previous_contour: Vec<usize>,
+        previous_contour: &mut Vec<usize>,
         dt:f32,
         condition: impl Fn(BranchSectionPosition, &mut Self)->bool
-        ) -> Result<Vec<usize>, BranchSectionPosition> {
+        ) -> Result<(), BranchSectionPosition> {
         let mut p = pos;
         while p.decimal_part()+dt <= 1. {
             if condition(p, self) {return Err(p)};
             let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
-            let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour); 
+            let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour, true); 
             self.register_triangles(&triangles);
-            previous_contour = current_contour;
+            *previous_contour = current_contour;
             p += dt;
         }
-        Ok(previous_contour)
+        Ok(())
     }
 
     fn compute_each_branch_recursive(&mut self, root: usize, start_section: Vec<usize>) {
-        let previous_contour = start_section;
+        let mut previous_contour = start_section;
 
         let pos_root = BranchSectionPosition::new(root, 0.);
 
@@ -303,24 +424,25 @@ impl MeshBuilder {
             [] => {},
             &[child] => {
                 let branch_length = (self.position(root) - self.position(child)).length();
-                let last_contour = self.compute_branch_until(pos_root, previous_contour.clone(), dz/branch_length, |_,_| false).unwrap();
-                self.compute_each_branch_recursive(child, last_contour)
+                self.compute_branch_until(pos_root, &mut previous_contour, dz/branch_length, |_,_| false).unwrap();
+                self.compute_each_branch_recursive(child, previous_contour)
             },
             // TODO: assume child1 is the main branch
             &[child1, child2] => {
                 let branch_length = 0.5*((self.position(root) - self.position(child1)).length()
                     + (self.position(root) - self.position(child2)).length());
-                let pos_split = self.compute_branch_until(pos_root, previous_contour.clone(), dz/branch_length, |t, me| 
+                let pos_split = self.compute_branch_until(pos_root, &mut previous_contour, dz/branch_length, |t, me| 
                     // FIXME: don't pass self as argument
                     me.split(t)
                     ).err().unwrap();
 
-                for c in [child1, child2] {
-                    let p = BranchSectionPosition::new(c, pos_split.t - 1.);
-                    let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
-                    let last_contour = self.compute_branch_until(p, current_contour, dz/branch_length, |_,_| false).unwrap();
-                    self.compute_each_branch_recursive(c, last_contour);
-                }
+                let ((p1, mut cont1), (p2, mut cont2)) = self.compute_branch_join(pos_split, previous_contour);
+
+                self.compute_branch_until(p1, &mut cont1, dz/branch_length, |_,_| false).unwrap();
+                self.compute_each_branch_recursive(child1, cont1);
+
+                self.compute_branch_until(p2, &mut cont2, dz/branch_length, |_,_| false).unwrap();
+                self.compute_each_branch_recursive(child2, cont2);
             },
             _ => panic!("did not expect more than 2 childs for node {root}")
         }
