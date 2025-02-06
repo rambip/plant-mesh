@@ -95,7 +95,7 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2]) -> Vec<usize> {
         let sb = det(u0, points[*b] - pivot);
         match (sa > 0., sb > 0.) {
             (true, true) => db.partial_cmp(&da).unwrap(),
-            (false, false) => {println!("wrong region"); da.partial_cmp(&db).unwrap()},
+            (false, false) => da.partial_cmp(&db).unwrap(),
             (false, true) => Ordering::Less,
             (true, false) => Ordering::Greater,
         }
@@ -110,7 +110,6 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2]) -> Vec<usize> {
     };
 
     let mut result: Vec<usize> = sorted_points[..2].into();
-    dbg!(&sorted_points);
 
     for &i in &sorted_points[2..] {
         loop {

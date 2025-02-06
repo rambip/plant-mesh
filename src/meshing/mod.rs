@@ -1,4 +1,5 @@
 use std::ops::{Add, AddAssign};
+use std::sync::{Arc, Mutex};
 
 use bevy::math::{Quat, Vec2, Vec3};
 use bevy::prelude::{Mesh, Color};
@@ -74,7 +75,7 @@ pub struct MeshBuilder {
     particles_per_node: Vec<Vec<usize>>,
     node_props: Vec<PlantNodeProps>,
     mesh_points: Vec<Vec3>,
-    debug_points: Vec<(Vec3, Color)>,
+    debug_points: Arc<Mutex<Vec<(Vec3, Color)>>>,
     mesh_triangles: Vec<usize>,
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
@@ -101,7 +102,7 @@ impl MeshBuilder {
             mesh_triangles: vec![],
             mesh_normals: vec![],
             mesh_colors: vec![],
-            debug_points: vec![],
+            debug_points: Arc::new(vec![].into()),
         }
     }
 
@@ -280,6 +281,7 @@ impl MeshBuilder {
             .collect();
 
         let center = to_plane(self.branch_section_center(pos));
+        self.debug_points.lock().unwrap().push((self.branch_section_center(pos), Color::srgb(1.0, 1.0, 1.0)));
         meshing::convex_hull_graham(None, &projected_points)
             .into_iter()
             .map(|i| points[i])
@@ -354,16 +356,16 @@ impl MeshBuilder {
             cont2[i_y], cont1[i_p], cont2[i_q],
         ]);
 
-        self.debug_points.push((self.mesh_points[cont1[i_p]], Color::srgb(1.0, 0.5, 0.5)));
-        self.debug_points.push((self.mesh_points[cont1[i_a]], Color::srgb(0.5, 0.5, 0.5)));
-        self.debug_points.push((self.mesh_points[cont1[i_z]], Color::srgb(0.5, 0.5, 0.5)));
+        //self.debug_points.push((self.mesh_points[cont1[i_p]], Color::srgb(1.0, 0.5, 0.5)));
+        //self.debug_points.push((self.mesh_points[cont1[i_a]], Color::srgb(0.5, 0.5, 0.5)));
+        //self.debug_points.push((self.mesh_points[cont1[i_z]], Color::srgb(0.5, 0.5, 0.5)));
 
-        self.debug_points.push((self.mesh_points[cont2[i_q]], Color::srgb(1.0, 0.5, 0.5)));
-        self.debug_points.push((self.mesh_points[cont2[i_y]], Color::srgb(0.5, 0.5, 0.5)));
-        self.debug_points.push((self.mesh_points[cont2[i_b]], Color::srgb(0.5, 0.5, 0.5)));
+        //self.debug_points.push((self.mesh_points[cont2[i_q]], Color::srgb(1.0, 0.5, 0.5)));
+        //self.debug_points.push((self.mesh_points[cont2[i_y]], Color::srgb(0.5, 0.5, 0.5)));
+        //self.debug_points.push((self.mesh_points[cont2[i_b]], Color::srgb(0.5, 0.5, 0.5)));
 
-        self.debug_points.push((self.mesh_points[previous_contour[i_x]], Color::srgb(1.0, 1.0, 1.0)));
-        self.debug_points.push((self.mesh_points[previous_contour[i_c]], Color::srgb(1.0, 1.0, 1.0)));
+        //self.debug_points.push((self.mesh_points[previous_contour[i_x]], Color::srgb(1.0, 1.0, 1.0)));
+        //self.debug_points.push((self.mesh_points[previous_contour[i_c]], Color::srgb(1.0, 1.0, 1.0)));
 
         ((p1, cont1), (p2, cont2))
     }
@@ -477,8 +479,8 @@ impl MeshBuilder {
             }
         }
         if debug_flags.other {
-            for &(p, c) in &self.debug_points {
-                gizmos.cross(p, 0.2, c);
+            for (p, c) in self.debug_points.lock().unwrap().iter() {
+                gizmos.cross(*p, 0.2, *c);
             }
         }
     }
