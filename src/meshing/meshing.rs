@@ -65,13 +65,14 @@ fn det(a: Vec2, b: Vec2) -> f32 {
 
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
-pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], treshold: Option<f32>) -> Vec<usize> {
-    let treshold = treshold.unwrap_or(0.);
-    let pivot = pivot.unwrap_or_else(
-        || *min_by_key(points, |x: &&Vec2| x.y).unwrap()
-    );
-    // FIXME: arbitrary
-    let u0 = Vec2::X;
+pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], min_angle: Option<f32>) -> Vec<usize> {
+    let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
+
+    let n = points.len();
+    let i0 = min_by_key(0..n, |&i| points[i].y).unwrap();
+    let pivot = pivot.unwrap_or(points[i0]);
+
+    let u0 = points[i0];
     let compare_angle = |a: &usize, b: &usize| {
         if points[*a] == pivot {
             return Ordering::Less
@@ -79,20 +80,11 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], treshold: Option
         if points[*b] == pivot {
             return Ordering::Greater
         }
-        let da = u0.dot(points[*a] - pivot)/(points[*a] - pivot).length();
-        let db = u0.dot(points[*b] - pivot)/(points[*b] - pivot).length();
-
-        let sa = det(u0, points[*a] - pivot);
-        let sb = det(u0, points[*b] - pivot);
-        match (sa > 0., sb > 0.) {
-            (true, true) => db.partial_cmp(&da).unwrap(),
-            (false, false) => da.partial_cmp(&db).unwrap(),
-            (false, true) => Ordering::Less,
-            (true, false) => Ordering::Greater,
-        }
+        u0.angle_to(points[*a] - pivot).partial_cmp(
+            &u0.angle_to(points[*b] - pivot)
+        ).unwrap()
     };
 
-    let n = points.len();
     assert!(n >= 3);
     let sorted_points : Vec<usize> = {
         let mut result: Vec<usize> = (0..n).into_iter().collect();
@@ -107,7 +99,8 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], treshold: Option
             let n_hull = result.len();
             let p_1 = result[n_hull-2];
             let p_2 = result[n_hull-1];
-            if det(points[p_2] - points[p_1], points[i] - points[p_1]) >= treshold || result.len() < 3 {
+            let angle = (points[i] - points[p_1]).angle_to(points[p_2] - points[p_1]);
+            if angle < 0. || angle > min_angle  || result.len() < 3 {
                 break
             }
             result.pop().unwrap();
