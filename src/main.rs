@@ -23,6 +23,7 @@ struct DebugFlags {
     other: bool,
 }
 
+mod tools;
 mod meshing;
 mod growing;
 mod shader;

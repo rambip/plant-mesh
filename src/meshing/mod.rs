@@ -7,52 +7,10 @@ use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy_gizmos::prelude::Gizmos;
 
 use crate::growing::{PlantNode, PlantNodeProps, NodeInfo};
+use crate::tools::{max_by_key, min_by_key};
 mod meshing;
 
 use meshing::{extended_catmull_spline, SplineIndex};
-
-// TODO: move to tool module
-pub fn min_by_key<I, T, F>(iter: I, mut f: F) -> Option<T>
-where
-    I: IntoIterator<Item = T>,
-    F: FnMut(&T) -> f32,
-{
-    iter.into_iter().reduce(|a, b| {
-        let a_key = f(&a);
-        let b_key = f(&b);
-        
-        // Handle NaN cases - treat NaN as greater than everything
-        match (a_key.is_nan(), b_key.is_nan()) {
-            (true, true) => a,   // If both are NaN, keep first
-            (true, false) => b,  // If a is NaN, choose b
-            (false, true) => a,  // If b is NaN, choose a
-            (false, false) => {
-                if a_key <= b_key { a } else { b }
-            }
-        }
-    })
-}
-
-pub fn max_by_key<I, T, F>(iter: I, mut f: F) -> Option<T>
-where
-    I: IntoIterator<Item = T>,
-    F: FnMut(&T) -> f32,
-{
-    iter.into_iter().reduce(|a, b| {
-        let a_key = f(&a);
-        let b_key = f(&b);
-        
-        // Handle NaN cases - treat NaN as greater than everything
-        match (a_key.is_nan(), b_key.is_nan()) {
-            (true, true) => a,   // If both are NaN, keep first
-            (true, false) => b,  // If a is NaN, choose b
-            (false, true) => a,  // If b is NaN, choose a
-            (false, false) => {
-                if a_key >= b_key { a } else { b }
-            }
-        }
-    })
-}
 
 #[derive(Copy, Clone, Debug)]
 struct BranchSectionPosition {
@@ -291,6 +249,17 @@ impl MeshBuilder {
         }
     }
 
+    fn branch_section_center(&self, pos: BranchSectionPosition) -> Vec3 {
+        match (self.node_info[pos.node].parent, &self.node_info[pos.node].children[..], pos.t) {
+            (_, &[a], t) if t >= 0. => self.node_props[pos.node].position.lerp(self.node_props[a].position, t),
+            // a is main branch
+            (_, &[a, _], t) if t >= 0. => self.node_props[pos.node].position.lerp(self.node_props[a].position, t),
+            (Some(p), _, t) if t <= 0. => self.node_props[pos.node].position.lerp(self.node_props[p].position, -t),
+            (_, &[], _) => panic!("node {} has no children so it has no center", pos.node),
+            _ => panic!("unable to compute branch center position {pos:?}. It has {:?} childrens and its parent is {:?}", self.node_info[pos.node].children, self.node_info[pos.node].parent)
+        }
+    }
+
     fn branch_contour(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
         let parent = pos.node;
         let points = self.particles_on_section(pos);
@@ -299,14 +268,19 @@ impl MeshBuilder {
             println!("node {} has no particles", pos.node);
         }
 
+        // TODO: smarter projection
+        let to_plane = |x: Vec3| 
+            (Quat::from_rotation_arc(self.node_props[parent].orientation, Vec3::Z) * x)
+            .truncate();
+
+
         let projected_points: Vec<Vec2> = points
             .iter()
-            // TODO: smarter projection
-            .map(|&x| Quat::from_rotation_arc(self.node_props[parent].orientation, Vec3::Z) * x)
-            .map(|x: Vec3| x.truncate())
+            .map(|x: &Vec3| to_plane(*x))
             .collect();
 
-        meshing::convex_hull_graham(&projected_points)
+        let center = to_plane(self.branch_section_center(pos));
+        meshing::convex_hull_graham(None, &projected_points)
             .into_iter()
             .map(|i| points[i])
             .collect()
@@ -334,8 +308,8 @@ impl MeshBuilder {
         let cont2 = self.register_points_on_contour(&self.branch_contour(p2), p2);
         let n2 = cont2.len();
 
-        let center_1 = self.position(p.node).lerp(self.position(c1), p.t);
-        let center_2 = self.position(p.node).lerp(self.position(c2), p.t);
+        let center_1 = self.branch_section_center(p1);
+        let center_2 = self.branch_section_center(p2);
 
         let i_p = max_by_key(0..n1, |&i| self.mesh_points[cont1[i]].dot(center_2 - center_1)).unwrap();
         let i_q = min_by_key(0..n2, |&i| self.mesh_points[cont2[i]].dot(center_2 - center_1)).unwrap();
@@ -371,14 +345,14 @@ impl MeshBuilder {
             false)
         );
 
-        //self.mesh_triangles.extend([
-        //    cont1[i_a], cont2[i_b], previous_contour[i_c],
-        //    cont2[i_q], cont2[i_b], cont1[i_a],
-        //    cont2[i_q], cont1[i_a], cont1[i_p],
-        //    cont1[i_z], cont2[i_y], previous_contour[i_x],
-        //    cont1[i_z], cont2[i_y], cont1[i_p],
-        //    cont1[i_p], cont2[i_y], cont2[i_q],
-        //]);
+        self.mesh_triangles.extend([
+            cont2[i_b], cont1[i_a], previous_contour[i_c],
+            cont2[i_b], cont2[i_q], cont1[i_a],
+            cont1[i_a], cont2[i_q], cont1[i_p],
+            cont2[i_y], cont1[i_z], previous_contour[i_x],
+            cont2[i_y], cont1[i_z], cont1[i_p],
+            cont2[i_y], cont1[i_p], cont2[i_q],
+        ]);
 
         self.debug_points.push((self.mesh_points[cont1[i_p]], Color::srgb(1.0, 0.5, 0.5)));
         self.debug_points.push((self.mesh_points[cont1[i_a]], Color::srgb(0.5, 0.5, 0.5)));

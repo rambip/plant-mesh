@@ -1,4 +1,8 @@
+use std::cmp::Ordering;
+
 use bevy::math::{FloatExt, Vec2, Vec3};
+
+use crate::tools::min_by_key;
 
 #[derive(Copy, Clone, Debug)]
 pub enum SplineIndex {
@@ -65,28 +69,50 @@ fn det(a: Vec2, b: Vec2) -> f32 {
 
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
-pub fn convex_hull_graham(points: &[Vec2]) -> Vec<usize> {
+pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2]) -> Vec<usize> {
+    let pivot = pivot.unwrap_or_else(
+        || *min_by_key(points, |x: &&Vec2| x.y).unwrap()
+    );
+    let i0 = if points[0] != pivot {
+        0
+    }
+    else {
+        assert!(points[1] != pivot, "the 2 first points of `points` are equal to the pivot point");
+        1
+    };
+    let u0 = points[i0] - pivot;
+    let compare_angle = |a: &usize, b: &usize| {
+        if points[*a] == pivot {
+            return Ordering::Less
+        }
+        if points[*b] == pivot {
+            return Ordering::Greater
+        }
+        let da = u0.dot(points[*a] - pivot)/(points[*a] - pivot).length();
+        let db = u0.dot(points[*b] - pivot)/(points[*b] - pivot).length();
+
+        let sa = det(u0, points[*a] - pivot);
+        let sb = det(u0, points[*b] - pivot);
+        match (sa > 0., sb > 0.) {
+            (true, true) => db.partial_cmp(&da).unwrap(),
+            (false, false) => {println!("wrong region"); da.partial_cmp(&db).unwrap()},
+            (false, true) => Ordering::Less,
+            (true, false) => Ordering::Greater,
+        }
+    };
+
     let n = points.len();
     assert!(n >= 3);
-    let p0 = (0..n)
-        .into_iter()
-        .min_by(|&i, &j| cmp(points[i].y, points[j].y)).unwrap();
-
-    // probably broken
     let sorted_points : Vec<usize> = {
-        let mut result: Vec<_> = (0..n).into_iter()
-            .filter(|p| *p != p0)
-            .collect();
-
-        result.sort_by(|i: &usize, j: &usize| 
-            cmp(0., det(points[*i] - points[p0], points[*j] - points[p0]))
-            );
+        let mut result: Vec<usize> = (0..n).into_iter().collect();
+        result.sort_by(compare_angle);
         result
     };
 
-    let mut result: Vec<usize> = vec![p0, sorted_points[0]];
+    let mut result: Vec<usize> = sorted_points[..2].into();
+    dbg!(&sorted_points);
 
-    for &i in &sorted_points[1..] {
+    for &i in &sorted_points[2..] {
         loop {
             let n_hull = result.len();
             let p_1 = result[n_hull-2];
@@ -164,6 +190,8 @@ pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize], close_
 
 #[cfg(test)]
 mod test {
+    use crate::tools::{max_by_key, min_by_key};
+
     use super::*;
     use rand::prelude::*;
 
@@ -179,7 +207,7 @@ mod test {
             .map(|(a, b)| Vec2::new(a, b))
             .collect();
 
-        let convex = convex_hull_graham(&points);
+        let convex = convex_hull_graham(points[0], &points);
         assert_eq!(convex, vec![0, 1, 3, 4]);
     }
 
@@ -198,13 +226,14 @@ mod test {
             .map(|(a, b)| Vec2::new(a-10., b))
             .collect();
 
-        let convex = convex_hull_graham(&points);
+        let convex = convex_hull_graham(Some(points[5]), &points);
         assert_eq!(convex, vec![5, 6, 7, 0, 3]);
     }
 
     #[test]
     fn test_random() {
-        for i in 0..10 {
+        const N: u64 = 10;
+        for i in 0..N {
             let mut rng = StdRng::seed_from_u64(i);
             let points: Vec<Vec2> = (0..10)
                 .into_iter()
@@ -213,7 +242,7 @@ mod test {
 
             dbg!(&points);
 
-            let result = convex_hull_graham(&points);
+            let result = convex_hull_graham(None, &points);
 
             let mut turns = (0..result.len()-2)
                 .map(|i| (result[i+0], result[i+1], result[i+2]))
