@@ -282,7 +282,7 @@ impl MeshBuilder {
 
         let center = to_plane(self.branch_section_center(pos));
         self.debug_points.lock().unwrap().push((self.branch_section_center(pos), Color::srgb(1.0, 1.0, 1.0)));
-        meshing::convex_hull_graham(None, &projected_points)
+        meshing::convex_hull_graham(Some(center), &projected_points)
             .into_iter()
             .map(|i| points[i])
             .collect()
