@@ -324,26 +324,27 @@ impl MeshBuilder {
         let i_q = min_by_key(0..n2, |&i| (self.mesh_points[cont2[i]] - center_1).length()).unwrap() as i32;
 
         let (m_junction, m_above) = split_contour(&cont1, i_p-1, i_p+1);
-        let (s_junction, s_above) = split_contour(&cont2, i_q-1, i_q+1);
+        let (mut s_junction, s_above) = split_contour(&cont2, i_q-1, i_q+1);
+        s_junction.reverse();
         assert_eq!(m_junction.len(), 3);
         assert_eq!(s_junction.len(), 3);
 
-        let i_c = min_by_key(0..previous_contour.len(),
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[2]]).length() 
+        let i_a = min_by_key(0..previous_contour.len(),
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[0]]).length() 
                + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[0]]).length()
         ).unwrap() as i32;
-        let i_x = min_by_key(0..previous_contour.len(),
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[0]]).length() 
+        let i_b = min_by_key(0..previous_contour.len(),
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[2]]).length() 
                + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[2]]).length()
         ).unwrap() as i32;
 
-        let (m_under, s_under) = split_contour(&previous_contour, i_c, i_x);
+        let (m_under, s_under) = split_contour(&previous_contour, i_b, i_a);
 
         let mut debug_points = self.debug_points.lock().unwrap();
-        for &i in &m_under {
+        for &i in &m_junction {
             debug_points.push((self.mesh_points[i], Color::srgb(1.0, 1.0, 0.0)));
         }
-        for &i in &s_under {
+        for &i in &s_junction {
             debug_points.push((self.mesh_points[i], Color::srgb(1.0, 0.0, 1.0)));
         }
 
@@ -365,8 +366,8 @@ impl MeshBuilder {
         );
 
         self.mesh_triangles.extend([
-            m_junction[0], s_junction[2], cont1[i_c as usize],
-            s_junction[0], m_junction[2], cont2[i_x as usize],
+            m_junction[0], s_junction[0], previous_contour[i_a as usize],
+            s_junction[2], m_junction[2], previous_contour[i_b as usize],
         ]);
 
         ((p1, cont1), (p2, cont2))

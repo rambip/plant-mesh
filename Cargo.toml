@@ -4,15 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = {version="0.15.1", default-features=false, features=[
-    #"bevy_gizmos",
-    #"bevy_sprite",
-    "bevy_render",
-    "bevy_window",
-    "x11",
-    "webgl2",
-    "bevy_core_pipeline",
-]}
+bevy = { version = "0.15.1", default-features = false, features = ["bevy_render", "bevy_window", "x11", "webgl2", "bevy_core_pipeline", "dynamic_linking"] }
 bevy_render = "0.15.1"
 bevy_sprite = "0.15.1"
 bevy_gizmos = {path="./bevy_gizmos", features=["bevy_render", "webgl"]}
