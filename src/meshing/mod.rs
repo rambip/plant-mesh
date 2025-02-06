@@ -53,18 +53,25 @@ impl BranchSectionPosition {
     }
 }
 
-// TODO: use iterator
-// source[end] is included in the result
-fn circular_slice<A: Copy>(source: &[A], start: usize, end: usize) -> Vec<A> {
-    let mut result = Vec::new();
-    let n = source.len();
+fn split_contour(source: &[usize], start: i32, end: i32) -> (Vec<usize>, Vec<usize>) {
+    let mut direct = Vec::new();
+    let mut indirect = Vec::new();
+    let n = source.len() as i32;
+
+    let id = |x| ((x+n)%n) as usize;
+
     let mut i = start;
-    while i%n != end {
-        result.push(source[i%n]);
+    while id(i) != id(end) {
+        direct.push(source[id(i)]);
         i += 1;
     }
-    result.push(source[end]);
-    result
+    direct.push(source[id(end)]);
+    while id(i) != id(start) {
+        indirect.push(source[id(i)]);
+        i += 1;
+    }
+    indirect.push(source[id(start)]);
+    (direct, indirect)
 }
 
 
@@ -313,59 +320,54 @@ impl MeshBuilder {
         let center_1 = self.branch_section_center(p1);
         let center_2 = self.branch_section_center(p2);
 
-        let i_p = max_by_key(0..n1, |&i| self.mesh_points[cont1[i]].dot(center_2 - center_1)).unwrap();
-        let i_q = min_by_key(0..n2, |&i| self.mesh_points[cont2[i]].dot(center_2 - center_1)).unwrap();
+        let i_p = min_by_key(0..n1, |&i| (self.mesh_points[cont1[i]] - center_2 ).length()).unwrap() as i32;
+        let i_q = min_by_key(0..n2, |&i| (self.mesh_points[cont2[i]] - center_1).length()).unwrap() as i32;
 
-        let i_a = (i_p+n1+1)%n1;
-        let i_z = (i_p+n1-1)%n1;
-
-        let i_y = (i_q+n2+1)%n2;
-        let i_b = (i_q+n2-1)%n2;
+        let (m_junction, m_above) = split_contour(&cont1, i_p-1, i_p+1);
+        let (s_junction, s_above) = split_contour(&cont2, i_q-1, i_q+1);
+        assert_eq!(m_junction.len(), 3);
+        assert_eq!(s_junction.len(), 3);
 
         let i_c = min_by_key(0..previous_contour.len(),
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[cont1[i_a]]).length() 
-               + (self.mesh_points[previous_contour[i]] - self.mesh_points[cont2[i_b]]).length()
-        ).unwrap();
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[2]]).length() 
+               + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[0]]).length()
+        ).unwrap() as i32;
         let i_x = min_by_key(0..previous_contour.len(),
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[cont1[i_z]]).length() 
-               + (self.mesh_points[previous_contour[i]] - self.mesh_points[cont2[i_y]]).length()
-        ).unwrap();
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[0]]).length() 
+               + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[2]]).length()
+        ).unwrap() as i32;
 
-        dbg!(n1, n2,i_p, i_q,
-            i_a, i_b, i_c,
-            i_x, i_y, i_z);
+        let (m_under, s_under) = split_contour(&previous_contour, i_c, i_x);
+
+        let mut debug_points = self.debug_points.lock().unwrap();
+        for &i in &m_under {
+            debug_points.push((self.mesh_points[i], Color::srgb(1.0, 1.0, 0.0)));
+        }
+        for &i in &s_under {
+            debug_points.push((self.mesh_points[i], Color::srgb(1.0, 0.0, 1.0)));
+        }
 
         self.mesh_triangles.extend(
             meshing::mesh_between_contours(&self.mesh_points, 
-            &circular_slice(&previous_contour, i_c, i_x), 
-            &circular_slice(&cont1, i_a, i_z),
+            &m_under, &m_above,
             false
         ));
-        self.mesh_triangles.extend(meshing::mesh_between_contours(&self.mesh_points, 
-            &circular_slice(&previous_contour, i_x, i_c),
-            &circular_slice(&cont2, i_y, i_b),
+        self.mesh_triangles.extend(
+            meshing::mesh_between_contours(&self.mesh_points, 
+            &s_under, &s_above,
+            false)
+        );
+
+        self.mesh_triangles.extend(
+            meshing::mesh_between_contours(&self.mesh_points, 
+            &s_junction, &m_junction,
             false)
         );
 
         self.mesh_triangles.extend([
-            cont2[i_b], cont1[i_a], previous_contour[i_c],
-            cont2[i_b], cont2[i_q], cont1[i_a],
-            cont1[i_a], cont2[i_q], cont1[i_p],
-            cont2[i_y], cont1[i_z], previous_contour[i_x],
-            cont2[i_y], cont1[i_z], cont1[i_p],
-            cont2[i_y], cont1[i_p], cont2[i_q],
+            m_junction[0], s_junction[2], cont1[i_c as usize],
+            s_junction[0], m_junction[2], cont2[i_x as usize],
         ]);
-
-        //self.debug_points.push((self.mesh_points[cont1[i_p]], Color::srgb(1.0, 0.5, 0.5)));
-        //self.debug_points.push((self.mesh_points[cont1[i_a]], Color::srgb(0.5, 0.5, 0.5)));
-        //self.debug_points.push((self.mesh_points[cont1[i_z]], Color::srgb(0.5, 0.5, 0.5)));
-
-        //self.debug_points.push((self.mesh_points[cont2[i_q]], Color::srgb(1.0, 0.5, 0.5)));
-        //self.debug_points.push((self.mesh_points[cont2[i_y]], Color::srgb(0.5, 0.5, 0.5)));
-        //self.debug_points.push((self.mesh_points[cont2[i_b]], Color::srgb(0.5, 0.5, 0.5)));
-
-        //self.debug_points.push((self.mesh_points[previous_contour[i_x]], Color::srgb(1.0, 1.0, 1.0)));
-        //self.debug_points.push((self.mesh_points[previous_contour[i_c]], Color::srgb(1.0, 1.0, 1.0)));
 
         ((p1, cont1), (p2, cont2))
     }
