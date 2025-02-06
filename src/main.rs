@@ -202,7 +202,7 @@ impl Default for Tree {
         let cache = meshing::MeshBuilder::new(&plant_graph);
         Self {
             plant_graph,
-            particle_per_leaf: 20,
+            particle_per_leaf: 100,
             cache,
         }
     }

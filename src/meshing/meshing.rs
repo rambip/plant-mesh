@@ -59,28 +59,19 @@ pub fn extended_catmull_spline(points: &[Vec3], pos: SplineIndex) -> Vec3 {
     b1.lerp(b2, ratio(1, 2))
 }
 
-fn cmp(a: f32, b: f32) -> std::cmp::Ordering {
-    a.partial_cmp(&b).expect("cannot compare NaN")
-}
-
 fn det(a: Vec2, b: Vec2) -> f32 {
     a.x * b.y - a.y * b.x
 }
 
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
-pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2]) -> Vec<usize> {
+pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], treshold: Option<f32>) -> Vec<usize> {
+    let treshold = treshold.unwrap_or(0.);
     let pivot = pivot.unwrap_or_else(
         || *min_by_key(points, |x: &&Vec2| x.y).unwrap()
     );
-    let i0 = if points[0] != pivot {
-        0
-    }
-    else {
-        assert!(points[1] != pivot, "the 2 first points of `points` are equal to the pivot point");
-        1
-    };
-    let u0 = points[i0] - pivot;
+    // FIXME: arbitrary
+    let u0 = Vec2::X;
     let compare_angle = |a: &usize, b: &usize| {
         if points[*a] == pivot {
             return Ordering::Less
@@ -116,7 +107,7 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2]) -> Vec<usize> {
             let n_hull = result.len();
             let p_1 = result[n_hull-2];
             let p_2 = result[n_hull-1];
-            if det(points[p_2] - points[p_1], points[i] - points[p_1]) >= 0. || result.len() < 3 {
+            if det(points[p_2] - points[p_1], points[i] - points[p_1]) >= treshold || result.len() < 3 {
                 break
             }
             result.pop().unwrap();
@@ -189,8 +180,6 @@ pub fn mesh_between_contours(points: &[Vec3], c1: &[usize], c2: &[usize], close_
 
 #[cfg(test)]
 mod test {
-    use crate::tools::{max_by_key, min_by_key};
-
     use super::*;
     use rand::prelude::*;
 
@@ -206,7 +195,7 @@ mod test {
             .map(|(a, b)| Vec2::new(a, b))
             .collect();
 
-        let convex = convex_hull_graham(points[0], &points);
+        let convex = convex_hull_graham(Some(points[0]), &points, None);
         assert_eq!(convex, vec![0, 1, 3, 4]);
     }
 
@@ -225,7 +214,7 @@ mod test {
             .map(|(a, b)| Vec2::new(a-10., b))
             .collect();
 
-        let convex = convex_hull_graham(Some(points[5]), &points);
+        let convex = convex_hull_graham(Some(points[5]), &points, None);
         assert_eq!(convex, vec![5, 6, 7, 0, 3]);
     }
 
@@ -241,7 +230,7 @@ mod test {
 
             dbg!(&points);
 
-            let result = convex_hull_graham(None, &points);
+            let result = convex_hull_graham(None, &points, None);
 
             let mut turns = (0..result.len()-2)
                 .map(|i| (result[i+0], result[i+1], result[i+2]))

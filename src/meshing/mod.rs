@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign};
 use std::sync::{Arc, Mutex};
 
-use bevy::math::{Quat, Vec2, Vec3};
+use bevy::math::{FloatExt, Quat, Vec2, Vec3};
 use bevy::prelude::{Mesh, Color};
 use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
@@ -124,6 +124,12 @@ impl MeshBuilder {
     fn position(&self, node_id: usize) -> Vec3 {
         self.node_props[node_id].position
     }
+    fn radius(&self, node_id: usize) -> f32 {
+        self.node_props[node_id].radius
+    }
+    fn orientation(&self, node_id: usize) -> Vec3 {
+        self.node_props[node_id].orientation
+    }
 
     fn register_particle_trajectory(&mut self, leaf_id: usize) {
         let PlantNodeProps {
@@ -146,7 +152,7 @@ impl MeshBuilder {
         self.particles_per_node[current_node].push(particle_id);
     }
 
-    fn register_points_on_contour(&mut self, points: &[Vec3], pos: BranchSectionPosition) -> Vec<usize> {
+    fn register_points_at_position(&mut self, points: &[Vec3], pos: BranchSectionPosition, compute_normals: bool) -> Vec<usize> {
         let orientation = self.node_props[pos.node].orientation;
         let i0 = self.mesh_points.len();
         let n = points.len();
@@ -156,20 +162,23 @@ impl MeshBuilder {
         let color = [1. - r, 0.5+0.5*r, 0.2, 1.0];
         self.mesh_colors.extend(vec![color; n]);
 
-        for i in 0..n {
-            let v1 = points[(n+i-1)%n] - points[(n+i-2)%n];
-            let v2 = points[(n+i+0)%n] - points[(n+i-1)%n];
-            let v3 = points[(n+i+1)%n] - points[(n+i+0)%n];
-            let v4 = points[(n+i+2)%n] - points[(n+i+1)%n];
+        if compute_normals {
 
-            let curv1 = v1.normalize() - v2.normalize();
-            let curv2 = v2.normalize() - v3.normalize();
-            let curv3 = v3.normalize() - v4.normalize();
+            for i in 0..n {
+                let v1 = points[(n+i-1)%n] - points[(n+i-2)%n];
+                let v2 = points[(n+i+0)%n] - points[(n+i-1)%n];
+                let v3 = points[(n+i+1)%n] - points[(n+i+0)%n];
+                let v4 = points[(n+i+2)%n] - points[(n+i+1)%n];
 
-            let mut curv = curv1+2.*curv2+curv3;
-            curv = curv - curv.dot(orientation)*orientation;
+                let curv1 = v1.normalize() - v2.normalize();
+                let curv2 = v2.normalize() - v3.normalize();
+                let curv3 = v3.normalize() - v4.normalize();
 
-            self.mesh_normals.push(curv.normalize());
+                let mut curv = curv1+2.*curv2+curv3;
+                curv = curv - curv.dot(orientation)*orientation;
+
+                self.mesh_normals.push(curv.normalize());
+            }
         }
 
         (i0..i0+n)
@@ -268,9 +277,21 @@ impl MeshBuilder {
         }
     }
 
+    fn branch_section_radius(&self, pos: BranchSectionPosition) -> f32 {
+        match (self.node_info[pos.node].parent, &self.node_info[pos.node].children[..], pos.t) {
+            (_, &[a], t) if t >= 0. => self.node_props[pos.node].radius.lerp(self.node_props[a].radius, t),
+            // a is main branch
+            (_, &[a, _], t) if t >= 0. => self.node_props[pos.node].radius.lerp(self.node_props[a].radius, t),
+            (Some(p), _, t) if t <= 0. => self.node_props[pos.node].radius.lerp(self.node_props[p].radius, -t),
+            (_, &[], _) => panic!("node {} has no children so it has no center", pos.node),
+            _ => panic!("unable to compute branch center position {pos:?}. It has {:?} childrens and its parent is {:?}", self.node_info[pos.node].children, self.node_info[pos.node].parent)
+        }
+    }
+
     fn branch_contour(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
         let parent = pos.node;
         let points = self.particles_on_section(pos);
+        let radius = self.branch_section_radius(pos);
 
         if points.len() == 0 {
             println!("node {} has no particles", pos.node);
@@ -289,7 +310,7 @@ impl MeshBuilder {
 
         let center = to_plane(self.branch_section_center(pos));
         self.debug_points.lock().unwrap().push((self.branch_section_center(pos), Color::srgb(1.0, 1.0, 1.0)));
-        meshing::convex_hull_graham(Some(center), &projected_points)
+        meshing::convex_hull_graham(Some(center), &projected_points, Some(0.01*radius*radius))
             .into_iter()
             .map(|i| points[i])
             .collect()
@@ -301,7 +322,7 @@ impl MeshBuilder {
 
     pub fn compute_each_branch(&mut self) {
         let pos_root = BranchSectionPosition::new(0, 0.);
-        let root_section = self.register_points_on_contour(&self.branch_contour(pos_root), pos_root);
+        let root_section = self.register_points_at_position(&self.branch_contour(pos_root), pos_root, true);
         self.compute_each_branch_recursive(0, root_section)
     }
 
@@ -312,9 +333,9 @@ impl MeshBuilder {
 
         let p1 = BranchSectionPosition::new(c1, p.t - 1.);
         let p2 = BranchSectionPosition::new(c2, p.t - 1.);
-        let cont1 = self.register_points_on_contour(&self.branch_contour(p1), p1);
+        let cont1 = self.register_points_at_position(&self.branch_contour(p1), p1, true);
         let n1 = cont1.len();
-        let cont2 = self.register_points_on_contour(&self.branch_contour(p2), p2);
+        let cont2 = self.register_points_at_position(&self.branch_contour(p2), p2, true);
         let n2 = cont2.len();
 
         let center_1 = self.branch_section_center(p1);
@@ -323,30 +344,22 @@ impl MeshBuilder {
         let i_p = min_by_key(0..n1, |&i| (self.mesh_points[cont1[i]] - center_2 ).length()).unwrap() as i32;
         let i_q = min_by_key(0..n2, |&i| (self.mesh_points[cont2[i]] - center_1).length()).unwrap() as i32;
 
-        let (m_junction, m_above) = split_contour(&cont1, i_p-1, i_p+1);
-        let (mut s_junction, s_above) = split_contour(&cont2, i_q-1, i_q+1);
+        let (m_junction, m_above) = split_contour(&cont1, i_p-2, i_p+2);
+        let (mut s_junction, s_above) = split_contour(&cont2, i_q-2, i_q+2);
         s_junction.reverse();
-        assert_eq!(m_junction.len(), 3);
-        assert_eq!(s_junction.len(), 3);
+        assert_eq!(m_junction.len(), 5);
+        assert_eq!(s_junction.len(), 5);
 
         let i_a = min_by_key(0..previous_contour.len(),
             |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[0]]).length() 
                + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[0]]).length()
         ).unwrap() as i32;
         let i_b = min_by_key(0..previous_contour.len(),
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[2]]).length() 
-               + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[2]]).length()
+            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[4]]).length() 
+               + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[4]]).length()
         ).unwrap() as i32;
 
         let (m_under, s_under) = split_contour(&previous_contour, i_b, i_a);
-
-        let mut debug_points = self.debug_points.lock().unwrap();
-        for &i in &m_junction {
-            debug_points.push((self.mesh_points[i], Color::srgb(1.0, 1.0, 0.0)));
-        }
-        for &i in &s_junction {
-            debug_points.push((self.mesh_points[i], Color::srgb(1.0, 0.0, 1.0)));
-        }
 
         self.mesh_triangles.extend(
             meshing::mesh_between_contours(&self.mesh_points, 
@@ -367,7 +380,7 @@ impl MeshBuilder {
 
         self.mesh_triangles.extend([
             m_junction[0], s_junction[0], previous_contour[i_a as usize],
-            s_junction[2], m_junction[2], previous_contour[i_b as usize],
+            s_junction[4], m_junction[4], previous_contour[i_b as usize],
         ]);
 
         ((p1, cont1), (p2, cont2))
@@ -382,7 +395,7 @@ impl MeshBuilder {
         let mut p = pos;
         while p.decimal_part()+dt <= 1. {
             if condition(p, self) {return Err(p)};
-            let current_contour = self.register_points_on_contour(&self.branch_contour(p), p);
+            let current_contour = self.register_points_at_position(&self.branch_contour(p), p, true);
             let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour, true); 
             self.register_triangles(&triangles);
             *previous_contour = current_contour;
@@ -391,16 +404,23 @@ impl MeshBuilder {
         Ok(())
     }
 
-    fn compute_each_branch_recursive(&mut self, root: usize, start_section: Vec<usize>) {
-        let mut previous_contour = start_section;
-
+    fn compute_each_branch_recursive(&mut self, root: usize, mut previous_contour: Vec<usize>) {
         let pos_root = BranchSectionPosition::new(root, 0.);
 
         let radius = self.node_props[root].radius;
         let dz = 2.0*radius * std::f32::consts::PI / previous_contour.len() as f32;
 
         match &self.node_info[root].children[..] {
-            [] => {},
+            [] => {
+                let leaf = self.position(root) + self.radius(root)*self.orientation(root);
+                let i_end = self.register_points_at_position(&vec![leaf], pos_root, false)[0];
+                let n = previous_contour.len();
+                for i in 0..n {
+                    self.mesh_triangles.extend([
+                        previous_contour[(i+1)%n], previous_contour[i], i_end
+                    ]);
+                }
+            },
             &[child] => {
                 let branch_length = (self.position(root) - self.position(child)).length();
                 self.compute_branch_until(pos_root, &mut previous_contour, dz/branch_length, |_,_| false).unwrap();
@@ -413,7 +433,7 @@ impl MeshBuilder {
                 let pos_split = self.compute_branch_until(pos_root, &mut previous_contour, dz/branch_length, |t, me| 
                     // FIXME: don't pass self as argument
                     me.split(t)
-                    ).err().unwrap();
+                    ).err().expect("2 children but branch does not split !");
 
                 let ((p1, mut cont1), (p2, mut cont2)) = self.compute_branch_join(pos_split, previous_contour);
 

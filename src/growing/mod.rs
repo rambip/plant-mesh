@@ -55,10 +55,10 @@ impl PlantNode {
                             ],
                         },
                         PlantNode {
-                            props: PlantNodeProps::new(Vec3::new(-1., 0., 4.5), 0.2, Vec3::new(0., 1., 1.)),
+                            props: PlantNodeProps::new(Vec3::new(-1., 0., 3.5), 0.3, Vec3::new(0., 1., 1.)),
                             children: vec![
                                 PlantNode {
-                                    props: PlantNodeProps::new(Vec3::new(-0.5, 1., 6.), 0.1, Vec3::new(0., 0., 1.)),
+                                    props: PlantNodeProps::new(Vec3::new(-0.5, 1., 5.), 0.1, Vec3::new(0., 0., 1.)),
                                     children: vec![],
                                 } ],
                         } ],
