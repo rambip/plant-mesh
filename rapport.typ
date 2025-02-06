@@ -110,3 +110,7 @@ we go from bottom to top(s)
         - triangle when two particles merge
         - triangle when one particle merge into two
         - case when one particle is replaced or 2 particles swap: we hope it will not appear ?
+
+
+- parametrization: if 2 branches are not the same size, it's very hard to merge them.
+We must find the right step size for both

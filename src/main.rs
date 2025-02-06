@@ -21,6 +21,7 @@ struct DebugFlags {
     strands: bool,
     skeleton: bool,
     other: bool,
+    contours: bool,
 }
 
 mod tools;
@@ -162,6 +163,9 @@ fn handle_input(
         camera_settings.debug.skeleton ^= true;
     }
     if keyboard.just_pressed(KeyCode::Numpad5) {
+        camera_settings.debug.contours ^= true;
+    }
+    if keyboard.just_pressed(KeyCode::Numpad9) {
         camera_settings.debug.other ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyA) {
@@ -202,7 +206,7 @@ impl Default for Tree {
         let cache = meshing::MeshBuilder::new(&plant_graph);
         Self {
             plant_graph,
-            particle_per_leaf: 100,
+            particle_per_leaf: 50,
             cache,
         }
     }
