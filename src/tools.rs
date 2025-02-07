@@ -1,43 +1,39 @@
-// TODO: rename
+// TODO: rename module
 
-pub fn min_by_key<I, T, F>(iter: I, mut f: F) -> Option<T>
-where
-    I: IntoIterator<Item = T>,
-    F: FnMut(&T) -> f32,
-{
-    iter.into_iter().reduce(|a, b| {
-        let a_key = f(&a);
-        let b_key = f(&b);
-        
-        // Handle NaN cases - treat NaN as greater than everything
-        match (a_key.is_nan(), b_key.is_nan()) {
-            (true, true) => a,   // If both are NaN, keep first
-            (true, false) => b,  // If a is NaN, choose b
-            (false, true) => a,  // If b is NaN, choose a
-            (false, false) => {
-                if a_key <= b_key { a } else { b }
+pub trait FloatProducer: ExactSizeIterator<Item=f32> + Sized {
+    fn arg_min(self) -> Option<usize> 
+    {
+        let (mut i_min, mut v_min) = (0, f32::NAN);
+        for (i, v) in self.enumerate() {
+            if v < v_min || v_min.is_nan() {
+                (i_min, v_min) = (i, v)
             }
         }
-    })
-}
+        if v_min.is_nan() {
+            None
+        }
+        else {
+            Some(i_min)
+        }
+    }
 
-pub fn max_by_key<I, T, F>(iter: I, mut f: F) -> Option<T>
-where
-    I: IntoIterator<Item = T>,
-    F: FnMut(&T) -> f32,
-{
-    iter.into_iter().reduce(|a, b| {
-        let a_key = f(&a);
-        let b_key = f(&b);
-        
-        // Handle NaN cases - treat NaN as greater than everything
-        match (a_key.is_nan(), b_key.is_nan()) {
-            (true, true) => a,   // If both are NaN, keep first
-            (true, false) => b,  // If a is NaN, choose b
-            (false, true) => a,  // If b is NaN, choose a
-            (false, false) => {
-                if a_key >= b_key { a } else { b }
+    fn arg_max(self) -> Option<usize> 
+    {
+        let (mut i_max, mut v_max) = (0, f32::NAN);
+        for (i, v) in self.enumerate() {
+            if v > v_max || v_max.is_nan() {
+                (i_max, v_max) = (i, v)
             }
         }
-    })
+        if v_max.is_nan() {
+            None
+        }
+        else {
+            Some(i_max)
+        }
+    }
 }
+
+impl<I> FloatProducer for I 
+where I: ExactSizeIterator<Item=f32> { }
+

@@ -1,8 +1,6 @@
-use std::cmp::Ordering;
-
 use bevy::math::{FloatExt, Vec2, Vec3};
 
-use crate::tools::{max_by_key, min_by_key};
+use crate::tools::FloatProducer;
 
 #[derive(Copy, Clone, Debug)]
 pub enum SplineIndex {
@@ -83,7 +81,7 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], min_angle: Optio
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
     let n = points.len();
-    let i_min_y = min_by_key(0..n, |&i| points[i].y).unwrap();
+    let i_min_y = points.into_iter().map(|point| point.y).arg_min().unwrap();
     let pivot = pivot.unwrap_or((1. / n as f32) * points.iter().sum::<Vec2>());
     let u0 = points[i_min_y] - pivot;
 
