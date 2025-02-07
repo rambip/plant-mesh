@@ -10,9 +10,11 @@ use rand::prelude::*;
 
 use crate::growing::{PlantNode, PlantNodeProps, NodeInfo};
 use crate::tools::FloatProducer;
-mod meshing;
+mod algorithms;
+mod particles;
 
-use meshing::{extended_catmull_spline, SplineIndex};
+use algorithms::{convex_hull_graham, extended_catmull_spline, mesh_between_contours, SplineIndex};
+use particles::TrajectoryBuilder;
 
 #[derive(Copy, Clone, Debug)]
 // TODO: enum ?
@@ -72,8 +74,8 @@ fn split_contour(source: &[usize], start: i32, end: i32) -> (Vec<usize>, Vec<usi
 pub struct MeshBuilder {
     node_info: Vec<NodeInfo>,
     // from bottom to top
-    trajectories: Vec<Vec<Vec3>>,
     particles_per_node: Vec<Vec<usize>>,
+    trajectories: Vec<Vec<Vec3>>,
     node_props: Vec<PlantNodeProps>,
     mesh_points: Vec<Vec3>,
     debug_points: Arc<Mutex<Vec<(Vec3, Color)>>>,
@@ -133,26 +135,10 @@ impl MeshBuilder {
         self.node_info[node_id].parent
     }
 
-    fn register_particle_trajectory(&mut self, leaf_id: usize) {
-        let PlantNodeProps {
-            position,
-            radius,
-            orientation,
-        } = self.node_props[leaf_id];
-        let particle_id = self.trajectories.len();
-        let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
-        let relative_pos = rotation * sample_uniform_circle(radius).extend(0.);
-        self.particles_per_node[leaf_id].push(particle_id);
-        let mut empty_trajectory = vec![Vec3::ZERO; self.depth(leaf_id)];
-        empty_trajectory.push(position+relative_pos);
-
-        self.trajectories.push(empty_trajectory);
-    }
-
-    fn register_particle_position_for_node(&mut self, particle_id: usize, position: Vec3, current_node: usize) {
-        let d = self.depth(current_node);
-        self.trajectories[particle_id][d] = position;
-        self.particles_per_node[current_node].push(particle_id);
+    pub fn compute_trajectories(&mut self, particles_per_leaf: usize) {
+        let mut builder = TrajectoryBuilder::new(&self.node_props, &self.node_info);
+        builder.compute_trajectories(0, particles_per_leaf);
+        (self.trajectories, self.particles_per_node) = builder.extract();
     }
 
     fn branch_length_to_parent(&self, child: usize) -> f32 {
@@ -199,26 +185,6 @@ impl MeshBuilder {
             .collect()
     }
 
-    fn project_particles(&mut self, parent: usize, child: usize, offset: Vec3) {
-        let origin = self.node_props[parent].position;
-        let normal = self.node_props[parent].orientation;
-        let r_parent = self.node_props[parent].radius;
-        let p_child = self.node_props[child].position;
-
-        let d = (origin - p_child).normalize();
-
-        // FIXME: no clone
-        for p in self.particles_per_node[child].clone() {
-            let pos_particle = self.trajectories[p][self.depth(child)];
-            let u = pos_particle - origin;
-
-            let l = normal.dot(u) / normal.dot(d.normalize());
-            assert!(!l.is_nan());
-            let projected = origin + r_parent*(offset + (u - l * d.normalize())).normalize();
-
-            self.register_particle_position_for_node(p, projected, parent);
-        }
-    }
 
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
         let t = if pos.length < 0. {
@@ -257,34 +223,6 @@ impl MeshBuilder {
     }
 
 
-    pub fn compute_trajectories(&mut self, root: usize, particle_per_leaf: usize) {
-        assert!(self.particles_per_node[root].len()==0);
-
-        match &self.node_info[root].children[..] {
-            [] => {
-                for _ in 0..particle_per_leaf {
-                    self.register_particle_trajectory(root);
-                }
-            },
-            &[child] => {
-                self.compute_trajectories(child, particle_per_leaf);
-                self.project_particles(root, child, Vec3::ZERO);
-            },
-            &[m_child, s_child] => {
-                self.compute_trajectories(m_child, particle_per_leaf);
-                self.compute_trajectories(s_child, particle_per_leaf);
-                let normal = self.node_props[root].orientation;
-                let offset_direction = {
-                    let u = self.position(m_child) - self.position(s_child);
-                    (u - u.dot(normal) * normal).normalize() 
-                };
-                self.project_particles(root, m_child, offset_direction * self.radius(m_child));
-                self.project_particles(root, s_child, -offset_direction * self.radius(s_child));
-            }
-            _ => panic!("did not expect more than 2 childs for node {root}")
-        }
-    }
-
     fn branch_section_center(&self, pos: BranchSectionPosition) -> Vec3 {
         if pos.length < 0. {
             let parent = self.parent(pos.node).expect("there is no branch under root");
@@ -320,7 +258,7 @@ impl MeshBuilder {
         let center = self.branch_section_center(pos);
         self.debug_points.lock().unwrap().push((center, Color::srgb(1.0, 1.0, 1.0)));
         let center = to_plane(center);
-        let result: Vec<Vec3> = meshing::convex_hull_graham(Some(center), &projected_points, Some(0.9*std::f32::consts::PI))
+        let result: Vec<Vec3> = convex_hull_graham(Some(center), &projected_points, Some(0.9*std::f32::consts::PI))
             .into_iter()
             // TODO: project point to avoid strands with too much diff ?
             .map(|i| points[i])
@@ -384,18 +322,18 @@ impl MeshBuilder {
         let (m_under, s_under) = split_contour(&previous_contour, i_b, i_a);
 
         self.mesh_triangles.extend(
-            meshing::mesh_between_contours(&self.mesh_points, 
+            mesh_between_contours(&self.mesh_points, 
             &m_under, &m_above,
             false
         ));
         self.mesh_triangles.extend(
-            meshing::mesh_between_contours(&self.mesh_points, 
+            mesh_between_contours(&self.mesh_points, 
             &s_under, &s_above,
             false)
         );
 
         self.mesh_triangles.extend(
-            meshing::mesh_between_contours(&self.mesh_points, 
+            mesh_between_contours(&self.mesh_points, 
             &s_junction, &m_junction,
             false)
         );
@@ -421,7 +359,7 @@ impl MeshBuilder {
                 panic!("stopping, the branch at position {p:?} is already too long")
             }
             let current_contour = self.register_points_at_position(&self.branch_contour(p), p, true);
-            let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour, true); 
+            let triangles = mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour, true); 
             self.register_triangles(&triangles);
             *previous_contour = current_contour;
             p += dz;
@@ -516,8 +454,8 @@ impl MeshBuilder {
                 for i in 1..100 {
                     let t1 = i as f32 / 100.;
                     let t2 = (i+1) as f32 / 100.;
-                    let pos1 = meshing::extended_catmull_spline(traj, SplineIndex::Global(t1));
-                    let pos2 = meshing::extended_catmull_spline(traj, SplineIndex::Global(t2));
+                    let pos1 = extended_catmull_spline(traj, SplineIndex::Global(t1));
+                    let pos2 = extended_catmull_spline(traj, SplineIndex::Global(t2));
                     let color = Color::srgb(1., 0.5, 0.5);
                     gizmos.line(pos1, pos2, color);
                 }
@@ -547,12 +485,4 @@ impl MeshBuilder {
     }
 }
 
-
-fn sample_uniform_disk(radius: f32) -> Vec2 {
-    Vec2::from_angle(rand::random::<f32>()*std::f32::consts::TAU) * radius*(rand::random::<f32>()).sqrt()
-}
-
-fn sample_uniform_circle(radius: f32) -> Vec2 {
-    Vec2::from_angle(rand::random::<f32>()*std::f32::consts::TAU) * radius
-}
 
