@@ -283,15 +283,8 @@ impl MeshBuilder {
         }
         else {
             let length = self.branch_length_main_children(pos.node);
-
-            let pos_according_to_child = |child: &usize| {
-                self.node_props[pos.node].position.lerp(self.node_props[*child].position, pos.length / length)
-            };
-
-            let children = &self.node_info[pos.node].children;
-            children.iter()
-                .map(pos_according_to_child)
-                .sum::<Vec3>() / children.len() as f32
+            let child = *self.node_info[pos.node].children.get(0).expect("there is no branch after this leaf");
+            self.node_props[pos.node].position.lerp(self.node_props[child].position, pos.length / length)
         }
     }
 
