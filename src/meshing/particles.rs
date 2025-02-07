@@ -1,9 +1,72 @@
-use bevy::math::{Quat, Vec2, Vec3};
+use bevy::math::{FloatPow, Quat, Vec2, Vec3};
 
 use crate::growing::{NodeInfo, PlantNodeProps};
 
-fn sample_uniform_circle(radius: f32) -> Vec2 {
-    Vec2::from_angle(rand::random::<f32>() * std::f32::consts::TAU) * radius
+fn sample_uniform_disk(radius: f32) -> Vec2 {
+    Vec2::from_angle(rand::random::<f32>() * std::f32::consts::TAU)
+        * radius
+        * (rand::random::<f32>()).sqrt()
+}
+
+struct ParticleSimulationConfig {
+    repulsion: f32,
+    dt: f32,
+    n_steps: usize,
+    // TODO: compute depending on number of particles
+    particle_size: f32,
+}
+
+const DEFAULT_SIM_CONFIG: ParticleSimulationConfig = ParticleSimulationConfig {
+    repulsion: 0.3,
+    dt: 0.001,
+    n_steps: 10,
+    particle_size: 0.01,
+};
+
+fn spread_points(
+    points: &mut Vec<Vec2>,
+    radius: f32,
+    config: ParticleSimulationConfig,
+) {
+    let n = points.len();
+    let mut velocities = vec![Vec2::ZERO; n];
+    let repulsion = config.repulsion * radius;
+
+    let max_radius = points
+        .iter()
+        .map(|x| x.length())
+        .reduce(f32::max)
+        .unwrap();
+
+    let scale = 0.9*radius / max_radius;
+
+    for i in 0..n {
+        points[i] *= scale;
+    }
+
+    for _ in 0..config.n_steps {
+        for i in 0..n {
+            velocities[i] = Vec2::ZERO;
+            for j in 0..n {
+                if i != j {
+                    let relative_pos = points[i] - points[j];
+                    let d = f32::max(
+                        relative_pos.length_squared(),
+                        config.particle_size.squared(),
+                    );
+                    velocities[i] += repulsion * relative_pos / d;
+                }
+            }
+        }
+        for i in 0..n {
+            let target_position = points[i] + config.dt * velocities[i];
+            if target_position.length() > radius {
+                points[i] -= config.dt * velocities[i];
+            } else {
+                points[i] = target_position;
+            }
+        }
+    }
 }
 
 pub struct TrajectoryBuilder<'a> {
@@ -28,66 +91,86 @@ impl<'a> TrajectoryBuilder<'a> {
         (self.trajectories, self.particles_per_node)
     }
 
-    fn register_particle_trajectory(&mut self, leaf_id: usize) {
-        let PlantNodeProps {
-            position,
-            radius,
-            orientation,
-        } = self.node_props[leaf_id];
-        let particle_id = self.trajectories.len();
-        let rotation = Quat::from_rotation_arc(Vec3::Z, orientation);
-        let relative_pos = rotation * sample_uniform_circle(radius).extend(0.);
-        self.particles_per_node[leaf_id].push(particle_id);
-        let mut empty_trajectory = vec![Vec3::ZERO; self.node_info[leaf_id].depth];
-        empty_trajectory.push(position + relative_pos);
+    fn register_particles_for_leaf(&mut self, node: usize, cloud: &[Vec2]) {
+        let position = self.node_props[node].position;
+        let normal = self.node_props[node].orientation;
 
-        self.trajectories.push(empty_trajectory);
+        let to_space = |x: Vec2| position + Quat::from_rotation_arc(Vec3::Z, normal) * x.extend(0.);
+
+        for &point in cloud {
+            let particle_id = self.trajectories.len();
+            self.particles_per_node[node].push(particle_id);
+            let mut empty_trajectory = vec![Vec3::ZERO; self.node_info[node].depth];
+            empty_trajectory.push(to_space(point));
+
+            self.trajectories.push(empty_trajectory);
+        }
     }
 
-    fn register_particle_position_for_node(
-        &mut self,
-        particle_id: usize,
-        position: Vec3,
-        current_node: usize,
-    ) {
-        let d = self.node_info[current_node].depth;
-        self.trajectories[particle_id][d] = position;
-        self.particles_per_node[current_node].push(particle_id);
+    fn register_particles_for_node(&mut self, node: usize, cloud: &[Vec2], particle_ids: &[usize]) {
+        assert_eq!(cloud.len(), particle_ids.len());
+        let position = self.node_props[node].position;
+        let normal = self.node_props[node].orientation;
+
+        let to_space = |x: Vec2| position + Quat::from_rotation_arc(Vec3::Z, normal) * x.extend(0.);
+
+        let n = particle_ids.len();
+        for i in 0..n {
+            let d = self.node_info[node].depth;
+            self.trajectories[particle_ids[i]][d] = to_space(cloud[i]);
+            self.particles_per_node[node].push(particle_ids[i]);
+        }
     }
 
-    fn project_particles(&mut self, parent: usize, child: usize, offset: Vec3) {
+    fn project_particles(&mut self, parent: usize, child: usize, offset: Vec3) -> Vec<Vec2> {
         let origin = self.node_props[parent].position;
         let normal = self.node_props[parent].orientation;
-        let r_parent = self.node_props[parent].radius;
         let p_child = self.node_props[child].position;
 
         let d = (origin - p_child).normalize();
 
-        // FIXME: no clone
-        for p in self.particles_per_node[child].clone() {
-            let pos_particle = self.trajectories[p][self.node_info[child].depth];
+        // TODO: share logic between files
+        let to_plane = |x: Vec3| (Quat::from_rotation_arc(normal, Vec3::Z) * x).truncate();
+
+        let projected = |particle_id: &usize| {
+            let pos_particle = self.trajectories[*particle_id][self.node_info[child].depth];
             let u = pos_particle - origin;
 
             let l = normal.dot(u) / normal.dot(d.normalize());
             assert!(!l.is_nan());
-            let projected = origin + r_parent * (offset + (u - l * d.normalize())).normalize();
+            to_plane(offset + (u - l * d.normalize()))
+        };
 
-            self.register_particle_position_for_node(p, projected, parent);
-        }
+        // TODO: no collect for opti
+        self.particles_per_node[child]
+            .iter()
+            .map(projected)
+            .collect()
     }
 
     pub fn compute_trajectories(&mut self, root: usize, particle_per_leaf: usize) {
         assert!(self.particles_per_node[root].len() == 0);
+        let radius = self.node_props[root].radius;
 
         match &self.node_info[root].children[..] {
             [] => {
-                for _ in 0..particle_per_leaf {
-                    self.register_particle_trajectory(root);
-                }
+                let radius = self.node_props[root].radius;
+
+                let mut cloud = 
+                    (0..particle_per_leaf)
+                    .map(|_| sample_uniform_disk(radius))
+                    .collect();
+
+                spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
+                self.register_particles_for_leaf(root, &cloud);
+
             }
             &[child] => {
                 self.compute_trajectories(child, particle_per_leaf);
-                self.project_particles(root, child, Vec3::ZERO);
+                let mut cloud = self.project_particles(root, child, Vec3::ZERO);
+                spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
+                let particle_ids = self.particles_per_node[child].clone();
+                self.register_particles_for_node(root, &cloud, &particle_ids);
             }
             &[m_child, s_child] => {
                 self.compute_trajectories(m_child, particle_per_leaf);
@@ -97,16 +180,26 @@ impl<'a> TrajectoryBuilder<'a> {
                     let u = self.node_props[m_child].position - self.node_props[s_child].position;
                     (u - u.dot(normal) * normal).normalize()
                 };
-                self.project_particles(
+                let m_cloud = self.project_particles(
                     root,
                     m_child,
                     offset_direction * self.node_props[m_child].radius,
                 );
-                self.project_particles(
+                let s_cloud = self.project_particles(
                     root,
                     s_child,
                     -offset_direction * self.node_props[s_child].radius,
                 );
+
+                let mut cloud = m_cloud;
+                cloud.extend(s_cloud);
+
+                let mut particle_ids = self.particles_per_node[m_child].clone();
+                particle_ids.extend(&self.particles_per_node[s_child]);
+
+                spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
+
+                self.register_particles_for_node(root, &cloud, &particle_ids);
             }
             _ => panic!("did not expect more than 2 childs for node {root}"),
         }
