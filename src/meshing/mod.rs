@@ -293,9 +293,16 @@ impl MeshBuilder {
             self.node_props[pos.node].position.lerp(self.node_props[parent].position, -pos.length / length)
         }
         else {
-            let child = self.node_info[pos.node].children[0];
             let length = self.branch_length_smallest_children(pos.node);
-            self.node_props[pos.node].position.lerp(self.node_props[child].position, pos.length / length)
+
+            let pos_according_to_child = |child: &usize| {
+                self.node_props[pos.node].position.lerp(self.node_props[*child].position, pos.length / length)
+            };
+
+            let children = &self.node_info[pos.node].children;
+            children.iter()
+                .map(pos_according_to_child)
+                .sum::<Vec3>() / children.len() as f32
         }
     }
 
@@ -339,13 +346,13 @@ impl MeshBuilder {
         self.compute_each_branch_recursive(0, root_section)
     }
 
-    fn compute_branch_join(&mut self, p: BranchSectionPosition, previous_contour: Vec<usize>) -> ((BranchSectionPosition, Vec<usize>), (BranchSectionPosition, Vec<usize>)){
+    fn compute_branch_join(&mut self, p: BranchSectionPosition, previous_contour: Vec<usize>, dz: f32) -> ((BranchSectionPosition, Vec<usize>), (BranchSectionPosition, Vec<usize>)){
         assert!(self.node_info[p.node].children.len() == 2);
         let c1 = self.node_info[p.node].children[0];
         let c2 = self.node_info[p.node].children[1];
 
-        let p1 = BranchSectionPosition::new(c1, p.length - 0.8*self.branch_length_parent(c1));
-        let p2 = BranchSectionPosition::new(c2, p.length - 0.8*self.branch_length_parent(c2));
+        let p1 = BranchSectionPosition::new(c1, p.length - self.branch_length_parent(c1)+2.*dz);
+        let p2 = BranchSectionPosition::new(c2, p.length - self.branch_length_parent(c2)+2.*dz);
         let cont1 = self.register_points_at_position(&self.branch_contour(p1), p1, true);
         let n1 = cont1.len();
         let cont2 = self.register_points_at_position(&self.branch_contour(p2), p2, true);
@@ -464,12 +471,12 @@ impl MeshBuilder {
             },
             // TODO: assume child1 is the main branch
             &[child1, child2] => {
-                let pos_split = self.compute_branch_until(pos_root, &mut previous_contour, dz, |t, me| 
+                let pos_split = self.compute_branch_until(pos_root, &mut previous_contour, dz, |p, me| 
                     // FIXME: don't pass self as argument
-                    me.split(t)
+                    me.split(p+2.*dz)
                     ).err().expect("2 children but branch does not split !");
 
-                let ((p1, mut cont1), (p2, mut cont2)) = self.compute_branch_join(pos_split, previous_contour);
+                let ((p1, mut cont1), (p2, mut cont2)) = self.compute_branch_join(pos_split, previous_contour, dz);
 
                 self.compute_branch_until(p1, &mut cont1, dz, |_,_| false).unwrap();
                 self.compute_each_branch_recursive(child1, cont1);
@@ -539,10 +546,12 @@ impl MeshBuilder {
             let mut rng = StdRng::seed_from_u64(42);
             for c in self.contours.lock().unwrap().iter() {
                 let t = rng.gen();
-                let color = Color::srgb(t, 0.2, 0.2);
-                for i in 0..c.len() {
+                let n = c.len();
+                for i in 0..n {
+                    let r = i as f32 / n as f32; 
+                    let color = Color::srgb(t, 0.3+0.2*r, 0.3+0.2*r);
                     let pos1 = c[i];
-                    let pos2 = c[(i+1)%c.len()];
+                    let pos2 = c[(i+1)%n];
                     gizmos.line(pos1, pos2, color);
                 }
 
