@@ -303,7 +303,6 @@ impl MeshBuilder {
         &mut self,
         p: BranchSectionPosition,
         previous_contour: Vec<usize>,
-        dz: f32,
     ) -> (
         (BranchSectionPosition, Vec<usize>),
         (BranchSectionPosition, Vec<usize>),
@@ -454,7 +453,7 @@ impl MeshBuilder {
                     });
 
                 let ((m_pos, mut m_cont), (s_pos, mut s_cont)) =
-                    self.compute_branch_join(pos_split, previous_contour, dz);
+                    self.compute_branch_join(pos_split, previous_contour);
 
                 self.compute_branch_while(m_pos, &mut m_cont, dz, |p, _| p.length < 0.);
                 self.compute_each_branch_recursive(m_child, m_cont);
@@ -467,7 +466,7 @@ impl MeshBuilder {
     }
 
     pub fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
-        if debug_flags.mesh {
+        if debug_flags.triangles {
             for i in 0..self.mesh_triangles.len() / 3 {
                 let (ia, ib, ic) = (
                     self.mesh_triangles[3 * i],

@@ -1,5 +1,6 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
+use bevy::input::{gestures::PinchGesture, mouse::{MouseMotion, MouseWheel}};
 pub(crate) use bevy::prelude::*;
 use shader::CustomEntity;
 use std::f32::consts::PI;
@@ -17,7 +18,7 @@ struct Tree {
 #[derive(Copy, Clone, Default, Debug)]
 struct DebugFlags {
     normals: bool,
-    mesh: bool,
+    triangles: bool,
     strands: bool,
     skeleton: bool,
     other: bool,
@@ -120,6 +121,10 @@ fn update_view(
 fn handle_input(
     mut camera_settings: ResMut<CameraSettings>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut evr_motion: EventReader<MouseMotion>,
+    mut evr_scroll: EventReader<MouseWheel>,
+    mut evr_gesture_pinch: EventReader<PinchGesture>,
     mut renders: Query<&mut NeedRender>,
     time: Res<Time>,
 ) {
@@ -128,6 +133,19 @@ fn handle_input(
     }
     if keyboard.pressed(KeyCode::ArrowLeft) {
         camera_settings.orbit_angle += camera_settings.sensibility * time.delta_secs()
+    }
+    for ev in evr_motion.read() {
+        if mouse.pressed(MouseButton::Left) {
+            camera_settings.animate = false;
+            camera_settings.z += 0.0005*ev.delta.y * camera_settings.orbit_distance;
+            camera_settings.orbit_angle -= 0.0005*ev.delta.x * camera_settings.orbit_distance;
+        }
+    }
+    for ev in evr_scroll.read() {
+        camera_settings.orbit_distance -= ev.y;
+    }
+    for ev in evr_gesture_pinch.read() {
+        camera_settings.orbit_distance -= ev.0;
     }
     if keyboard.just_pressed(KeyCode::NumpadAdd) {
         camera_settings.orbit_distance -= 1.;
@@ -140,25 +158,25 @@ fn handle_input(
             r.0 = true
         }
     }
-    if keyboard.just_pressed(KeyCode::Numpad0) {
+    if keyboard.just_pressed(KeyCode::Enter) {
         camera_settings.show_mesh ^= true;
     }
-    if keyboard.just_pressed(KeyCode::Numpad1) {
+    if keyboard.just_pressed(KeyCode::KeyN) {
         camera_settings.debug.normals ^= true;
     }
-    if keyboard.just_pressed(KeyCode::Numpad2) {
-        camera_settings.debug.mesh ^= true;
+    if keyboard.just_pressed(KeyCode::KeyW) {
+        camera_settings.debug.triangles ^= true;
     }
-    if keyboard.just_pressed(KeyCode::Numpad3) {
+    if keyboard.just_pressed(KeyCode::KeyS) {
         camera_settings.debug.strands ^= true;
     }
-    if keyboard.just_pressed(KeyCode::Numpad4) {
+    if keyboard.just_pressed(KeyCode::KeyG) {
         camera_settings.debug.skeleton ^= true;
     }
-    if keyboard.just_pressed(KeyCode::Numpad5) {
+    if keyboard.just_pressed(KeyCode::KeyC) {
         camera_settings.debug.contours ^= true;
     }
-    if keyboard.just_pressed(KeyCode::Numpad9) {
+    if keyboard.just_pressed(KeyCode::KeyD) {
         camera_settings.debug.other ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyA) {
