@@ -32,7 +32,13 @@ mod tools;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                canvas: Some("#bevy".into()),
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(bevy_sprite::SpritePlugin {})
         .add_plugins(bevy_gizmos::GizmoPlugin)
         .add_plugins(shader::CustomMeshPipelinePlugin)
@@ -142,7 +148,14 @@ fn handle_input(
         }
     }
     for ev in evr_scroll.read() {
-        camera_settings.orbit_distance -= ev.y;
+        #[cfg(target_family="wasm")]
+        {
+            camera_settings.orbit_distance -= 0.1*ev.y;
+        }
+        #[cfg(not(target_family="wasm"))]
+        {
+            camera_settings.orbit_distance -= ev.y;
+        }
     }
     for ev in evr_gesture_pinch.read() {
         camera_settings.orbit_distance -= ev.0;
