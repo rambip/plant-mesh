@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use bevy::math::{FloatExt, Vec2, Vec3};
 
-use crate::tools::min_by_key;
+use crate::tools::{max_by_key, min_by_key};
 
 #[derive(Copy, Clone, Debug)]
 pub enum SplineIndex {
@@ -63,25 +63,33 @@ fn det(a: Vec2, b: Vec2) -> f32 {
     a.x * b.y - a.y * b.x
 }
 
+pub fn angle_to(a: Vec2, b: Vec2) -> f32 {
+    if a.length_squared() * b.length_squared() == 0. {
+        return 0.;
+    }
+
+    // TODO: more efficient
+    let angle = f32::acos(
+        0.99*a.dot(b) / f32::sqrt(a.length_squared() * b.length_squared()),
+    );
+
+    if a.perp_dot(b) >= 0. {angle} else {2.*std::f32::consts::PI-angle}
+}
+
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
+/// we suppose that the barycenter is in the convex hull
 pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], min_angle: Option<f32>) -> Vec<usize> {
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
     let n = points.len();
-    let i0 = min_by_key(0..n, |&i| points[i].y).unwrap();
-    let pivot = pivot.unwrap_or(points[i0]);
+    let i_min_y = min_by_key(0..n, |&i| points[i].y).unwrap();
+    let pivot = pivot.unwrap_or((1. / n as f32) * points.iter().sum::<Vec2>());
+    let u0 = points[i_min_y] - pivot;
 
-    let u0 = points[i0];
     let compare_angle = |a: &usize, b: &usize| {
-        if points[*a] == pivot {
-            return Ordering::Less
-        }
-        if points[*b] == pivot {
-            return Ordering::Greater
-        }
-        u0.angle_to(points[*a] - pivot).partial_cmp(
-            &u0.angle_to(points[*b] - pivot)
+        angle_to(u0, points[*a] - pivot).partial_cmp(
+            &angle_to(u0, points[*b] - pivot)
         ).unwrap()
     };
 
@@ -93,21 +101,21 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], min_angle: Optio
     };
 
     let mut result: Vec<usize> = sorted_points[..2].into();
+    let is_sharp_angle = |result: &Vec<usize>, i| {
+        let n_hull = result.len();
+        let p_1 = result[n_hull-2];
+        let p_2 = result[n_hull-1];
+        let angle = angle_to(points[i] - points[p_1], points[p_2] - points[p_1]);
+        angle < min_angle
+    };
 
-    for &i in &sorted_points[2..] {
-        loop {
-            let n_hull = result.len();
-            let p_1 = result[n_hull-2];
-            let p_2 = result[n_hull-1];
-            let angle = (points[i] - points[p_1]).angle_to(points[p_2] - points[p_1]);
-            if angle < 0. || angle > min_angle  || result.len() < 3 {
-                break
-            }
+    for &i in sorted_points.iter().cycle().skip(2).take(n-1) {
+        while result.len() >= 2 && is_sharp_angle(&result, i) {
             result.pop().unwrap();
         }
         result.push(i);
     }
-
+    result.pop();
     result
 }
 
@@ -208,7 +216,7 @@ mod test {
             .collect();
 
         let convex = convex_hull_graham(Some(points[5]), &points, None);
-        assert_eq!(convex, vec![5, 6, 7, 0, 3]);
+        assert_eq!(convex, vec![0, 3, 5, 6, 7]);
     }
 
     #[test]
