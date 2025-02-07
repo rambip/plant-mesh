@@ -24,10 +24,10 @@ struct DebugFlags {
     contours: bool,
 }
 
-mod tools;
-mod meshing;
 mod growing;
+mod meshing;
 mod shader;
+mod tools;
 
 fn main() {
     App::new()
@@ -52,11 +52,9 @@ fn setup(
     // draw a floor
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(100., 100., 0.1))),
-        Transform::from_translation(-Vec3::Z * 0.1)
+        Transform::from_translation(-Vec3::Z * 0.1),
     ));
-    commands.spawn((
-        Mesh3d(meshes.add(Circle::new(4.0))),
-    ));
+    commands.spawn((Mesh3d(meshes.add(Circle::new(4.0))),));
     commands.spawn((
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
@@ -70,7 +68,6 @@ fn setup(
         shader::CustomEntity,
     ));
 }
-
 
 #[derive(Resource, Debug)]
 struct CameraSettings {
@@ -95,12 +92,11 @@ impl Default for CameraSettings {
             show_mesh: true,
         }
     }
-
 }
 impl CameraSettings {
     fn transform(&self, time: f32) -> Transform {
         let mut camera = Transform::default();
-        let angle = self.orbit_angle + if self.animate {0.5*time} else {0.};
+        let angle = self.orbit_angle + if self.animate { 0.5 * time } else { 0. };
         camera.rotation = Quat::from_rotation_z(angle)
                         * Quat::from_rotation_x(0.5*PI) // swap y and z
         ;
@@ -117,7 +113,7 @@ fn update_view(
     camera_settings: Res<CameraSettings>,
     mut camera: Single<&mut Transform, With<Camera>>,
     time: Res<Time>,
-){
+) {
     **camera = camera_settings.transform(time.elapsed_secs());
 }
 
@@ -127,9 +123,6 @@ fn handle_input(
     mut renders: Query<&mut NeedRender>,
     time: Res<Time>,
 ) {
-
-
-
     if keyboard.pressed(KeyCode::ArrowRight) {
         camera_settings.orbit_angle -= camera_settings.sensibility * time.delta_secs()
     }
@@ -171,7 +164,6 @@ fn handle_input(
     if keyboard.just_pressed(KeyCode::KeyA) {
         camera_settings.animate ^= true;
     }
-
 }
 
 #[derive(Component)]
@@ -183,7 +175,7 @@ fn draw_tree(
     mut trees: Query<(Entity, &mut Mesh3d, &mut Tree, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera_settings: Res<CameraSettings>,
-    ) {
+) {
     for (e, mut mesh, mut tree, mut need_render) in trees.iter_mut() {
         mesh.0 = meshes.add(tree.render_mesh(need_render.0));
         need_render.0 = false;
@@ -192,13 +184,11 @@ fn draw_tree(
 
         if camera_settings.show_mesh {
             commands.entity(e).insert(CustomEntity);
-        }
-        else {
+        } else {
             commands.entity(e).remove::<CustomEntity>();
         }
     }
 }
-
 
 impl Default for Tree {
     fn default() -> Self {
@@ -224,7 +214,6 @@ impl Tree {
 
         self.cache.to_mesh()
     }
-
 
     // TODO: optimization = return an iterator
 

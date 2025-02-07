@@ -7,29 +7,45 @@
 //! into Bevy—render nodes are another, lower-level method—but it does allow
 //! for better reuse of parts of Bevy's built-in mesh rendering logic.
 
+use bevy::ecs::system::lifetimeless::Read;
 use bevy::{
-    core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT}, ecs::{
+    core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT},
+    ecs::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
-    }, prelude::*, render::{
+    },
+    prelude::*,
+    render::{
         render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand,
-            RenderCommandResult, SetItemPipeline, TrackedRenderPass, 
+            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
+            SetItemPipeline, TrackedRenderPass,
         },
         render_resource::{
-            ColorTargetState, ColorWrites, CompareFunction, DepthStencilState,
-            FragmentState, MultisampleState, PipelineCache, PrimitiveState,
-            RenderPipelineDescriptor, SpecializedRenderPipeline,
-            SpecializedRenderPipelines, TextureFormat,
-            VertexState
+            ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, FragmentState,
+            MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor,
+            SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat, VertexState,
         },
         renderer::RenderDevice,
         view::{ExtractedView, RenderVisibleEntities},
         Render, RenderApp, RenderSet,
-    }, utils::HashMap
+    },
+    utils::HashMap,
 };
-use bevy::ecs::system::lifetimeless::Read;
-use bevy_render::{mesh::{allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases}, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, ShaderStages}, sync_world::MainEntity, view::{ViewUniform, ViewUniforms}, Extract};
+use bevy_render::{
+    mesh::{
+        allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh,
+        RenderMeshBufferInfo,
+    },
+    render_asset::RenderAssets,
+    render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases},
+    render_resource::{
+        binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry,
+        DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, ShaderStages,
+    },
+    sync_world::MainEntity,
+    view::{ViewUniform, ViewUniforms},
+    Extract,
+};
 
 #[derive(Component)]
 pub struct CustomEntity;
@@ -53,13 +69,11 @@ struct CustomMeshPipeline {
     view_layout: BindGroupLayout,
 }
 
-pub const SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(13828845428412094821);
+pub const SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(13828845428412094821);
 
 /// A [`RenderCommand`] that binds the vertex and index buffers and issues the
 /// draw command for our custom phase item.
 struct DrawCustomMesh;
-
 
 /// FIXME: prepare the view uniforms before passing them to the pass ?
 /// https://docs.rs/bevy_pbr/0.15.1/src/bevy_pbr/render/mesh_view_bindings.rs.html#715
@@ -85,35 +99,33 @@ where
         (meshes, mesh_instances, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-
-        let Some(MeshInstance {id, ..}) = mesh_instances.get(&item.main_entity())
-            else {return RenderCommandResult::Skip};
+        let Some(MeshInstance { id, .. }) = mesh_instances.get(&item.main_entity()) else {
+            return RenderCommandResult::Skip;
+        };
 
         let mesh_allocator = mesh_allocator.into_inner();
 
         let Some(gpu_mesh) = meshes.into_inner().get(*id) else {
             return RenderCommandResult::Skip;
         };
-        let Some(vertex_buffer_slice) =
-            mesh_allocator.mesh_vertex_slice(&id)
-        else {
+        let Some(vertex_buffer_slice) = mesh_allocator.mesh_vertex_slice(&id) else {
             return RenderCommandResult::Skip;
         };
 
-        let RenderMeshBufferInfo::Indexed {index_format, count} = &gpu_mesh.buffer_info 
-            else {return RenderCommandResult::Failure("mesh buffer is not indexed wtf")};
+        let RenderMeshBufferInfo::Indexed {
+            index_format,
+            count,
+        } = &gpu_mesh.buffer_info
+        else {
+            return RenderCommandResult::Failure("mesh buffer is not indexed wtf");
+        };
 
         let index_buffer_slice = mesh_allocator.mesh_index_slice(&id).unwrap();
 
         // Tell the GPU where the vertices are.
-        pass.set_vertex_buffer(
-            0,
-            vertex_buffer_slice.buffer.slice(..)
-        );
+        pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
 
-        
         pass.set_index_buffer(index_buffer_slice.buffer.slice(..), 0, *index_format);
-
 
         pass.set_bind_group(0, &views.0, &[0]);
 
@@ -138,9 +150,8 @@ impl Plugin for CustomMeshPipelinePlugin {
         let mut shaders = app.world_mut().resource_mut::<Assets<Shader>>();
         shaders.insert(
             &SHADER_HANDLE,
-            Shader::from_wgsl(include_str!("shader.wgsl"), file!())
+            Shader::from_wgsl(include_str!("shader.wgsl"), file!()),
         );
-
     }
     fn finish(&self, app: &mut App) {
         // We make sure to add these to the render app, not the main app.
@@ -153,18 +164,14 @@ impl Plugin for CustomMeshPipelinePlugin {
             .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
             .init_resource::<MeshInstances>()
             .add_render_command::<Transparent3d, DrawCustomMeshCommands>()
-            .add_systems(
-                ExtractSchedule,
-                extract_meshes
-            )
+            .add_systems(ExtractSchedule, extract_meshes)
             .add_systems(
                 Render,
-                (   
+                (
                     prepare_view_bind_groups.in_set(RenderSet::Prepare),
-                    queue_meshes.in_set(RenderSet::Queue)
-                )
-            )
-            ;
+                    queue_meshes.in_set(RenderSet::Queue),
+                ),
+            );
     }
 }
 
@@ -192,10 +199,7 @@ fn queue_meshes(
 
         // Find all the custom rendered entities that are visible from this
         // view.
-        for &entity in view_visible_entities
-            .get::<With<Mesh3d>>()
-            .iter()
-        {
+        for &entity in view_visible_entities.get::<With<Mesh3d>>().iter() {
             // Ordinarily, the [`SpecializedRenderPipeline::Key`] would contain
             // some per-view settings, such as whether the view is HDR, but for
             // simplicity's sake we simply hard-code the view's characteristics,
@@ -234,9 +238,9 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
         // TODO: lazy static and check the layout
         let mut l: MeshVertexBufferLayouts = Default::default();
         let vertex_layout = Mesh::new(PrimitiveTopology::TriangleList, Default::default())
-            .with_inserted_attribute( Mesh::ATTRIBUTE_POSITION, vec![[0.,0.,0.]])
-            .with_inserted_attribute( Mesh::ATTRIBUTE_NORMAL, vec![[0.,0.,0.]])
-            .with_inserted_attribute( Mesh::ATTRIBUTE_COLOR, vec![[0.,0.,0.,0.]])
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0., 0., 0.]])
+            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0., 0., 0.]])
+            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0., 0., 0., 0.]])
             .get_mesh_vertex_buffer_layout(&mut l)
             .0
             .layout()
@@ -244,9 +248,7 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
 
         RenderPipelineDescriptor {
             label: Some("custom render pipeline".into()),
-            layout: vec![
-                self.view_layout.clone()
-            ],
+            layout: vec![self.view_layout.clone()],
             push_constant_ranges: vec![],
             vertex: VertexState {
                 shader: SHADER_HANDLE,
@@ -290,9 +292,8 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
     }
 }
 
-
 #[derive(Component)]
-struct ViewBindGroup( BindGroup );
+struct ViewBindGroup(BindGroup);
 
 // FIXME: init view uniforms
 fn prepare_view_bind_groups(
@@ -300,16 +301,20 @@ fn prepare_view_bind_groups(
     render_device: Res<RenderDevice>,
     mesh_pipeline: Res<CustomMeshPipeline>,
     view_uniforms: Res<ViewUniforms>,
-    views: Query< Entity>,
+    views: Query<Entity>,
 ) {
     if let Some(view_binding) = view_uniforms.uniforms.binding() {
         for entity in &views {
-        let entries = DynamicBindGroupEntries::new_with_indices(((0, view_binding.clone()),));
-        let layout = &mesh_pipeline.view_layout;
+            let entries = DynamicBindGroupEntries::new_with_indices(((0, view_binding.clone()),));
+            let layout = &mesh_pipeline.view_layout;
 
-        commands.entity(entity).insert(ViewBindGroup (
-            render_device.create_bind_group("view_bind_group", layout, &entries),
-        ));
+            commands
+                .entity(entity)
+                .insert(ViewBindGroup(render_device.create_bind_group(
+                    "view_bind_group",
+                    layout,
+                    &entries,
+                )));
         }
     }
 }
@@ -320,10 +325,7 @@ fn extract_meshes(
 ) {
     for (entity, m) in &meshes {
         // TODO: cleanup meshes
-        mesh_instances.insert(entity.into(), 
-            MeshInstance {
-                id: m.0.id()
-            });
+        mesh_instances.insert(entity.into(), MeshInstance { id: m.0.id() });
     }
 }
 
@@ -332,21 +334,19 @@ impl FromWorld for CustomMeshPipeline {
         // Load and compile the shader in the background.
         let render_device = world.resource::<RenderDevice>();
 
-        let view_layout_entries: Vec<BindGroupLayoutEntry> = DynamicBindGroupLayoutEntries::new_with_indices(
-            ShaderStages::FRAGMENT,
-            (
-                (0, uniform_buffer::<ViewUniform>(true).visibility(ShaderStages::VERTEX_FRAGMENT),
-                    ),)
-            ).to_vec()
-        ;
+        let view_layout_entries: Vec<BindGroupLayoutEntry> =
+            DynamicBindGroupLayoutEntries::new_with_indices(
+                ShaderStages::FRAGMENT,
+                ((
+                    0,
+                    uniform_buffer::<ViewUniform>(true).visibility(ShaderStages::VERTEX_FRAGMENT),
+                ),),
+            )
+            .to_vec();
 
-        let view_layout = render_device.create_bind_group_layout(
-            "mesh_view_layout",
-            &view_layout_entries,
-        );
+        let view_layout =
+            render_device.create_bind_group_layout("mesh_view_layout", &view_layout_entries);
 
-        CustomMeshPipeline {
-            view_layout,
-        }
+        CustomMeshPipeline { view_layout }
     }
 }
