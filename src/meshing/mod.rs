@@ -9,7 +9,7 @@ use bevy_gizmos::prelude::Gizmos;
 use rand::prelude::*;
 
 use crate::growing::{PlantNode, PlantNodeProps, NodeInfo};
-use crate::tools::min_by_key;
+use crate::tools::{max_by_key, min_by_key};
 mod meshing;
 
 use meshing::{extended_catmull_spline, SplineIndex};
@@ -330,6 +330,7 @@ impl MeshBuilder {
         let center = to_plane(center);
         let result: Vec<Vec3> = meshing::convex_hull_graham(Some(center), &projected_points, Some(0.9*std::f32::consts::PI))
             .into_iter()
+            // TODO: project point to avoid strands with too much diff ?
             .map(|i| points[i])
             .collect();
         self.contours.lock().unwrap().push(result.clone());
@@ -351,55 +352,39 @@ impl MeshBuilder {
         let c1 = self.node_info[p.node].children[0];
         let c2 = self.node_info[p.node].children[1];
 
-        let p1 = BranchSectionPosition::new(c1, p.length - self.branch_length_parent(c1)+2.*dz);
-        let p2 = BranchSectionPosition::new(c2, p.length - self.branch_length_parent(c2)+2.*dz);
+        let p1 = BranchSectionPosition::new(c1, p.length - self.branch_length_parent(c1)+dz);
+    let p2 = BranchSectionPosition::new(c2, p.length - self.branch_length_parent(c2)+dz);
         let cont1 = self.register_points_at_position(&self.branch_contour(p1), p1, true);
         let n1 = cont1.len();
         let cont2 = self.register_points_at_position(&self.branch_contour(p2), p2, true);
         let n2 = cont2.len();
 
         let center_1 = self.branch_section_center(p1);
+        let dist_center_1 = |i: usize| (self.mesh_points[i] - center_1).length();
+
         let center_2 = self.branch_section_center(p2);
+        let dist_center_2 = |i: usize| (self.mesh_points[i] - center_2).length();
+
         let center = 0.5*(center_1 + center_2);
+        let dist_center = |i: usize| (self.mesh_points[i] - center).length();
+
 
         let normal = self.node_props[p.node].orientation;
+        let side = |i: usize| Mat3::from_cols(center_1 - center_2, normal, self.mesh_points[i] - center).determinant();
 
-        let i_p = min_by_key(0..n1, |&i| (self.mesh_points[cont1[i]] - center_2 ).length()).unwrap() as i32;
-        let i_q = min_by_key(0..n2, |&i| (self.mesh_points[cont2[i]] - center_1).length()).unwrap() as i32;
-
-        let (m_junction, m_above) = split_contour(&cont1, i_p-2, i_p+2);
-        let (mut s_junction, s_above) = split_contour(&cont2, i_q-2, i_q+2);
-        s_junction.reverse();
-        assert_eq!(m_junction.len(), 5);
-        assert_eq!(s_junction.len(), 5);
-
-        let side = |p: Vec3| Mat3::from_cols(center_1 - center_2, normal, p - center).determinant();
-        let mut side_a = Vec::new();
-        let mut side_b = Vec::new();
-        for i in 0..previous_contour.len() {
-            let point = self.mesh_points[previous_contour[i]];
-            if side(point) >= 0. {
-                side_b.push(i);
-                //self.debug_points.lock().unwrap().push((point, Color::srgb(1.0, 1.0, 0.5)));
-            }
-            else {
-                side_a.push(i);
-                //self.debug_points.lock().unwrap().push((point, Color::srgb(0.5, 1.0, 1.0)));
-            }
-        }
-
-        let i_a = min_by_key(side_a,
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[0]]).length() 
-               + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[0]]).length()
-        ).unwrap() as i32;
-        let i_b = min_by_key(side_b,
-            |&i| (self.mesh_points[previous_contour[i]] - self.mesh_points[m_junction[4]]).length() 
-               + (self.mesh_points[previous_contour[i]] - self.mesh_points[s_junction[4]]).length()
-        ).unwrap() as i32;
+        let i_p = min_by_key(0..n1, |i| dist_center_2(cont1[*i])).unwrap() as i32;
+        let i_q = min_by_key(0..n2, |i| dist_center_1(cont2[*i])).unwrap() as i32;
+        let i_a = min_by_key(0..previous_contour.len(), |i| side(previous_contour[*i]) / dist_center(previous_contour[*i]))
+            .unwrap() as i32;
+        let i_b = max_by_key(0..previous_contour.len(), |i| side(previous_contour[*i]) / dist_center(previous_contour[*i]))
+            .unwrap() as i32;
 
         self.debug_points.lock().unwrap().push((self.mesh_points[previous_contour[i_a as usize]], Color::srgb(1.0, 1.0, 0.8)));
         self.debug_points.lock().unwrap().push((self.mesh_points[previous_contour[i_b as usize]], Color::srgb(0.8, 1.0, 1.0)));
 
+        let (m_junction, m_above) = split_contour(&cont1, i_p-2, i_p+2);
+        let (mut s_junction, s_above) = split_contour(&cont2, i_q-2, i_q+2);
+        s_junction.reverse();
         let (m_under, s_under) = split_contour(&previous_contour, i_b, i_a);
 
         self.mesh_triangles.extend(
@@ -473,7 +458,7 @@ impl MeshBuilder {
             &[child1, child2] => {
                 let pos_split = self.compute_branch_until(pos_root, &mut previous_contour, dz, |p, me| 
                     // FIXME: don't pass self as argument
-                    me.split(p+2.*dz)
+                    me.split(p+dz)
                     ).err().expect("2 children but branch does not split !");
 
                 let ((p1, mut cont1), (p2, mut cont2)) = self.compute_branch_join(pos_split, previous_contour, dz);
