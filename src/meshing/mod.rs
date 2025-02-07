@@ -316,7 +316,7 @@ impl MeshBuilder {
 
         let mut compute_properties = |child| {
             let branch_length = self.branch_length_to_parent(child);
-            let pos = BranchSectionPosition::new(child, p.length - branch_length + dz);
+            let pos = BranchSectionPosition::new(child, p.length - branch_length);
             let center = self.branch_section_center(pos);
             let contour = self.register_points_at_position(&self.branch_contour(pos), pos, true);
             (pos, center, contour)
@@ -442,7 +442,6 @@ impl MeshBuilder {
             }
             &[child] => {
                 let branch_length = self.branch_length_to_parent(child);
-                dbg!(branch_length);
                 self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, _| {
                     p.length < branch_length
                 });
@@ -451,7 +450,7 @@ impl MeshBuilder {
             &[m_child, s_child] => {
                 let pos_split =
                     self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, me| {
-                        !me.branch_is_spliting(p + dz)
+                        !me.branch_is_spliting(p)
                     });
 
                 let ((m_pos, mut m_cont), (s_pos, mut s_cont)) =
