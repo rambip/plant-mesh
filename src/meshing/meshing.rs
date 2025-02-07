@@ -105,7 +105,7 @@ pub fn convex_hull_graham(pivot: Option<Vec2>, points: &[Vec2], min_angle: Optio
         let n_hull = result.len();
         let p_1 = result[n_hull-2];
         let p_2 = result[n_hull-1];
-        let angle = angle_to(points[i] - points[p_1], points[p_2] - points[p_1]);
+        let angle = angle_to(points[p_1] - points[p_2], points[i] - points[p_2]);
         angle < min_angle
     };
 
