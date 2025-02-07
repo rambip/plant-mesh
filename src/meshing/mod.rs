@@ -153,16 +153,9 @@ impl MeshBuilder {
         (self.position(child) - self.position(parent)).length()
     }
 
-    fn branch_length_smallest_children(&self, node: usize) -> f32 {
-        match &self.node_info[node].children[..] {
-            &[] => panic!("a leaf does not have a length"),
-            &[child] => (self.position(node) - self.position(child)).length(),
-            &[child1, child2] => f32::min(
-                (self.position(node) - self.position(child1)).length(),
-                (self.position(node) - self.position(child2)).length()
-            ),
-            _ => panic!("node has more than 2 children")
-        }
+    fn branch_length_main_children(&self, node: usize) -> f32 {
+        let child = *self.node_info[node].children.get(0).expect("a leaf does not have a length");
+        (self.position(node) - self.position(child)).length()
     }
 
     fn register_points_at_position(&mut self, points: &[Vec3], pos: BranchSectionPosition, compute_normals: bool) -> Vec<usize> {
@@ -199,7 +192,7 @@ impl MeshBuilder {
             .collect()
     }
 
-    fn project_particles(&mut self, parent: usize, child: usize, offset: bool) {
+    fn project_particles(&mut self, parent: usize, child: usize, offset: Vec3) {
         let origin = self.node_props[parent].position;
         let normal = self.node_props[parent].orientation;
         let r_parent = self.node_props[parent].radius;
@@ -212,12 +205,9 @@ impl MeshBuilder {
             let pos_particle = self.trajectories[p][self.depth(child)];
             let u = pos_particle - origin;
 
-            let projected_offset = p_child - origin - (p_child - origin).dot(normal)*normal;
-
             let l = normal.dot(u) / normal.dot(d.normalize());
             assert!(!l.is_nan());
-            let o = if offset {0.5*projected_offset} else {Vec3::ZERO};
-            let projected = origin + r_parent*(o + (u - l * d.normalize())).normalize();
+            let projected = origin + r_parent*(offset + (u - l * d.normalize())).normalize();
 
             self.register_particle_position_for_node(p, projected, parent);
         }
@@ -229,7 +219,7 @@ impl MeshBuilder {
             let branch_len = (self.position(pos.node) - self.position(parent)).length();
             (branch_len + pos.length)/branch_len
         } else {
-            pos.length / self.branch_length_smallest_children(pos.node)
+            pos.length / self.branch_length_main_children(pos.node)
         };
         let depth = if pos.length < 0. {self.depth(pos.node) - 1} else {self.depth(pos.node)};
         let spline_index = SplineIndex::Local(depth, t);
@@ -240,12 +230,12 @@ impl MeshBuilder {
             .collect()
     }
 
-    fn split(&mut self, pos: BranchSectionPosition) -> bool {
+    fn split(&self, pos: BranchSectionPosition) -> bool {
         if self.node_info[pos.node].children.len() != 2 {return false};
         let child1 = self.node_info[pos.node].children[0];
         let child2 = self.node_info[pos.node].children[1];
 
-        let t = pos.length / self.branch_length_smallest_children(pos.node);
+        let t = pos.length / self.branch_length_main_children(pos.node);
         let center_1 = self.position(pos.node).lerp(self.position(child1), t);
         let center_2 = self.position(pos.node).lerp(self.position(child2), t);
 
@@ -268,19 +258,18 @@ impl MeshBuilder {
             },
             &[child] => {
                 self.compute_trajectories(child, particle_per_leaf);
-                self.project_particles(root, child, false);
+                self.project_particles(root, child, Vec3::ZERO);
             },
-            // TODO: assume child1 is the main branch
-            &[child1, child2] => {
-                let mut big_child = child1;
-                let mut small_child = child2;
-                self.compute_trajectories(child1, particle_per_leaf);
-                self.compute_trajectories(child2, particle_per_leaf);
-                if self.particles_per_node[big_child].len() < self.particles_per_node[small_child].len() {
-                    std::mem::swap(&mut big_child, &mut small_child);
-                }
-                self.project_particles(root, small_child, false);
-                self.project_particles(root, big_child, true);
+            &[m_child, s_child] => {
+                self.compute_trajectories(m_child, particle_per_leaf);
+                self.compute_trajectories(s_child, particle_per_leaf);
+                let normal = self.node_props[root].orientation;
+                let offset_direction = {
+                    let u = self.position(m_child) - self.position(s_child);
+                    (u - u.dot(normal) * normal).normalize() 
+                };
+                self.project_particles(root, m_child, offset_direction * self.radius(m_child));
+                self.project_particles(root, s_child, -offset_direction * self.radius(s_child));
             }
             _ => panic!("did not expect more than 2 childs for node {root}")
         }
@@ -293,7 +282,7 @@ impl MeshBuilder {
             self.node_props[pos.node].position.lerp(self.node_props[parent].position, -pos.length / length)
         }
         else {
-            let length = self.branch_length_smallest_children(pos.node);
+            let length = self.branch_length_main_children(pos.node);
 
             let pos_according_to_child = |child: &usize| {
                 self.node_props[pos.node].position.lerp(self.node_props[*child].position, pos.length / length)
@@ -382,8 +371,8 @@ impl MeshBuilder {
         self.debug_points.lock().unwrap().push((self.mesh_points[previous_contour[i_a as usize]], Color::srgb(1.0, 1.0, 0.8)));
         self.debug_points.lock().unwrap().push((self.mesh_points[previous_contour[i_b as usize]], Color::srgb(0.8, 1.0, 1.0)));
 
-        let (m_junction, m_above) = split_contour(&cont1, i_p-2, i_p+2);
-        let (mut s_junction, s_above) = split_contour(&cont2, i_q-2, i_q+2);
+        let (m_junction, m_above) = split_contour(&cont1, i_p-1, i_p+1);
+        let (mut s_junction, s_above) = split_contour(&cont2, i_q-1, i_q+1);
         s_junction.reverse();
         let (m_under, s_under) = split_contour(&previous_contour, i_b, i_a);
 
@@ -406,31 +395,27 @@ impl MeshBuilder {
 
         self.mesh_triangles.extend([
             m_junction[0], s_junction[0], previous_contour[i_a as usize],
-            s_junction[4], m_junction[4], previous_contour[i_b as usize],
+            s_junction[2], m_junction[2], previous_contour[i_b as usize],
         ]);
 
         ((p1, cont1), (p2, cont2))
     }
 
-    fn compute_branch_until(&mut self, 
+    fn compute_branch_while(&mut self, 
         pos: BranchSectionPosition, 
         previous_contour: &mut Vec<usize>,
         dz:f32,
-        condition: impl Fn(BranchSectionPosition, &mut Self)->bool
-        ) -> Result<(), BranchSectionPosition> {
+        condition: impl Fn(BranchSectionPosition, &Self)->bool
+        ) -> BranchSectionPosition {
         let mut p = pos;
-        // TODO: remove this strange condition by changing the logic in
-        // `compute_each_branch_recursive` ?
-        let end_length = if p.length < 0. {0.} else {self.branch_length_smallest_children(pos.node)};
-        while p.length <= end_length {
-            if condition(p, self) {return Err(p)};
+        while condition(p, self) {
             let current_contour = self.register_points_at_position(&self.branch_contour(p), p, true);
             let triangles = meshing::mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour, true); 
             self.register_triangles(&triangles);
             *previous_contour = current_contour;
             p += dz;
         }
-        Ok(())
+        p
     }
 
     fn compute_each_branch_recursive(&mut self, root: usize, mut previous_contour: Vec<usize>) {
@@ -451,22 +436,22 @@ impl MeshBuilder {
                 }
             },
             &[child] => {
-                self.compute_branch_until(pos_root, &mut previous_contour, dz, |_,_| false).unwrap();
+                let branch_length = self.branch_length_parent(child);
+                self.compute_branch_while(pos_root, &mut previous_contour, dz, |p,_| p.length < branch_length);
                 self.compute_each_branch_recursive(child, previous_contour)
             },
-            // TODO: assume child1 is the main branch
             &[child1, child2] => {
-                let pos_split = self.compute_branch_until(pos_root, &mut previous_contour, dz, |p, me| 
+                let pos_split = self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, me| 
                     // FIXME: don't pass self as argument
-                    me.split(p+dz)
-                    ).err().expect("2 children but branch does not split !");
+                    !me.split(p+dz)
+                );
 
                 let ((p1, mut cont1), (p2, mut cont2)) = self.compute_branch_join(pos_split, previous_contour, dz);
 
-                self.compute_branch_until(p1, &mut cont1, dz, |_,_| false).unwrap();
+                self.compute_branch_while(p1, &mut cont1, dz, |p,_| p.length < 0.);
                 self.compute_each_branch_recursive(child1, cont1);
 
-                self.compute_branch_until(p2, &mut cont2, dz, |_,_| false).unwrap();
+                self.compute_branch_while(p2, &mut cont2, dz, |p,_| p.length < 0.);
                 self.compute_each_branch_recursive(child2, cont2);
             },
             _ => panic!("did not expect more than 2 childs for node {root}")
