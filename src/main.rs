@@ -150,7 +150,7 @@ fn handle_input(
     for ev in evr_scroll.read() {
         #[cfg(target_family="wasm")]
         {
-            camera_settings.orbit_distance -= 0.1*ev.y;
+            camera_settings.orbit_distance -= 0.03*ev.y;
         }
         #[cfg(not(target_family="wasm"))]
         {
