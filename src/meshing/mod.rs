@@ -58,7 +58,6 @@ pub struct MeshBuilder {
     mesh_points: Vec<Vec3>,
     debug_points: Arc<Mutex<Vec<(Vec3, Color)>>>,
     mesh_triangles: Vec<usize>,
-    mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
     contours: Arc<Mutex<Vec<Vec<Vec3>>>>,
 }
@@ -80,7 +79,6 @@ impl MeshBuilder {
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
             mesh_triangles: vec![],
-            mesh_normals: vec![],
             mesh_colors: vec![],
             debug_points: Arc::new(vec![].into()),
         }
@@ -95,7 +93,7 @@ impl MeshBuilder {
     pub fn compute_each_branch(&mut self) {
         let pos_root = BranchSectionPosition::new(0, 0.);
         let root_section =
-            self.register_points_at_position(&self.branch_contour(pos_root), pos_root, true);
+            self.register_points(&self.branch_contour(pos_root));
         self.compute_each_branch_recursive(0, root_section)
     }
 
@@ -105,10 +103,6 @@ impl MeshBuilder {
             RenderAssetUsages::default(),
         )
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.mesh_points.clone())
-        //.with_inserted_attribute(
-        //    Mesh::ATTRIBUTE_NORMAL,
-        //    self.mesh_normals.clone(),
-        //)
         .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.mesh_colors.clone())
         .with_inserted_indices(Indices::U32(
             self.mesh_triangles.iter().map(|x| *x as u32).collect(),
@@ -253,13 +247,10 @@ impl MeshBuilder {
         result
     }
 
-    fn register_points_at_position(
+    fn register_points(
         &mut self,
         points: &[Vec3],
-        pos: BranchSectionPosition,
-        compute_normals: bool,
     ) -> Vec<usize> {
-        let orientation = self.node_props[pos.node].orientation;
         let i0 = self.mesh_points.len();
         let n = points.len();
         self.mesh_points.extend(points);
@@ -268,24 +259,6 @@ impl MeshBuilder {
             let a: f32 = rand::random();
             let color = [0.3, 0.15, 0.05+0.05*a, 1.0];
             self.mesh_colors.push(color);
-        }
-
-        if compute_normals {
-            for i in 0..n {
-                let v1 = points[(n + i - 1) % n] - points[(n + i - 2) % n];
-                let v2 = points[(n + i + 0) % n] - points[(n + i - 1) % n];
-                let v3 = points[(n + i + 1) % n] - points[(n + i + 0) % n];
-                let v4 = points[(n + i + 2) % n] - points[(n + i + 1) % n];
-
-                let curv1 = v1.normalize() - v2.normalize();
-                let curv2 = v2.normalize() - v3.normalize();
-                let curv3 = v3.normalize() - v4.normalize();
-
-                let mut curv = curv1 + 2. * curv2 + curv3;
-                curv = curv - curv.dot(orientation) * orientation;
-
-                self.mesh_normals.push(curv.normalize());
-            }
         }
 
         (i0..i0 + n).into_iter().collect()
@@ -313,7 +286,7 @@ impl MeshBuilder {
             let branch_length = self.branch_length_to_parent(child);
             let pos = BranchSectionPosition::new(child, p.length - branch_length);
             let center = self.branch_section_center(pos);
-            let contour = self.register_points_at_position(&self.branch_contour(pos), pos, true);
+            let contour = self.register_points(&self.branch_contour(pos));
             (pos, center, contour)
         };
 
@@ -407,7 +380,7 @@ impl MeshBuilder {
                 panic!("stopping, the branch at position {p:?} is already too long")
             }
             let current_contour =
-                self.register_points_at_position(&self.branch_contour(p), p, true);
+                self.register_points(&self.branch_contour(p));
             let triangles =
                 mesh_between_contours(&self.mesh_points, &previous_contour, &current_contour, true);
             self.register_triangles(&triangles);
@@ -426,7 +399,7 @@ impl MeshBuilder {
         match &self.node_info[root].children[..] {
             [] => {
                 let leaf = self.position(root) + self.radius(root) * self.orientation(root);
-                let i_end = self.register_points_at_position(&vec![leaf], pos_root, false)[0];
+                let i_end = self.register_points(&vec![leaf])[0];
                 let n = previous_contour.len();
                 for i in 0..n {
                     self.mesh_triangles.extend([
