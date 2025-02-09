@@ -323,8 +323,8 @@ fn extract_meshes(
     mut mesh_instances: ResMut<MeshInstances>,
     meshes: Extract<Query<(Entity, &Mesh3d), With<CustomEntity>>>,
 ) {
+    mesh_instances.clear();
     for (entity, m) in &meshes {
-        // TODO: cleanup meshes
         mesh_instances.insert(entity.into(), MeshInstance { id: m.0.id() });
     }
 }
