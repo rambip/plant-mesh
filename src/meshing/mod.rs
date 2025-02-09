@@ -61,7 +61,6 @@ pub struct MeshBuilder {
     mesh_normals: Vec<Vec3>,
     mesh_colors: Vec<[f32; 4]>,
     contours: Arc<Mutex<Vec<Vec<Vec3>>>>,
-    tree_depth: usize,
 }
 
 impl MeshBuilder {
@@ -72,13 +71,11 @@ impl MeshBuilder {
         plant_graph.register_node_info(&mut node_info, 0);
 
         let node_count = node_info.len();
-        let tree_depth = plant_graph.compute_depth();
 
         Self {
             contours: Arc::new(vec![].into()),
             node_props,
             node_info,
-            tree_depth,
             trajectories: vec![],
             particles_per_node: vec![vec![]; node_count],
             mesh_points: vec![],
@@ -120,9 +117,6 @@ impl MeshBuilder {
         result
     }
 
-    fn max_depth(&self) -> usize {
-        self.tree_depth
-    }
     fn depth(&self, node_id: usize) -> usize {
         self.node_info[node_id].depth
     }
@@ -270,9 +264,11 @@ impl MeshBuilder {
         let n = points.len();
         self.mesh_points.extend(points);
 
-        let r = (self.depth(pos.node) as f32) / self.max_depth() as f32;
-        let color = [1. - r, 0.5 + 0.5 * r, 0.2, 1.0];
-        self.mesh_colors.extend(vec![color; n]);
+        for _ in 0..n {
+            let a: f32 = rand::random();
+            let color = [0.3, 0.15, 0.05+0.05*a, 1.0];
+            self.mesh_colors.push(color);
+        }
 
         if compute_normals {
             for i in 0..n {
@@ -494,13 +490,16 @@ impl MeshBuilder {
             }
         }
         if debug_flags.strands {
-            for traj in &self.trajectories {
+            let mut rng = StdRng::seed_from_u64(42);
+            for (i_t, traj) in self.trajectories.iter().enumerate() {
+                let a: f32 = i_t as f32 / self.trajectories.len() as f32;
+                let b : f32 = rng.gen();
+                let color = Color::srgb(1., 0.3+0.5*a, 0.3+0.5*b);
                 for i in 1..100 {
                     let t1 = i as f32 / 100.;
                     let t2 = (i + 1) as f32 / 100.;
                     let pos1 = extended_catmull_spline(traj, SplineIndex::Global(t1));
                     let pos2 = extended_catmull_spline(traj, SplineIndex::Global(t2));
-                    let color = Color::srgb(1., 0.5, 0.5);
                     gizmos.line(pos1, pos2, color);
                 }
             }
