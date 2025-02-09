@@ -1,23 +1,19 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
+use crate::meshing::VolumetricTree;
 use bevy::input::{gestures::PinchGesture, mouse::{MouseMotion, MouseWheel}};
 pub(crate) use bevy::prelude::*;
+use growing::{PlantNode, TreeSkeleton};
+use meshing::GeometryData;
 use shader::CustomEntity;
+use smallvec::SmallVec;
 use std::f32::consts::PI;
 
 use bevy_gizmos::prelude::Gizmos;
 
-#[derive(Component)]
-struct Tree {
-    // TODO: color on nodes ?
-    plant_graph: growing::PlantNode,
-    particle_per_leaf: usize,
-    cache: meshing::MeshBuilder,
-}
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, Resource)]
 struct DebugFlags {
-    normals: bool,
     triangles: bool,
     strands: bool,
     skeleton: bool,
@@ -25,8 +21,56 @@ struct DebugFlags {
     contours: bool,
 }
 
-mod growing;
+#[derive(Clone)]
+pub struct NodeInfo {
+    pub depth: usize,
+    pub parent: Option<usize>,
+    // id in prefix traversal order of tree
+    pub id: usize,
+    // TODO: bigger children first
+    pub children: SmallVec<[usize; 2]>,
+}
+
+//mod simple_generation;
+
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PlantNodeProps {
+    pub position: Vec3,
+    pub radius: f32,
+    pub orientation: Vec3,
+}
+
+impl PlantNodeProps {
+    fn new(position: Vec3, radius: f32, orientation: Vec3) -> Self {
+        Self {
+            position,
+            radius,
+            orientation: orientation.normalize(),
+        }
+    }
+}
+
+
+trait VisualDebug {
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags);
+}
+
+
 mod meshing;
+mod growing;
+
+#[derive(Component)]
+struct TreeConfig {
+    particle_per_leaf: usize,
+}
+
+impl TreeConfig {
+    fn to_tree(&self) -> TreeSkeleton {
+        PlantNode::demo().to_tree()
+    }
+}
+
 mod shader;
 mod tools;
 
@@ -43,9 +87,10 @@ fn main() {
         .add_plugins(bevy_gizmos::GizmoPlugin)
         .add_plugins(shader::CustomMeshPipelinePlugin)
         .init_resource::<CameraSettings>()
+        .init_resource::<DebugFlags>()
         .add_systems(Startup, setup)
         .add_systems(Update, draw_tree)
-        .add_systems(Update, (handle_input, update_view))
+        .add_systems(Update, (handle_input, update_view, visual_debug))
         .run();
 }
 
@@ -68,10 +113,9 @@ fn setup(
         camera_settings.transform(0.),
     ));
     commands.spawn((
-        Tree::default(),
+        TreeConfig::default(),
         Mesh3d::default(),
         NeedRender(true),
-        //Visibility::default(),
         shader::CustomEntity,
     ));
 }
@@ -82,7 +126,6 @@ struct CameraSettings {
     pub orbit_angle: f32,
     pub sensibility: f32,
     z: f32,
-    debug: DebugFlags,
     animate: bool,
     show_mesh: bool,
 }
@@ -94,7 +137,6 @@ impl Default for CameraSettings {
             orbit_angle: 0.,
             sensibility: 1.,
             z: 5.,
-            debug: Default::default(),
             animate: true,
             show_mesh: true,
         }
@@ -132,6 +174,7 @@ fn handle_input(
     mut evr_scroll: EventReader<MouseWheel>,
     mut evr_gesture_pinch: EventReader<PinchGesture>,
     mut renders: Query<&mut NeedRender>,
+    mut flags: ResMut<DebugFlags>,
     time: Res<Time>,
 ) {
     if keyboard.pressed(KeyCode::ArrowRight) {
@@ -174,23 +217,20 @@ fn handle_input(
     if keyboard.just_pressed(KeyCode::Enter) {
         camera_settings.show_mesh ^= true;
     }
-    if keyboard.just_pressed(KeyCode::KeyN) {
-        camera_settings.debug.normals ^= true;
-    }
     if keyboard.just_pressed(KeyCode::KeyW) {
-        camera_settings.debug.triangles ^= true;
+        flags.triangles ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
-        camera_settings.debug.strands ^= true;
+        flags.strands ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyG) {
-        camera_settings.debug.skeleton ^= true;
+        flags.skeleton ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyC) {
-        camera_settings.debug.contours ^= true;
+        flags.contours ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyD) {
-        camera_settings.debug.other ^= true;
+        flags.other ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyA) {
         camera_settings.animate ^= true;
@@ -202,16 +242,25 @@ struct NeedRender(bool);
 
 fn draw_tree(
     mut commands: Commands,
-    mut gizmos: Gizmos,
-    mut trees: Query<(Entity, &mut Mesh3d, &mut Tree, &mut NeedRender)>,
+    mut trees: Query<(Entity, &mut Mesh3d, &TreeConfig, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera_settings: Res<CameraSettings>,
 ) {
-    for (e, mut mesh, mut tree, mut need_render) in trees.iter_mut() {
-        mesh.0 = meshes.add(tree.render_mesh(need_render.0));
-        need_render.0 = false;
-        // only debug the tree after trying to render it
-        tree.debug(&mut gizmos, camera_settings.debug);
+    for (e, mut mesh, tree_config, mut need_render) in trees.iter_mut() {
+        if need_render.0 {
+            let tree = tree_config.to_tree();
+            let mut mesh_builder = GeometryData::default();
+            let mut strands = VolumetricTree::from_tree(tree.clone(), tree_config.particle_per_leaf);
+            strands.compute_branches(&mut mesh_builder);
+
+            mesh.0 = meshes.add(mesh_builder.to_mesh());
+            need_render.0 = false;
+
+            commands.entity(e).insert(tree);
+            commands.entity(e).insert(strands);
+            commands.entity(e).insert(mesh_builder);
+        }
+
 
         if camera_settings.show_mesh {
             commands.entity(e).insert(CustomEntity);
@@ -221,37 +270,28 @@ fn draw_tree(
     }
 }
 
-impl Default for Tree {
-    fn default() -> Self {
-        let plant_graph = growing::PlantNode::demo();
-        let cache = meshing::MeshBuilder::new(&plant_graph);
-        Self {
-            plant_graph,
-            particle_per_leaf: 100,
-            cache,
-        }
+fn visual_debug(
+    query: Query<
+        (
+            Option<&GeometryData>,
+            Option<&TreeSkeleton>,
+            Option<&VolumetricTree>,
+        )>,
+    flags: Res<DebugFlags>,
+    mut gizmos: Gizmos,
+) {
+    for (t, g, s) in &query {
+        t.map(|x| x.debug(&mut gizmos, *flags));
+        g.map(|x| x.debug(&mut gizmos, *flags));
+        s.map(|x| x.debug(&mut gizmos, *flags));
     }
 }
 
-impl Tree {
-    // TODO: don't use pbr but my own rendering pipeline.
-    // https://github.com/bevyengine/bevy/blob/main/examples/shader/specialized_mesh_pipeline.rs
-    pub fn render_mesh(&mut self, recompute: bool) -> Mesh {
-        if recompute {
-            self.cache = meshing::MeshBuilder::new(&self.plant_graph);
-            self.cache.compute_trajectories(self.particle_per_leaf);
-            self.cache.compute_each_branch();
+
+impl Default for TreeConfig {
+    fn default() -> Self {
+        Self {
+            particle_per_leaf: 100,
         }
-
-        self.cache.to_mesh()
-    }
-
-    // TODO: optimization = return an iterator
-
-    pub fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags) {
-        if debug_flags.skeleton {
-            self.plant_graph.debug(gizmos);
-        }
-        self.cache.debug(gizmos, debug_flags);
     }
 }

@@ -1,41 +1,19 @@
+use std::ops::{Add, AddAssign};
+
 use bevy::color::Color;
 use bevy::math::{Isometry3d, Quat, Vec3};
+use bevy::prelude::Component;
 use bevy_gizmos::prelude::Gizmos;
 use smallvec::SmallVec;
 
-#[derive(Clone)]
-pub struct NodeInfo {
-    pub depth: usize,
-    pub parent: Option<usize>,
-    // id in prefix traversal order of tree
-    pub id: usize,
-    // TODO: bigger children first
-    pub children: SmallVec<[usize; 2]>,
-}
+use crate::{NodeInfo, PlantNodeProps, VisualDebug};
 
-//mod simple_generation;
 
 pub struct PlantNode {
     children: Vec<PlantNode>,
     props: PlantNodeProps,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
-pub struct PlantNodeProps {
-    pub position: Vec3,
-    pub radius: f32,
-    pub orientation: Vec3,
-}
-
-impl PlantNodeProps {
-    fn new(position: Vec3, radius: f32, orientation: Vec3) -> Self {
-        Self {
-            position,
-            radius,
-            orientation: orientation.normalize(),
-        }
-    }
-}
 
 impl PlantNode {
     pub fn demo() -> Self {
@@ -99,21 +77,6 @@ impl PlantNode {
         }
     }
 
-    pub fn debug(&self, gizmos: &mut Gizmos) {
-        let isometry = Isometry3d {
-            translation: self.props.position.into(),
-            rotation: Quat::from_rotation_arc(Vec3::Z, self.props.orientation),
-        };
-        gizmos.circle(isometry, 1.1 * self.props.radius, Color::srgb(0., 0.8, 0.5));
-        for c in &self.children {
-            gizmos.line(
-                self.props.position,
-                c.props.position,
-                Color::srgb(0.1, 0.1, 0.1),
-            );
-            c.debug(gizmos)
-        }
-    }
 
     pub fn register_node_info(&self, acc: &mut Vec<NodeInfo>, parent_id: usize) {
         let id = acc.len();
@@ -145,5 +108,142 @@ impl PlantNode {
             .map(|x| x.compute_depth())
             .max()
             .unwrap_or_default()
+    }
+
+    pub fn to_tree(&self) -> TreeSkeleton {
+        let mut node_props = Vec::new();
+        self.register_node_properties(&mut node_props);
+        let mut node_info = Vec::new();
+        self.register_node_info(&mut node_info, 0);
+
+        TreeSkeleton {
+            node_info,
+            node_props,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct BranchSectionPosition {
+    // the node being considered
+    pub node: usize,
+    // the distance we traveled from the node to the leaves
+    // it can be negative, in this case we consider the parent
+    pub length: f32,
+}
+
+impl Add<f32> for BranchSectionPosition {
+    type Output = BranchSectionPosition;
+
+    fn add(self, rhs: f32) -> Self::Output {
+        Self {
+            node: self.node,
+            length: self.length + rhs,
+        }
+    }
+}
+
+impl AddAssign<f32> for BranchSectionPosition {
+    fn add_assign(&mut self, rhs: f32) {
+        self.length += rhs
+    }
+}
+
+impl BranchSectionPosition {
+    pub fn new(node: usize, length: f32) -> Self {
+        Self { node, length }
+    }
+}
+
+#[derive(Component, Clone)]
+pub struct TreeSkeleton {
+    pub node_props: Vec<PlantNodeProps>,
+    pub node_info: Vec<NodeInfo>,
+}
+
+impl VisualDebug for TreeSkeleton {
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
+        if debug_flags.skeleton {
+            for i in 0..self.node_count() {
+                let isometry = Isometry3d {
+                    translation: self.position(i).into(),
+                    rotation: Quat::from_rotation_arc(Vec3::Z, self.orientation(i)),
+                };
+                gizmos.circle(isometry, 1.1 * self.radius(i), Color::srgb(0., 0.8, 0.5));
+                for &c in self.children(i) {
+                    gizmos.line(
+                        self.position(i),
+                        self.position(c),
+                        Color::srgb(0.1, 0.1, 0.1),
+                    );
+                }
+            }
+        }
+    }
+}
+
+
+impl TreeSkeleton {
+    pub fn root(&self) -> usize {
+        0
+    }
+    pub fn depth(&self, node_id: usize) -> usize {
+        self.node_info[node_id].depth
+    }
+    pub fn position(&self, node_id: usize) -> Vec3 {
+        self.node_props[node_id].position
+    }
+    pub fn radius(&self, node_id: usize) -> f32 {
+        self.node_props[node_id].radius
+    }
+    pub fn orientation(&self, node_id: usize) -> Vec3 {
+        self.node_props[node_id].orientation
+    }
+    pub fn main_children(&self, node_id: usize) -> Option<usize> {
+        self.node_info[node_id].children.get(0).copied()
+    }
+    pub fn parent(&self, node_id: usize) -> Option<usize> {
+        self.node_info[node_id].parent
+    }
+
+    pub fn branch_length_to_parent(&self, child: usize) -> f32 {
+        let parent = self.parent(child).expect("there is no branch under root");
+        (self.position(child) - self.position(parent)).length()
+    }
+
+    pub fn branch_length_to_main_children(&self, node: usize) -> f32 {
+        let child = self
+            .main_children(node)
+            .expect("a leaf does not have a length");
+        (self.position(node) - self.position(child)).length()
+    }
+
+    pub(crate) fn node_count(&self) -> usize {
+        self.node_props.len()
+    }
+
+    pub(crate) fn children(&self, root: usize) -> &[usize] {
+        &self.node_info[root].children[..]
+    }
+
+    pub fn branch_section_center(&self, pos: BranchSectionPosition) -> Vec3 {
+        if pos.length < 0. {
+            let parent = self
+                .parent(pos.node)
+                .expect("there is no branch under root");
+            let length = self.branch_length_to_parent(pos.node);
+            self.node_props[pos.node]
+                .position
+                .lerp(self.node_props[parent].position, -pos.length / length)
+        } else {
+            let length = self.branch_length_to_main_children(pos.node);
+            let child = *self.node_info[pos.node]
+                .children
+                .get(0)
+                .expect("there is no branch after this leaf");
+            self.node_props[pos.node]
+                .position
+                .lerp(self.node_props[child].position, pos.length / length)
+        }
     }
 }
