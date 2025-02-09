@@ -29,7 +29,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     vertex_output.clip_position = clip;
 
     // hardcoded light direction
-    var diffuse_light: f32 = 0.2*dot(vertex.normal, vec3(0., 0.6, 0.6));
+    var light_direction = -vec3(0., 0.3, 0.9);
+    var diffuse_light: f32 = 0.2*dot(vertex.normal, -light_direction);
     var intensity : f32 = 0.5+diffuse_light;
     vertex_output.color = vec4(intensity*vertex.color.rgb, vertex.color.a);
     return vertex_output;

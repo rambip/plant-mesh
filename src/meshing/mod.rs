@@ -381,12 +381,12 @@ impl MeshBuilder {
         ));
 
         self.mesh_triangles.extend([
-            m_junction[0],
-            s_junction[0],
             previous_contour[i_a as usize],
-            s_junction[2],
-            m_junction[2],
+            s_junction[0],
+            m_junction[0],
             previous_contour[i_b as usize],
+            m_junction[2],
+            s_junction[2],
         ]);
 
         ((m_p, m_cont), (s_p, s_cont))
@@ -401,6 +401,7 @@ impl MeshBuilder {
     ) -> BranchSectionPosition {
         let mut p = pos;
         assert!(dz != 0.);
+        p += dz;
         while condition(p, self) {
             if p.length > 1000. * dz {
                 panic!("stopping, the branch at position {p:?} is already too long")
@@ -429,17 +430,17 @@ impl MeshBuilder {
                 let n = previous_contour.len();
                 for i in 0..n {
                     self.mesh_triangles.extend([
-                        previous_contour[(i + 1) % n],
                         previous_contour[i],
+                        previous_contour[(i + 1) % n],
                         i_end,
                     ]);
                 }
             }
             &[child] => {
                 let branch_length = self.branch_length_to_parent(child);
-                self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, _| {
-                    p.length < branch_length
-                });
+                self.compute_branch_while(pos_root, &mut previous_contour, dz, 
+                    |p, _| p.length < branch_length
+                );
                 self.compute_each_branch_recursive(child, previous_contour)
             }
             &[m_child, s_child] => {
@@ -451,10 +452,14 @@ impl MeshBuilder {
                 let ((m_pos, mut m_cont), (s_pos, mut s_cont)) =
                     self.compute_branch_join(pos_split, previous_contour);
 
-                self.compute_branch_while(m_pos, &mut m_cont, dz, |p, _| p.length < 0.);
+                self.compute_branch_while(m_pos, &mut m_cont, dz, 
+                    |p, _| p.length < 0.
+                );
                 self.compute_each_branch_recursive(m_child, m_cont);
 
-                self.compute_branch_while(s_pos, &mut s_cont, dz, |p, _| p.length < 0.);
+                self.compute_branch_while(s_pos, &mut s_cont, dz, |p, _| 
+                    p.length < 0.
+                );
                 self.compute_each_branch_recursive(s_child, s_cont);
             }
             _ => panic!("did not expect more than 2 childs for node {root}"),
@@ -482,9 +487,12 @@ impl MeshBuilder {
         }
 
         if debug_flags.normals {
-            for i in 0..self.mesh_normals.len() {
+            let mesh = self.to_mesh();
+            let normals = mesh.attribute(Mesh::ATTRIBUTE_NORMAL).unwrap()
+                .as_float3().unwrap();
+            for i in 0..normals.len() {
                 let p = self.mesh_points[i];
-                let normal = self.mesh_normals[i];
+                let normal = Vec3::from(normals[i]);
                 let color = Color::srgb(1., 0.0, 0.);
                 gizmos.line(p, p + 0.3 * normal, color);
             }

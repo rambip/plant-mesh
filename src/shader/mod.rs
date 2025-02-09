@@ -270,7 +270,7 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
                 })],
             }),
             primitive: PrimitiveState {
-                cull_mode: Some(Face::Front),
+                cull_mode: Some(Face::Back),
                 ..PrimitiveState::default()
             },
             // Note that if your view has no depth buffer this will need to be

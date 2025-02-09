@@ -154,11 +154,11 @@ pub fn mesh_between_contours(
     let mut add_point =
         |f1: &mut std::slice::Iter<_>, f2: &mut std::slice::Iter<_>, c: CountourId| match c {
             CountourId::C1 => {
-                result.extend([current(f1), current(f2), next(f1)]);
+                result.extend([current(f2), current(f1), next(f1)]);
                 let _ = f1.next();
             }
             CountourId::C2 => {
-                result.extend([current(f1), current(f2), next(f2)]);
+                result.extend([current(f2), current(f1), next(f2)]);
                 let _ = f2.next();
             }
         };
@@ -185,8 +185,8 @@ pub fn mesh_between_contours(
     }
 
     if close_contour {
-        result.extend([current(&f1), current(&f2), i1_0]);
-        result.extend([i1_0, current(&f2), i2_0]);
+        result.extend([current(&f2), current(&f1), i1_0]);
+        result.extend([current(&f2), i1_0, i2_0]);
     }
 
     result
