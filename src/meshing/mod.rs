@@ -6,7 +6,7 @@ pub use mesh_builder::GeometryData;
 
 
 use bevy::color::Color;
-use bevy::math::{Mat3, Quat, Vec2, Vec3};
+use bevy::math::{Mat3, Vec2, Vec3};
 use bevy::prelude::Component;
 use bevy_gizmos::gizmos::Gizmos;
 use rand::rngs::StdRng;
@@ -111,16 +111,11 @@ impl VolumetricTree {
             println!("node {} has no particles", pos.node);
         }
 
-        // TODO: smarter projection
-        let to_plane = |x: Vec3| {
-            (Quat::from_rotation_arc(self.tree.orientation(parent), Vec3::Z) * x).truncate()
-        };
-
-        let projected_points: Vec<Vec2> = points.iter().map(|x: &Vec3| to_plane(*x)).collect();
+        let projected_points: Vec<Vec2> = points.iter().map(|x: &Vec3| self.tree.space_to_plane(parent, *x)).collect();
 
         let center = self.tree.branch_section_center(pos);
         mesh.add_debug(center, Color::srgb(1.0, 1.0, 1.0));
-        let center = to_plane(center);
+        let center = self.tree.space_to_plane(parent, center);
         let result: Vec<Vec3> = convex_hull_graham(
             Some(center),
             &projected_points,
@@ -145,7 +140,7 @@ impl VolumetricTree {
         (BranchSectionPosition, Vec<usize>),
     ) {
         assert!(self.tree.children(pos.node).len() == 2);
-        let normal = self.tree.orientation(pos.node);
+        let normal = self.tree.normal(pos.node);
 
         let m_child = self.tree.children(pos.node)[0];
         let s_child = self.tree.children(pos.node)[1];
@@ -260,7 +255,7 @@ impl VolumetricTree {
 
         match self.tree.children(root) {
             [] => {
-                let leaf = self.tree.position(root) + self.tree.radius(root) * self.tree.orientation(root);
+                let leaf = self.tree.position(root) + self.tree.radius(root) * self.tree.normal(root);
                 let i_end = mesh.register_points(&vec![leaf])[0];
                 let n = previous_contour.len();
                 for i in 0..n {

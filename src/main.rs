@@ -38,7 +38,7 @@ pub struct NodeInfo {
 pub struct PlantNodeProps {
     pub position: Vec3,
     pub radius: f32,
-    pub orientation: Vec3,
+    pub orientation: Quat,
 }
 
 impl PlantNodeProps {
@@ -46,7 +46,7 @@ impl PlantNodeProps {
         Self {
             position,
             radius,
-            orientation: orientation.normalize(),
+            orientation: Quat::from_rotation_arc(Vec3::Z, orientation.normalize()),
         }
     }
 }
@@ -250,7 +250,7 @@ fn draw_tree(
         if need_render.0 {
             let tree = tree_config.to_tree();
             let mut mesh_builder = GeometryData::default();
-            let mut strands = VolumetricTree::from_tree(tree.clone(), tree_config.particle_per_leaf);
+            let strands = VolumetricTree::from_tree(tree.clone(), tree_config.particle_per_leaf);
             strands.compute_branches(&mut mesh_builder);
 
             mesh.0 = meshes.add(mesh_builder.to_mesh());

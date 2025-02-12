@@ -89,8 +89,9 @@ pub fn convex_hull_graham(
 ) -> Vec<usize> {
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
+    assert!(!points.is_empty());
     let n = points.len();
-    let i_min_y = points.into_iter().map(|point| point.y).arg_min().unwrap();
+    let i_min_y = points.into_iter().map(|point| point.y).arg_min().expect("some points are NaN when computing convex hull");
     let pivot = pivot.unwrap_or((1. / n as f32) * points.iter().sum::<Vec2>());
     let u0 = points[i_min_y] - pivot;
 

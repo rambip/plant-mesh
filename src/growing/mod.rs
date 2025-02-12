@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign};
 
 use bevy::color::Color;
-use bevy::math::{Isometry3d, Quat, Vec3};
+use bevy::math::{Isometry3d, Quat, Vec2, Vec3};
 use bevy::prelude::Component;
 use bevy_gizmos::prelude::Gizmos;
 use smallvec::SmallVec;
@@ -167,7 +167,7 @@ impl VisualDebug for TreeSkeleton {
             for i in 0..self.node_count() {
                 let isometry = Isometry3d {
                     translation: self.position(i).into(),
-                    rotation: Quat::from_rotation_arc(Vec3::Z, self.orientation(i)),
+                    rotation: self.orientation(i),
                 };
                 gizmos.circle(isometry, 1.1 * self.radius(i), Color::srgb(0., 0.8, 0.5));
                 for &c in self.children(i) {
@@ -196,8 +196,18 @@ impl TreeSkeleton {
     pub fn radius(&self, node_id: usize) -> f32 {
         self.node_props[node_id].radius
     }
-    pub fn orientation(&self, node_id: usize) -> Vec3 {
+    pub fn orientation(&self, node_id: usize) -> Quat {
         self.node_props[node_id].orientation
+    }
+    pub fn normal(&self, node_id: usize) -> Vec3 {
+        self.orientation(node_id)*Vec3::Z
+    }
+    pub fn plane_to_space(&self, node_id: usize, v: Vec2) -> Vec3 {
+        self.position(node_id) + self.orientation(node_id)*v.extend(0.)
+    }
+    pub fn space_to_plane(&self, node_id: usize, v: Vec3) -> Vec2 {
+        (self.orientation(node_id).inverse() * (v - self.position(node_id)))
+            .truncate()
     }
     pub fn main_children(&self, node_id: usize) -> Option<usize> {
         self.node_info[node_id].children.get(0).copied()
