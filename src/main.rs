@@ -67,7 +67,7 @@ struct TreeConfig {
 
 impl TreeConfig {
     fn to_tree(&self) -> TreeSkeleton {
-        PlantNode::demo().to_tree()
+        dbg!(PlantNode::basic_random()).to_tree()
     }
 }
 
@@ -291,7 +291,7 @@ fn visual_debug(
 impl Default for TreeConfig {
     fn default() -> Self {
         Self {
-            particle_per_leaf: 100,
+            particle_per_leaf: 30,
         }
     }
 }
