@@ -49,11 +49,11 @@ impl PlantNode {
     pub fn basic_random() -> Self {
         let mut rng = rand::rngs::ThreadRng::default();
         let root = PlantNodeProps {
-            radius: 1.,
+            radius: 0.5,
             orientation: Quat::default(),
             position: Vec3::ZERO,
         };
-        generation::grow_tree_basic(&mut rng, root, 0, 0.1)
+        generation::grow_tree_basic(&mut rng, root, 0, 0.05)
     }
     pub fn _demo() -> Self {
         Self {

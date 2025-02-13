@@ -30,10 +30,10 @@ struct ParticleSimulationConfig {
 }
 
 const DEFAULT_SIM_CONFIG: ParticleSimulationConfig = ParticleSimulationConfig {
-    repulsion: 0.3,
+    repulsion: 0.1,
     dt: 0.001,
     n_steps: 10,
-    particle_size: 0.01,
+    particle_size: 0.002,
 };
 
 fn spread_points(

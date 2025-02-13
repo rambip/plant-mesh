@@ -289,7 +289,7 @@ fn visual_debug(
 impl Default for TreeConfig {
     fn default() -> Self {
         Self {
-            particle_per_leaf: 30,
+            particle_per_leaf: 10,
         }
     }
 }
