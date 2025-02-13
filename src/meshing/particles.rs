@@ -1,11 +1,24 @@
 use bevy::math::{FloatPow, Vec2, Vec3};
+use rand::{prelude::Distribution, Rng};
 
 use crate::growing::TreeSkeleton;
 
-fn sample_uniform_disk(radius: f32) -> Vec2 {
-    Vec2::from_angle(rand::random::<f32>() * std::f32::consts::TAU)
-        * radius
-        * (rand::random::<f32>()).sqrt()
+struct UniformDisk {
+    radius: f32
+}
+
+impl UniformDisk {
+    fn new(radius: f32) -> Self {
+        Self {radius}
+    }
+}
+
+impl Distribution<Vec2> for UniformDisk {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec2 {
+        Vec2::from_angle(rng.gen_range(0f32..std::f32::consts::TAU))
+            * self.radius
+            * rng.gen_range(0f32..1f32).sqrt()
+    }
 }
 
 struct ParticleSimulationConfig {
@@ -138,7 +151,11 @@ impl<'a> TrajectoryBuilder<'a> {
             .collect()
     }
 
-    pub fn compute_trajectories(&mut self, root: usize, particle_per_leaf: usize) {
+    pub fn compute_trajectories(&mut self, 
+        root: usize, 
+        rng: &mut impl Rng,
+        particle_per_leaf: usize
+        ) {
         assert!(self.particles_per_node[root].len() == 0);
         let radius = self.tree.radius(root);
 
@@ -146,9 +163,8 @@ impl<'a> TrajectoryBuilder<'a> {
             [] => {
                 let radius = self.tree.radius(root);
 
-                let mut cloud = 
-                    (0..particle_per_leaf)
-                    .map(|_| sample_uniform_disk(radius))
+                let mut cloud = rng.sample_iter(UniformDisk::new(radius))
+                    .take(particle_per_leaf)
                     .collect();
 
                 spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
@@ -156,15 +172,15 @@ impl<'a> TrajectoryBuilder<'a> {
 
             }
             &[child] => {
-                self.compute_trajectories(child, particle_per_leaf);
+                self.compute_trajectories(child, rng, particle_per_leaf);
                 let mut cloud = self.project_particles(root, child, Vec3::ZERO);
                 spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
                 let particle_ids = self.particles_per_node[child].clone();
                 self.register_particles_for_node(root, &cloud, &particle_ids);
             }
             &[m_child, s_child] => {
-                self.compute_trajectories(m_child, particle_per_leaf);
-                self.compute_trajectories(s_child, particle_per_leaf);
+                self.compute_trajectories(m_child, rng, particle_per_leaf);
+                self.compute_trajectories(s_child, rng, particle_per_leaf);
                 let normal = self.tree.normal(root);
                 let offset_direction = {
                     let u = self.tree.position(m_child) - self.tree.position(s_child);

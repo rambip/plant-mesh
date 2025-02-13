@@ -18,7 +18,7 @@ pub struct NodeInfo {
     pub children: SmallVec<[usize; 2]>,
 }
 
-mod simple_generation;
+mod generation;
 
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -53,7 +53,7 @@ impl PlantNode {
             orientation: Quat::default(),
             position: Vec3::ZERO,
         };
-        simple_generation::grow_tree_basic(&mut rng, root, 0, 0.1)
+        generation::grow_tree_basic(&mut rng, root, 0, 0.1)
     }
     pub fn _demo() -> Self {
         Self {
@@ -201,7 +201,11 @@ pub struct TreeSkeleton {
 }
 
 impl VisualDebug for TreeSkeleton {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
+    fn debug<R: rand::Rng + Clone>(&self, 
+        gizmos: &mut Gizmos,
+        _rng: R,
+        debug_flags: crate::DebugFlags
+) {
         if debug_flags.skeleton {
             for i in 0..self.node_count() {
                 let isometry = Isometry3d {

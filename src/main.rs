@@ -5,6 +5,7 @@ use bevy::input::{gestures::PinchGesture, mouse::{MouseMotion, MouseWheel}};
 pub(crate) use bevy::prelude::*;
 use growing::{PlantNode, TreeSkeleton};
 use meshing::GeometryData;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use shader::CustomEntity;
 use smallvec::SmallVec;
 use std::f32::consts::PI;
@@ -39,7 +40,11 @@ pub struct PlantNodeProps {
 }
 
 trait VisualDebug {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags);
+    fn debug<R: Rng + Clone>(&self,
+        gizmos: &mut Gizmos,
+        rng: R,
+        debug_flags: DebugFlags
+        );
 }
 
 
@@ -234,10 +239,16 @@ fn draw_tree(
 ) {
     for (e, mut mesh, tree_config, mut need_render) in trees.iter_mut() {
         if need_render.0 {
+            let seed = rand::random::<u64>();
+            let rng = StdRng::seed_from_u64(seed);
             let tree = tree_config.to_tree();
             let mut mesh_builder = GeometryData::default();
-            let strands = VolumetricTree::from_tree(tree.clone(), tree_config.particle_per_leaf);
-            strands.compute_branches(&mut mesh_builder);
+            let strands = VolumetricTree::from_tree(
+                tree.clone(), 
+                rng.clone(),
+                tree_config.particle_per_leaf
+            );
+            strands.compute_branches(&mut mesh_builder, rng.clone());
 
             mesh.0 = meshes.add(mesh_builder.to_mesh());
             need_render.0 = false;
@@ -259,17 +270,18 @@ fn draw_tree(
 fn visual_debug(
     query: Query<
         (
-            Option<&GeometryData>,
             Option<&TreeSkeleton>,
             Option<&VolumetricTree>,
+            Option<&GeometryData>,
         )>,
     flags: Res<DebugFlags>,
     mut gizmos: Gizmos,
 ) {
-    for (t, g, s) in &query {
-        t.map(|x| x.debug(&mut gizmos, *flags));
-        g.map(|x| x.debug(&mut gizmos, *flags));
-        s.map(|x| x.debug(&mut gizmos, *flags));
+    let rng = StdRng::seed_from_u64(42);
+    for (s, t, g) in &query {
+        s.map(|x| x.debug(&mut gizmos, rng.clone(), *flags));
+        t.map(|x| x.debug(&mut gizmos, rng.clone(), *flags));
+        g.map(|x| x.debug(&mut gizmos, rng.clone(), *flags));
     }
 }
 

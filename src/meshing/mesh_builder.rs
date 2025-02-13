@@ -6,7 +6,8 @@ use bevy::math::Vec3;
 use bevy::prelude::{Color, Component, Mesh};
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy_gizmos::prelude::Gizmos;
-use rand::prelude::*;
+use rand::rngs::StdRng;
+use rand::Rng;
 
 use crate::VisualDebug;
 
@@ -40,14 +41,15 @@ impl GeometryData {
     pub fn register_points(
         &mut self,
         points: &[Vec3],
+        rng: &mut StdRng,
     ) -> Vec<usize> {
         let i0 = self.points.len();
         let n = points.len();
         self.points.extend(points);
 
         for _ in 0..n {
-            let a: f32 = rand::random();
-            let color = Color::srgb(0.35, 0.2, 0.1+0.01*a);
+            let blue: f32 = rng.gen_range(0.1f32..0.13);
+            let color = Color::srgb(0.35, 0.2, blue);
             self.colors.push(color);
         }
 
@@ -85,7 +87,11 @@ impl GeometryData {
 }
 
 impl VisualDebug for GeometryData {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
+    fn debug<R: rand::Rng + Clone>(&self, 
+        gizmos: &mut Gizmos, 
+        rng: R,
+        debug_flags: crate::DebugFlags
+        ) {
         if debug_flags.triangles {
             for i in 0..self.triangles.len() / 3 {
                 let (ia, ib, ic) = (
@@ -105,20 +111,8 @@ impl VisualDebug for GeometryData {
             }
         }
 
-        // TODO: store normals
-        //if debug_flags.normals {
-        //    let mesh = self.to_mesh();
-        //    let normals = mesh.attribute(Mesh::ATTRIBUTE_NORMAL).unwrap()
-        //        .as_float3().unwrap();
-        //    for i in 0..normals.len() {
-        //        let p = self.normals[i];
-        //        let normal = Vec3::from(normals[i]);
-        //        let color = Color::srgb(1., 0.0, 0.);
-        //        gizmos.line(p, p + 0.3 * normal, color);
-        //    }
-        //}
         if debug_flags.contours {
-            let mut rng = StdRng::seed_from_u64(42);
+            let mut rng = rng.clone();
             for c in self.contours.iter() {
                 let t = rng.gen();
                 let n = c.len();
@@ -131,6 +125,7 @@ impl VisualDebug for GeometryData {
                 }
             }
         }
+
         if debug_flags.other {
             for (p, c) in self.debug_points.iter() {
                 gizmos.cross(*p, 0.2, *c);

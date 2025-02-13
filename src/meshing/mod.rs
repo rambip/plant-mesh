@@ -3,14 +3,12 @@ mod particles;
 mod mesh_builder;
 pub use mesh_builder::GeometryData;
 
-
-
 use bevy::color::Color;
 use bevy::math::{Mat3, Vec2, Vec3};
 use bevy::prelude::Component;
 use bevy_gizmos::gizmos::Gizmos;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 
 use crate::growing::{BranchSectionPosition, TreeSkeleton};
 use crate::tools::{split_slice_circular, FloatProducer};
@@ -28,10 +26,14 @@ pub struct VolumetricTree {
 }
 
 impl VolumetricTree {
-    pub fn from_tree(tree: TreeSkeleton, particles_per_leaf: usize) -> Self {
+    pub fn from_tree(
+            tree: TreeSkeleton, 
+            mut rng: impl Rng + Clone,
+            particles_per_leaf: usize
+        ) -> Self {
         // compute trajectories
         let mut builder = TrajectoryBuilder::new(&tree);
-        builder.compute_trajectories(0, particles_per_leaf);
+        builder.compute_trajectories(0, &mut rng, particles_per_leaf);
         let (trajectories, particles_per_node) = builder.extract();
         Self {
             trajectories,
@@ -42,10 +44,10 @@ impl VolumetricTree {
 }
 
 impl VolumetricTree {
-    pub fn compute_branches(&self, mesh: &mut GeometryData) {
+    pub fn compute_branches(&self, mesh: &mut GeometryData, mut rng: StdRng) {
         let pos_root = BranchSectionPosition::new(self.tree.root(), 0.);
-        let root_section = self.register_branch_contour(pos_root, mesh);
-        self.compute_each_branch_recursive(self.tree.root(), root_section, mesh);
+        let root_section = self.register_branch_contour(pos_root, mesh, &mut rng);
+        self.compute_each_branch_recursive(self.tree.root(), root_section, mesh, &mut rng);
     }
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
         let t = if pos.length < 0. {
@@ -98,9 +100,9 @@ impl VolumetricTree {
     }
 
 
-    fn register_branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData) -> Vec<usize> {
+    fn register_branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData, rng: &mut StdRng) -> Vec<usize> {
         let contour = self.branch_contour(pos, mesh);
-        mesh.register_points(&contour)
+        mesh.register_points(&contour, rng)
     }
 
     fn branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData) -> Vec<Vec3> {
@@ -134,7 +136,8 @@ impl VolumetricTree {
         &self,
         pos: BranchSectionPosition,
         previous_contour: Vec<usize>,
-        mesh: &mut GeometryData
+        mesh: &mut GeometryData,
+        rng: &mut StdRng,
     ) -> (
         (BranchSectionPosition, Vec<usize>),
         (BranchSectionPosition, Vec<usize>),
@@ -149,7 +152,7 @@ impl VolumetricTree {
             let branch_length = self.tree.branch_length_to_parent(child);
             let pos = BranchSectionPosition::new(child, pos.length - branch_length);
             let center = self.tree.branch_section_center(pos);
-            let contour = self.register_branch_contour(pos, mesh);
+            let contour = self.register_branch_contour(pos, mesh, rng);
             (pos, center, contour)
         };
 
@@ -225,7 +228,8 @@ impl VolumetricTree {
         previous_contour: &mut Vec<usize>,
         dz: f32,
         condition: impl Fn(BranchSectionPosition, &Self) -> bool,
-        mesh: &mut GeometryData
+        mesh: &mut GeometryData,
+        rng: &mut StdRng,
     ) -> BranchSectionPosition {
         let mut p = pos;
         assert!(dz != 0.);
@@ -234,7 +238,7 @@ impl VolumetricTree {
             if p.length > 1000. * dz {
                 panic!("stopping, the branch at position {p:?} is already too long")
             }
-            let current_contour = self.register_branch_contour(p, mesh);
+            let current_contour = self.register_branch_contour(p, mesh, rng);
             let triangles = mesh_between_contours(
                 &mesh.points(),
                 &previous_contour, 
@@ -247,7 +251,7 @@ impl VolumetricTree {
         p
     }
 
-    fn compute_each_branch_recursive(&self, root: usize, mut previous_contour: Vec<usize>, mesh: &mut GeometryData) {
+    fn compute_each_branch_recursive(&self, root: usize, mut previous_contour: Vec<usize>, mesh: &mut GeometryData, rng: &mut StdRng) {
         let pos_root = BranchSectionPosition::new(root, 0.);
 
         let radius = self.tree.radius(root);
@@ -256,7 +260,7 @@ impl VolumetricTree {
         match self.tree.children(root) {
             [] => {
                 let leaf = self.tree.position(root) + self.tree.radius(root) * self.tree.normal(root);
-                let i_end = mesh.register_points(&vec![leaf])[0];
+                let i_end = mesh.register_points(&vec![leaf], rng)[0];
                 let n = previous_contour.len();
                 for i in 0..n {
                     mesh.register_triangles(&[
@@ -270,29 +274,30 @@ impl VolumetricTree {
                 let branch_length = self.tree.branch_length_to_parent(child);
                 self.compute_branch_while(pos_root, &mut previous_contour, dz, 
                     |p, _| p.length < branch_length,
-                    mesh
+                    mesh,
+                    rng
                 );
-                self.compute_each_branch_recursive(child, previous_contour, mesh)
+                self.compute_each_branch_recursive(child, previous_contour, mesh, rng)
             }
             &[m_child, s_child] => {
                 let pos_split =
-                    self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, me| !me.branch_is_spliting(p), mesh
+                    self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, me| !me.branch_is_spliting(p), mesh, rng
                     );
 
                 let ((m_pos, mut m_cont), (s_pos, mut s_cont)) =
-                    self.compute_branch_join(pos_split, previous_contour, mesh);
+                    self.compute_branch_join(pos_split, previous_contour, mesh, rng);
 
                 self.compute_branch_while(m_pos, &mut m_cont, dz, 
                     |p, _| p.length < 0.,
-                    mesh
+                    mesh, rng
                 );
-                self.compute_each_branch_recursive(m_child, m_cont, mesh);
+                self.compute_each_branch_recursive(m_child, m_cont, mesh, rng);
 
                 self.compute_branch_while(s_pos, &mut s_cont, dz, |p, _| 
                     p.length < 0.,
-                    mesh
+                    mesh, rng
                 );
-                self.compute_each_branch_recursive(s_child, s_cont, mesh);
+                self.compute_each_branch_recursive(s_child, s_cont, mesh, rng);
             }
             _ => panic!("did not expect more than 2 childs for node {root}"),
         }
@@ -301,10 +306,13 @@ impl VolumetricTree {
 }
 
 impl VisualDebug for VolumetricTree {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
-
+    fn debug<R: rand::Rng + Clone>(&self, 
+        gizmos: &mut Gizmos,
+        rng: R,
+        debug_flags: crate::DebugFlags
+) {
         if debug_flags.strands {
-            let mut rng = StdRng::seed_from_u64(42);
+            let mut rng = rng.clone();
             for (i_t, traj) in self.trajectories.iter().enumerate() {
                 let a: f32 = i_t as f32 / self.trajectories.len() as f32;
                 let b : f32 = rng.gen();
