@@ -3,8 +3,8 @@
 use crate::meshing::VolumetricTree;
 use bevy::input::{gestures::PinchGesture, mouse::{MouseMotion, MouseWheel}};
 pub(crate) use bevy::prelude::*;
-use growing::{PlantNode, TreeSkeleton};
-use meshing::GeometryData;
+use growing::{GrowConfig, PlantNode, TreeSkeletonDebugData, Seed, TreeSkeleton};
+use meshing::{GeometryData, VolumetricTreeConfig, VolumetricTreeDebugData};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use shader::CustomEntity;
 use smallvec::SmallVec;
@@ -47,19 +47,39 @@ trait VisualDebug {
         );
 }
 
+impl VisualDebug for () {
+    fn debug<R: Rng + Clone>(&self, _: &mut Gizmos, _: R, _: DebugFlags) { }
+}
+
+trait TreePipelinePhase {
+    type Previous;
+    type Config;
+    type DebugCache: Default + VisualDebug;
+    fn generate_from(prev: Self::Previous, config: &Self::Config, cache: &mut Self::DebugCache, rng: StdRng) -> Self;
+}
+
+trait Grow
+{
+    fn grow<Next>(self, config: &Next::Config, cache: &mut Next::DebugCache, rng: StdRng) -> Next
+        where Next: TreePipelinePhase<Previous=Self>;
+}
+
+
+impl<T> Grow for T {
+    fn grow<Next>(self, config: &<Next as TreePipelinePhase>::Config, cache: &mut <Next as TreePipelinePhase>::DebugCache, rng: StdRng) -> Next 
+where Next: TreePipelinePhase<Previous=T> {
+        Next::generate_from(self, config, cache, rng)
+    }
+}
+
 
 mod meshing;
 mod growing;
 
 #[derive(Component)]
 struct TreeConfig {
-    particle_per_leaf: usize,
-}
-
-impl TreeConfig {
-    fn to_tree(&self) -> TreeSkeleton {
-        PlantNode::basic_random().to_tree()
-    }
+    grow_config: GrowConfig,
+    strands_config: VolumetricTreeConfig,
 }
 
 mod shader;
@@ -239,23 +259,22 @@ fn draw_tree(
 ) {
     for (e, mut mesh, tree_config, mut need_render) in trees.iter_mut() {
         if need_render.0 {
-            let seed = rand::random::<u64>();
-            let rng = StdRng::seed_from_u64(seed);
-            let tree = tree_config.to_tree();
-            let mut mesh_builder = GeometryData::default();
-            let strands = VolumetricTree::from_tree(
-                tree.clone(), 
-                rng.clone(),
-                tree_config.particle_per_leaf
-            );
-            strands.compute_branches(&mut mesh_builder, rng.clone());
+            let rng = StdRng::seed_from_u64(rand::random::<u64>());
 
-            mesh.0 = meshes.add(mesh_builder.to_mesh());
+            let mut tree_skeleton = Default::default();
+            let mut strands = Default::default();
+            let mut mesh_data = GeometryData::default();
+
+            let tree_mesh = Seed
+                .grow::<PlantNode>(&tree_config.grow_config, &mut (), rng.clone())
+                .grow::<TreeSkeleton>(&(), &mut tree_skeleton, rng.clone())
+                .grow::<VolumetricTree>(&tree_config.strands_config, &mut strands, rng.clone())
+                .grow::<Mesh>(&(), &mut mesh_data, rng.clone());
+                
+            mesh.0 = meshes.add(tree_mesh);
             need_render.0 = false;
 
-            commands.entity(e).insert(tree);
-            commands.entity(e).insert(strands);
-            commands.entity(e).insert(mesh_builder);
+            commands.entity(e).insert((tree_skeleton, strands, mesh_data));
         }
 
 
@@ -267,11 +286,12 @@ fn draw_tree(
     }
 }
 
+// TODO: more readable
 fn visual_debug(
     query: Query<
         (
-            Option<&TreeSkeleton>,
-            Option<&VolumetricTree>,
+            Option<&TreeSkeletonDebugData>,
+            Option<&VolumetricTreeDebugData>,
             Option<&GeometryData>,
         )>,
     flags: Res<DebugFlags>,
@@ -289,7 +309,10 @@ fn visual_debug(
 impl Default for TreeConfig {
     fn default() -> Self {
         Self {
-            particle_per_leaf: 10,
+            grow_config: GrowConfig {},
+            strands_config: VolumetricTreeConfig {
+                particles_per_leaf: 10,
+            }
         }
     }
 }

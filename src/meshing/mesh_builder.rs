@@ -9,7 +9,10 @@ use bevy_gizmos::prelude::Gizmos;
 use rand::rngs::StdRng;
 use rand::Rng;
 
-use crate::VisualDebug;
+use crate::growing::BranchSectionPosition;
+use crate::{TreePipelinePhase, VisualDebug};
+
+use super::VolumetricTree;
 
 #[derive(Default, Component)]
 pub struct GeometryData {
@@ -20,24 +23,33 @@ pub struct GeometryData {
     points: Vec<Vec3>,
 }
 
-impl GeometryData {
-    pub fn to_mesh(&self) -> Mesh {
+impl TreePipelinePhase for Mesh {
+    type Previous = VolumetricTree;
+    type Config = ();
+    type DebugCache = GeometryData;
+    fn generate_from(prev: Self::Previous, _: &Self::Config, cache: &mut Self::DebugCache, mut rng: StdRng) -> Self {
+        let pos_root = BranchSectionPosition::new(prev.tree.root(), 0.);
+        let root_section = prev.register_branch_contour(pos_root, cache, &mut rng);
+        prev.compute_each_branch_recursive(prev.tree.root(), root_section, cache, &mut rng);
+
         let mut result = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
         )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.points.clone())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, cache.points.clone())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, cache.colors
             .iter()
             .map(|a| a.to_linear().to_f32_array())
             .collect::<Vec<_>>())
         .with_inserted_indices(Indices::U32(
-            self.triangles.iter().map(|x| *x as u32).collect(),
+            cache.triangles.iter().map(|x| *x as u32).collect(),
         ));
         result.compute_smooth_normals();
         result
     }
+}
 
+impl GeometryData {
     pub fn register_points(
         &mut self,
         points: &[Vec3],

@@ -1,3 +1,4 @@
+use crate::TreePipelinePhase;
 use std::ops::{Add, AddAssign};
 
 use bevy::color::Color;
@@ -44,10 +45,24 @@ pub struct PlantNode {
     props: PlantNodeProps,
 }
 
+pub struct Seed;
 
-impl PlantNode {
-    pub fn basic_random() -> Self {
-        let mut rng = rand::rngs::ThreadRng::default();
+pub struct GrowConfig { }
+
+#[derive(Default, Component)]
+pub struct TreeSkeletonDebugData {
+    copy: TreeSkeleton,
+}
+
+impl TreePipelinePhase for PlantNode {
+    type Previous = Seed;
+    type Config = GrowConfig;
+    type DebugCache = ();
+    fn generate_from(
+        _: Self::Previous, 
+        config: &Self::Config, 
+        _: &mut Self::DebugCache, 
+        mut rng: rand::prelude::StdRng) -> Self {
         let root = PlantNodeProps {
             radius: 0.5,
             orientation: Quat::default(),
@@ -55,6 +70,33 @@ impl PlantNode {
         };
         generation::grow_tree_basic(&mut rng, root, 0, 0.05)
     }
+}
+
+impl TreePipelinePhase for TreeSkeleton {
+    type Previous = PlantNode;
+    type Config = ();
+    type DebugCache = TreeSkeletonDebugData;
+    fn generate_from(prev: Self::Previous, 
+        _: &Self::Config, 
+        cache: &mut Self::DebugCache, 
+        _rng: rand::prelude::StdRng) -> Self {
+
+        let mut node_props = Vec::new();
+        prev.register_node_properties(&mut node_props);
+        let mut node_info = Vec::new();
+        prev.register_node_info(&mut node_info, 0);
+
+        let result = TreeSkeleton {
+            node_info,
+            node_props,
+        };
+        cache.copy = result.clone();
+        result
+    }
+}
+
+
+impl PlantNode {
     pub fn _demo() -> Self {
         Self {
             props: PlantNodeProps::new(Vec3::new(0., 0., -2.), 1.1, Vec3::new(0., 0., 1.)),
@@ -148,18 +190,6 @@ impl PlantNode {
             .max()
             .unwrap_or_default()
     }
-
-    pub fn to_tree(&self) -> TreeSkeleton {
-        let mut node_props = Vec::new();
-        self.register_node_properties(&mut node_props);
-        let mut node_info = Vec::new();
-        self.register_node_info(&mut node_info, 0);
-
-        TreeSkeleton {
-            node_info,
-            node_props,
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -194,29 +224,29 @@ impl BranchSectionPosition {
     }
 }
 
-#[derive(Component, Clone)]
+#[derive(Clone, Default)]
 pub struct TreeSkeleton {
     pub node_props: Vec<PlantNodeProps>,
     pub node_info: Vec<NodeInfo>,
 }
 
-impl VisualDebug for TreeSkeleton {
+impl VisualDebug for TreeSkeletonDebugData {
     fn debug<R: rand::Rng + Clone>(&self, 
         gizmos: &mut Gizmos,
         _rng: R,
         debug_flags: crate::DebugFlags
 ) {
         if debug_flags.skeleton {
-            for i in 0..self.node_count() {
+            for i in 0..self.copy.node_count() {
                 let isometry = Isometry3d {
-                    translation: self.position(i).into(),
-                    rotation: self.orientation(i),
+                    translation: self.copy.position(i).into(),
+                    rotation: self.copy.orientation(i),
                 };
-                gizmos.circle(isometry, 1.1 * self.radius(i), Color::srgb(0., 0.8, 0.5));
-                for &c in self.children(i) {
+                gizmos.circle(isometry, 1.1 * self.copy.radius(i), Color::srgb(0., 0.8, 0.5));
+                for &c in self.copy.children(i) {
                     gizmos.line(
-                        self.position(i),
-                        self.position(c),
+                        self.copy.position(i),
+                        self.copy.position(c),
                         Color::srgb(0.1, 0.1, 0.1),
                     );
                 }
