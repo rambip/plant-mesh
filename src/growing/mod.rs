@@ -286,7 +286,7 @@ fn sample_random_children_rotations(rng: &mut impl Rng, min_angle: f32, max_angl
 }
 
 fn sample_radius(rng: &mut impl Rng, parent_radius: f32) -> f32 {
-    rng.gen_range(parent_radius*0.4..parent_radius*0.6)
+    rng.gen_range(parent_radius*0.4..parent_radius*0.7)
 }
 
 fn sample_size(rng: &mut impl Rng, parent_size: f32) -> f32 {

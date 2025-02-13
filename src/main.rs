@@ -67,7 +67,7 @@ struct TreeConfig {
 
 impl TreeConfig {
     fn to_tree(&self) -> TreeSkeleton {
-        dbg!(PlantNode::basic_random()).to_tree()
+        PlantNode::basic_random().to_tree()
     }
 }
 
