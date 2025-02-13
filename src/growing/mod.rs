@@ -4,11 +4,39 @@ use bevy::color::Color;
 use bevy::math::{Isometry3d, Quat, Vec2, Vec3};
 use bevy::prelude::Component;
 use bevy_gizmos::prelude::Gizmos;
-use rand::Rng;
 use smallvec::SmallVec;
 
-use crate::{NodeInfo, PlantNodeProps, VisualDebug};
+use crate::VisualDebug;
 
+#[derive(Clone)]
+pub struct NodeInfo {
+    pub depth: usize,
+    pub parent: Option<usize>,
+    // id in prefix traversal order of tree
+    pub id: usize,
+    // TODO: bigger children first
+    pub children: SmallVec<[usize; 2]>,
+}
+
+mod simple_generation;
+
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PlantNodeProps {
+    pub position: Vec3,
+    pub radius: f32,
+    pub orientation: Quat,
+}
+
+impl PlantNodeProps {
+    fn new(position: Vec3, radius: f32, orientation: Vec3) -> Self {
+        Self {
+            position,
+            radius,
+            orientation: Quat::from_rotation_arc(Vec3::Z, orientation.normalize()),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct PlantNode {
@@ -25,9 +53,9 @@ impl PlantNode {
             orientation: Quat::default(),
             position: Vec3::ZERO,
         };
-        grow_tree_basic(&mut rng, root, 0, 0.1)
+        simple_generation::grow_tree_basic(&mut rng, root, 0, 0.1)
     }
-    pub fn demo() -> Self {
+    pub fn _demo() -> Self {
         Self {
             props: PlantNodeProps::new(Vec3::new(0., 0., -2.), 1.1, Vec3::new(0., 0., 1.)),
             children: vec![PlantNode {
@@ -271,68 +299,3 @@ impl TreeSkeleton {
     }
 }
 
-fn sample_random_children_rotations(rng: &mut impl Rng, min_angle: f32, max_angle: f32) -> (Quat, Quat) {
-    let a: f32 = rng.gen_range(min_angle..max_angle);
-    let b: f32 = rng.gen_range(min_angle..max_angle);
-    let c: f32 = rng.gen_range(0f32..2.*std::f32::consts::PI);
-    let rot1 = Quat::from_rotation_z(c)
-        * Quat::from_rotation_x(a)
-        * Quat::from_rotation_z(-c);
-    let rot2 = Quat::from_rotation_z(c)
-        * Quat::from_rotation_x(-b)
-        * Quat::from_rotation_z(-c);
-    (rot1, rot2)
-
-}
-
-fn sample_radius(rng: &mut impl Rng, parent_radius: f32) -> f32 {
-    rng.gen_range(parent_radius*0.4..parent_radius*0.7)
-}
-
-fn sample_size(rng: &mut impl Rng, parent_size: f32) -> f32 {
-    parent_size * rng.gen_range(2f32..4f32)
-}
-
-fn grow_tree_basic(
-    rng: &mut impl Rng,
-    root: PlantNodeProps,
-    depth: usize,
-    min_radius: f32,
-    ) -> PlantNode {
-
-    // TODO: why 
-
-    let location = |rotation, radius, size| {
-        PlantNodeProps {
-            position: root.position + root.orientation*rotation*(size*Vec3::Z),
-            orientation: root.orientation * rotation,
-            radius,
-        }
-    };
-
-    let children = if root.radius < min_radius {
-        vec![]
-    }
-    else if rand::random::<f32>() > 1./f32::powf(2., depth as f32) {
-        let (rot1, rot2) = sample_random_children_rotations(rng, 0.5, 0.8);
-        let (r1, r2) = (sample_radius(rng, root.radius), sample_radius(rng, root.radius));
-        let (s1, s2) = (sample_size(rng, root.radius), sample_size(rng, root.radius));
-        vec![
-            grow_tree_basic(rng, location(rot1, r1, s1), depth+1, min_radius),
-            grow_tree_basic(rng, location(rot2, r2, s2), depth+1, min_radius)
-        ]
-    }
-    else {
-        let (rot, _) = sample_random_children_rotations(rng, 0., 0.2);
-        let r = root.radius;
-        vec![
-            grow_tree_basic(rng, location(rot, r, 3.*root.radius), depth+1, min_radius)
-        ]
-    };
-
-    PlantNode {
-        props: root,
-        children,
-    }
-
-}

@@ -31,26 +31,12 @@ pub struct NodeInfo {
     pub children: SmallVec<[usize; 2]>,
 }
 
-//mod simple_generation;
-
-
 #[derive(Copy, Clone, Debug, Default)]
 pub struct PlantNodeProps {
     pub position: Vec3,
     pub radius: f32,
     pub orientation: Quat,
 }
-
-impl PlantNodeProps {
-    fn new(position: Vec3, radius: f32, orientation: Vec3) -> Self {
-        Self {
-            position,
-            radius,
-            orientation: Quat::from_rotation_arc(Vec3::Z, orientation.normalize()),
-        }
-    }
-}
-
 
 trait VisualDebug {
     fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags);
