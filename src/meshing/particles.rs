@@ -1,4 +1,4 @@
-use bevy::math::{FloatPow, Vec2, Vec3};
+use bevy::{math::{FloatPow, Vec2, Vec3}, prelude::Component};
 use rand::{prelude::Distribution, Rng};
 
 use crate::growing::TreeSkeleton;
@@ -82,58 +82,50 @@ fn spread_points(
     }
 }
 
-pub struct TrajectoryBuilder<'a> {
-    particles_per_node: Vec<Vec<usize>>,
-    trajectories: Vec<Vec<Vec3>>,
-    tree: &'a TreeSkeleton,
+#[derive(Component, Default)]
+pub struct TrajectoryBuilder {
+    pub particles_per_node: Vec<Vec<usize>>,
+    pub trajectories: Vec<Vec<Vec3>>,
 }
 
-impl<'a> TrajectoryBuilder<'a> {
-    pub fn new(tree: &'a TreeSkeleton) -> Self {
+impl TrajectoryBuilder {
+    pub fn clear_for_tree(&mut self, tree:&TreeSkeleton) {
         let n = tree.node_count();
-        Self {
-            particles_per_node: vec![vec![]; n],
-            trajectories: vec![],
-            tree
-        }
+        self.particles_per_node = vec![vec![]; n];
+        self.trajectories = vec![];
     }
-
-    pub fn extract(self) -> (Vec<Vec<Vec3>>, Vec<Vec<usize>>) {
-        (self.trajectories, self.particles_per_node)
-    }
-
-    fn register_particles_for_leaf(&mut self, node: usize, cloud: &[Vec2]) {
+    fn register_particles_for_leaf(&mut self, tree: &TreeSkeleton, node: usize, cloud: &[Vec2]) {
         for &point in cloud {
             let particle_id = self.trajectories.len();
             self.particles_per_node[node].push(particle_id);
-            let mut empty_trajectory = vec![Vec3::ZERO; self.tree.depth(node)];
-            empty_trajectory.push(self.tree.plane_to_space(node, point));
+            let mut empty_trajectory = vec![Vec3::ZERO; tree.depth(node)];
+            empty_trajectory.push(tree.plane_to_space(node, point));
 
             self.trajectories.push(empty_trajectory);
         }
     }
 
-    fn register_particles_for_node(&mut self, node: usize, cloud: &[Vec2], particle_ids: &[usize]) {
+    fn register_particles_for_node(&mut self, tree: &TreeSkeleton, node: usize, cloud: &[Vec2], particle_ids: &[usize]) {
         assert_eq!(cloud.len(), particle_ids.len());
 
         let n = particle_ids.len();
         for i in 0..n {
-            let d = self.tree.depth(node);
-            self.trajectories[particle_ids[i]][d] = self.tree.plane_to_space(node, cloud[i]);
+            let d = tree.depth(node);
+            self.trajectories[particle_ids[i]][d] = tree.plane_to_space(node, cloud[i]);
             self.particles_per_node[node].push(particle_ids[i]);
         }
     }
 
-    fn project_particles(&mut self, parent: usize, child: usize, offset: Vec3) -> Vec<Vec2> {
-        let origin = self.tree.position(parent);
-        let normal = self.tree.normal(parent);
-        let orientation = self.tree.orientation(parent);
-        let p_child = self.tree.position(child);
+    fn project_particles(&mut self, tree: &TreeSkeleton, parent: usize, child: usize, offset: Vec3) -> Vec<Vec2> {
+        let origin = tree.position(parent);
+        let normal = tree.normal(parent);
+        let orientation = tree.orientation(parent);
+        let p_child = tree.position(child);
 
         let d = (origin - p_child).normalize();
 
         let projected = |particle_id: &usize| {
-            let pos_particle = self.trajectories[*particle_id][self.tree.depth(child)];
+            let pos_particle = self.trajectories[*particle_id][tree.depth(child)];
             let u = pos_particle - origin;
 
             let l = normal.dot(u) / normal.dot(d.normalize());
@@ -152,49 +144,52 @@ impl<'a> TrajectoryBuilder<'a> {
     }
 
     pub fn compute_trajectories(&mut self, 
+        tree: &TreeSkeleton,
         root: usize, 
         rng: &mut impl Rng,
         particle_per_leaf: usize
         ) {
         assert!(self.particles_per_node[root].len() == 0);
-        let radius = self.tree.radius(root);
+        let radius = tree.radius(root);
 
-        match self.tree.children(root) {
+        match tree.children(root) {
             [] => {
-                let radius = self.tree.radius(root);
+                let radius = tree.radius(root);
 
                 let mut cloud = rng.sample_iter(UniformDisk::new(radius))
                     .take(particle_per_leaf)
                     .collect();
 
                 spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
-                self.register_particles_for_leaf(root, &cloud);
+                self.register_particles_for_leaf(tree, root, &cloud);
 
             }
             &[child] => {
-                self.compute_trajectories(child, rng, particle_per_leaf);
-                let mut cloud = self.project_particles(root, child, Vec3::ZERO);
+                self.compute_trajectories(tree, child, rng, particle_per_leaf);
+                let mut cloud = self.project_particles(tree, root, child, Vec3::ZERO);
                 spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
                 let particle_ids = self.particles_per_node[child].clone();
-                self.register_particles_for_node(root, &cloud, &particle_ids);
+                self.register_particles_for_node(tree, root, &cloud, &particle_ids);
             }
             &[m_child, s_child] => {
-                self.compute_trajectories(m_child, rng, particle_per_leaf);
-                self.compute_trajectories(s_child, rng, particle_per_leaf);
-                let normal = self.tree.normal(root);
+                self.compute_trajectories(tree, m_child, rng, particle_per_leaf);
+                self.compute_trajectories(tree, s_child, rng, particle_per_leaf);
+                let normal = tree.normal(root);
                 let offset_direction = {
-                    let u = self.tree.position(m_child) - self.tree.position(s_child);
+                    let u = tree.position(m_child) - tree.position(s_child);
                     (u - u.dot(normal) * normal).normalize()
                 };
                 let m_cloud = self.project_particles(
+                    tree,
                     root,
                     m_child,
-                    offset_direction * self.tree.radius(m_child)
+                    offset_direction * tree.radius(m_child)
                 );
                 let s_cloud = self.project_particles(
+                    tree,
                     root,
                     s_child,
-                    -offset_direction * self.tree.radius(s_child)
+                    -offset_direction * tree.radius(s_child)
                 );
 
                 let mut cloud = m_cloud;
@@ -205,7 +200,7 @@ impl<'a> TrajectoryBuilder<'a> {
 
                 spread_points(&mut cloud, radius, DEFAULT_SIM_CONFIG);
 
-                self.register_particles_for_node(root, &cloud, &particle_ids);
+                self.register_particles_for_node(tree, root, &cloud, &particle_ids);
             }
             _ => panic!("did not expect more than 2 childs for node {root}"),
         }

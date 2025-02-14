@@ -5,7 +5,7 @@ pub use mesh_builder::GeometryData;
 
 use bevy::color::Color;
 use bevy::math::{Mat3, Vec2, Vec3};
-use bevy::prelude::{Component, Mesh};
+use bevy::prelude::Component;
 use bevy_gizmos::gizmos::Gizmos;
 use rand::rngs::StdRng;
 
@@ -14,7 +14,7 @@ use crate::tools::{split_slice_circular, FloatProducer};
 use crate::{TreePipelinePhase, VisualDebug};
 
 use algorithms::{convex_hull_graham, extended_catmull_spline, mesh_between_contours, SplineIndex};
-use particles::TrajectoryBuilder;
+pub use particles::TrajectoryBuilder;
 
 
 #[derive(Component)]
@@ -28,25 +28,16 @@ pub struct VolumetricTreeConfig {
     pub particles_per_leaf: usize
 }
 
-#[derive(Component, Default)]
-pub struct VolumetricTreeDebugData {
-    pub particles_per_node: Vec<Vec<usize>>,
-    pub trajectories: Vec<Vec<Vec3>>,
-}
-
 impl TreePipelinePhase for VolumetricTree {
     type Previous = TreeSkeleton;
     type Config = VolumetricTreeConfig;
-    type DebugCache = VolumetricTreeDebugData;
-    fn generate_from(prev: Self::Previous, config: &Self::Config, cache: &mut Self::DebugCache, mut rng: StdRng) -> Self {
-        let mut builder = TrajectoryBuilder::new(&prev);
-        builder.compute_trajectories(0, &mut rng, config.particles_per_leaf);
-        let (trajectories, particles_per_node) = builder.extract();
-        cache.particles_per_node = particles_per_node.clone();
-        cache.trajectories = trajectories.clone();
+    type DebugCache = TrajectoryBuilder;
+    fn generate_from(prev: Self::Previous, config: &Self::Config, builder: &mut Self::DebugCache, mut rng: StdRng) -> Self {
+        builder.clear_for_tree(&prev);
+        builder.compute_trajectories(&prev, 0, &mut rng, config.particles_per_leaf);
         Self {
-            trajectories,
-            particles_per_node,
+            trajectories: builder.trajectories.clone(),
+            particles_per_node: builder.particles_per_node.clone(),
             tree: prev
         }
     }
@@ -54,8 +45,6 @@ impl TreePipelinePhase for VolumetricTree {
 
 
 impl VolumetricTree {
-    pub fn compute_branches(&self, mesh: &mut GeometryData, mut rng: StdRng) {
-    }
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
         let t = if pos.length < 0. {
             let parent = self.tree.parent(pos.node).unwrap();
@@ -312,7 +301,7 @@ impl VolumetricTree {
 
 }
 
-impl VisualDebug for VolumetricTreeDebugData {
+impl VisualDebug for TrajectoryBuilder {
     fn debug<R: rand::Rng + Clone>(&self, 
         gizmos: &mut Gizmos,
         rng: R,

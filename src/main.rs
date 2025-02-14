@@ -4,7 +4,7 @@ use crate::meshing::VolumetricTree;
 use bevy::input::{gestures::PinchGesture, mouse::{MouseMotion, MouseWheel}};
 pub(crate) use bevy::prelude::*;
 use growing::{GrowConfig, PlantNode, TreeSkeletonDebugData, Seed, TreeSkeleton};
-use meshing::{GeometryData, VolumetricTreeConfig, VolumetricTreeDebugData};
+use meshing::{GeometryData, VolumetricTreeConfig, TrajectoryBuilder};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use shader::CustomEntity;
 use smallvec::SmallVec;
@@ -261,20 +261,22 @@ fn draw_tree(
         if need_render.0 {
             let rng = StdRng::seed_from_u64(rand::random::<u64>());
 
-            let mut tree_skeleton = Default::default();
-            let mut strands = Default::default();
-            let mut mesh_data = GeometryData::default();
+            let (
+                 mut skeleton_builder,
+                 mut particle_builder,
+                 mut mesh_builder
+            ) = Default::default();
 
             let tree_mesh = Seed
                 .grow::<PlantNode>(&tree_config.grow_config, &mut (), rng.clone())
-                .grow::<TreeSkeleton>(&(), &mut tree_skeleton, rng.clone())
-                .grow::<VolumetricTree>(&tree_config.strands_config, &mut strands, rng.clone())
-                .grow::<Mesh>(&(), &mut mesh_data, rng.clone());
+                .grow::<TreeSkeleton>(&(), &mut skeleton_builder, rng.clone())
+                .grow::<VolumetricTree>(&tree_config.strands_config, &mut particle_builder, rng.clone())
+                .grow::<Mesh>(&(), &mut mesh_builder, rng.clone());
                 
             mesh.0 = meshes.add(tree_mesh);
             need_render.0 = false;
 
-            commands.entity(e).insert((tree_skeleton, strands, mesh_data));
+            commands.entity(e).insert((skeleton_builder, particle_builder, mesh_builder));
         }
 
 
@@ -291,7 +293,7 @@ fn visual_debug(
     query: Query<
         (
             Option<&TreeSkeletonDebugData>,
-            Option<&VolumetricTreeDebugData>,
+            Option<&TrajectoryBuilder>,
             Option<&GeometryData>,
         )>,
     flags: Res<DebugFlags>,
