@@ -25,10 +25,10 @@ pub struct VolumetricTree {
 pub struct StrandsConfig {
     pub particles_per_leaf: usize,
     pub repulsion: f32,
+    pub wall_repulsion: f32,
     pub dt: f32,
     pub n_steps: usize,
-    // TODO: compute depending on number of particles
-    pub particle_size: f32,
+    pub max_force_factor: f32,
 }
 
 impl TreePipelinePhase for VolumetricTree {
