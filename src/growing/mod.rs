@@ -319,7 +319,10 @@ impl TreeSkeleton {
     }
 
     pub fn branch_section_center(&self, pos: BranchSectionPosition) -> Vec3 {
-        if pos.length < 0. {
+        if pos.length == 0. {
+            self.node_props[pos.node].position
+        }
+        else if pos.length < 0. {
             let parent = self
                 .parent(pos.node)
                 .expect("there is no branch under root");

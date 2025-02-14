@@ -76,7 +76,10 @@ impl TreePipelinePhase for Mesh {
 
 impl VolumetricTree {
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
-        let t = if pos.length < 0. {
+        let t = if pos.length == 0.{
+            0.
+        }
+        else if pos.length < 0. {
             let parent = self.tree.parent(pos.node).unwrap();
             let branch_len = (self.tree.position(pos.node) - self.tree.position(parent)).length();
             (branch_len + pos.length) / branch_len
@@ -117,18 +120,19 @@ impl VolumetricTree {
 
         let m_pos = BranchSectionPosition::new(
             m_child,
-            pos.length - self.tree.branch_length_to_parent(m_child),
+            f32::min(0., pos.length - self.tree.branch_length_to_parent(m_child)),
         );
         let s_pos = BranchSectionPosition::new(
             s_child,
-            pos.length - self.tree.branch_length_to_parent(s_child),
+            f32::min(0., pos.length - self.tree.branch_length_to_parent(s_child)),
         );
-        let m_relative_pos = self
-            .particles_on_section(m_pos)
+        let m_part = self.particles_on_section(m_pos);
+        let s_part = self.particles_on_section(s_pos);
+
+        let m_relative_pos = m_part
             .into_iter()
             .map(pos_along_dir);
-        let s_relative_pos = self
-            .particles_on_section(s_pos)
+        let s_relative_pos = s_part
             .into_iter()
             .map(pos_along_dir);
 
@@ -191,7 +195,8 @@ impl VolumetricTree {
 
         let mut compute_properties = |child| {
             let branch_length = self.tree.branch_length_to_parent(child);
-            let pos = BranchSectionPosition::new(child, pos.length - branch_length);
+            let pos = BranchSectionPosition::new(child, 
+                f32::min(0., pos.length - branch_length));
             let center = self.tree.branch_section_center(pos);
             let contour = self.register_branch_contour(pos, mesh);
             (pos, center, contour)
@@ -200,6 +205,7 @@ impl VolumetricTree {
         let (m_p, m_c, m_cont) = compute_properties(m_child);
         let (s_p, s_c, s_cont) = compute_properties(s_child);
 
+        assert!(m_cont.len() >= 3 && s_cont.len() >= 3, "not enough particles in the branch to compute join");
         let center = 0.5 * (m_c + s_c);
 
         let m_dist_center = |i: &usize| (mesh.point(i) - m_c).length();
@@ -342,11 +348,15 @@ impl VolumetricTree {
                 self.compute_each_branch_recursive(child, previous_contour, mesh, config)
             }
             &[m_child, s_child] => {
+                let max_branch_length = f32::max(
+                    self.tree.branch_length_to_parent(m_child),
+                    self.tree.branch_length_to_parent(s_child),
+                );
                 let pos_split = self.compute_branch_while(
                     pos_root,
                     &mut previous_contour,
                     dz,
-                    |p, me| !me.branch_is_spliting(p),
+                    |p, me| !me.branch_is_spliting(p) && p.length < max_branch_length,
                     mesh,
                 );
 
