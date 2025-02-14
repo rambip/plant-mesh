@@ -1,5 +1,5 @@
 [grow]
-min_radius = 0.03
+min_radius = 0.05
 max_turn_angle = 1.0
 min_split_angle = 0.4
 max_zigzag_angle = 0.3
@@ -10,7 +10,7 @@ secondary_children_radius_factor = 0.4
 radius_variance = 0.2
 
 [strands]
-particles_per_leaf = 7
+particles_per_leaf = 10
 wall_repulsion = 0.1
 repulsion = 0.3
 dt = 0.002
