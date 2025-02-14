@@ -26,6 +26,12 @@ struct DebugFlags {
     contours: bool,
 }
 
+impl DebugFlags {
+    fn need_render_mesh(&self) -> bool {
+        self.triangles || self.other || self.contours
+    }
+}
+
 #[derive(Clone)]
 pub struct NodeInfo {
     pub depth: usize,
@@ -182,7 +188,6 @@ fn setup(
     ));
     commands.spawn((
         TreeConfigHandle(config_handle),
-        Mesh3d::default(),
         NeedRender(true),
         shader::CustomEntity,
     ));
@@ -319,12 +324,13 @@ struct NeedRender(bool);
 
 fn draw_tree(
     mut commands: Commands,
-    mut trees: Query<(Entity, &mut Mesh3d, &TreeConfigHandle, &mut NeedRender)>,
+    mut trees: Query<(Entity, &TreeConfigHandle, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera_settings: Res<CameraSettings>,
     configs: Res<Assets<TreeConfig>>,
+    flags: Res<DebugFlags>,
 ) {
-    for (e, mut mesh, tree_config_handle, mut need_render) in trees.iter_mut() {
+    for (e, tree_config_handle, mut need_render) in trees.iter_mut() {
         if camera_settings.show_mesh {
             commands.entity(e).insert(CustomEntity);
         } else {
@@ -334,6 +340,7 @@ fn draw_tree(
         if !need_render.0 {
             return;
         }
+        need_render.0 = false;
 
         let rng = StdRng::seed_from_u64(rand::random::<u64>());
 
@@ -343,18 +350,29 @@ fn draw_tree(
         let mut mesh_builder = rng.clone().into();
 
         let Some(tree_config) = configs.get(&tree_config_handle.0) else {return};
-        let tree_mesh = Seed
+        let strands = Seed
             .grow::<PlantNode>(&tree_config.grow, &mut plant_builder)
             .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
-            .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
-            .grow::<Mesh>(&(), &mut mesh_builder);
+            .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder);
 
-        mesh.0 = meshes.add(tree_mesh);
-        need_render.0 = false;
 
         commands
             .entity(e)
-            .insert((skeleton_builder, particle_builder, mesh_builder));
+            .insert((skeleton_builder, particle_builder));
+
+        if camera_settings.show_mesh || flags.need_render_mesh() {
+            let tree_mesh = strands
+                .grow::<Mesh>(&(), &mut mesh_builder);
+
+
+            let mesh = meshes.add(tree_mesh);
+            commands.entity(e)
+                .insert(Mesh3d(mesh));
+
+            commands
+                .entity(e)
+                .insert(mesh_builder);
+        }
     }
 }
 
