@@ -4,8 +4,10 @@ mod particles;
 pub use mesh_builder::GeometryData;
 
 use bevy::color::Color;
-use bevy::math::{Mat3, Vec2, Vec3};
+use bevy::math::{Mat3, Quat, Vec2, Vec3};
 use bevy::prelude::{Component, Mesh};
+use rand::prelude::Distribution;
+use rand::Rng;
 
 use crate::growing::{BranchSectionPosition, TreeSkeleton};
 use crate::tools::{split_slice_circular, FloatProducer};
@@ -50,14 +52,23 @@ impl TreePipelinePhase for VolumetricTree {
     }
 }
 
+#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MeshConfig {
+    leaf_size: f32,
+    leaf_angle: f32,
+}
+
 impl TreePipelinePhase for Mesh {
     type Previous = VolumetricTree;
-    type Config = ();
+    type Config = MeshConfig;
     type Builder = GeometryData;
-    fn generate_from(prev: Self::Previous, _: &Self::Config, builder: &mut Self::Builder) -> Self {
+    fn generate_from(prev: Self::Previous, 
+        config: &Self::Config, 
+        builder: &mut Self::Builder
+        ) -> Self {
         let pos_root = BranchSectionPosition::new(prev.tree.root(), 0.);
         let root_section = prev.register_branch_contour(pos_root, builder);
-        prev.compute_each_branch_recursive(prev.tree.root(), root_section, builder);
+        prev.compute_each_branch_recursive(prev.tree.root(), root_section, builder, config);
 
         builder.to_mesh()
     }
@@ -130,7 +141,7 @@ impl VolumetricTree {
         mesh: &mut GeometryData,
     ) -> Vec<usize> {
         let contour = self.branch_contour(pos, mesh);
-        mesh.register_points(&contour)
+        mesh.register_points_trunk(&contour)
     }
 
     fn branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData) -> Vec<Vec3> {
@@ -281,6 +292,7 @@ impl VolumetricTree {
         root: usize,
         mut previous_contour: Vec<usize>,
         mesh: &mut GeometryData,
+        config: &MeshConfig
     ) {
         let pos_root = BranchSectionPosition::new(root, 0.);
 
@@ -291,7 +303,7 @@ impl VolumetricTree {
             [] => {
                 let leaf =
                     self.tree.position(root) + self.tree.radius(root) * self.tree.normal(root);
-                let i_end = mesh.register_points(&vec![leaf])[0];
+                let i_end = mesh.register_points_trunk(&[leaf])[0];
                 let n = previous_contour.len();
                 for i in 0..n {
                     mesh.register_triangles(&[
@@ -300,6 +312,23 @@ impl VolumetricTree {
                         i_end,
                     ]);
                 }
+                let random_point_distrib = RandomLeafPoint {
+                    length: config.leaf_size,
+                    max_angle: config.leaf_angle,
+                    normal: self.tree.normal(root),
+                };
+
+                let p1 = leaf+mesh.rng.sample(random_point_distrib);
+                let p2 = leaf+mesh.rng.sample(random_point_distrib);
+                let i_leaf = mesh.register_points_leaf(&[
+                    leaf, p1, p2 ]
+                )[0];
+                mesh.register_triangles(&[
+                    i_leaf, i_leaf+1, i_leaf+2,
+                    i_leaf, i_leaf+2, i_leaf+1,
+                ]);
+
+
             }
             &[child] => {
                 let branch_length = self.tree.branch_length_to_parent(child);
@@ -310,7 +339,7 @@ impl VolumetricTree {
                     |p, _| p.length < branch_length,
                     mesh,
                 );
-                self.compute_each_branch_recursive(child, previous_contour, mesh)
+                self.compute_each_branch_recursive(child, previous_contour, mesh, config)
             }
             &[m_child, s_child] => {
                 let pos_split = self.compute_branch_while(
@@ -325,12 +354,28 @@ impl VolumetricTree {
                     self.compute_branch_join(pos_split, previous_contour, mesh);
 
                 self.compute_branch_while(m_pos, &mut m_cont, dz, |p, _| p.length < 0., mesh);
-                self.compute_each_branch_recursive(m_child, m_cont, mesh);
+                self.compute_each_branch_recursive(m_child, m_cont, mesh, config);
 
                 self.compute_branch_while(s_pos, &mut s_cont, dz, |p, _| p.length < 0., mesh);
-                self.compute_each_branch_recursive(s_child, s_cont, mesh);
+                self.compute_each_branch_recursive(s_child, s_cont, mesh, config);
             }
             _ => panic!("did not expect more than 2 childs for node {root}"),
         }
+    }
+}
+
+#[derive(Copy, Clone)]
+struct RandomLeafPoint {
+    max_angle: f32,
+    length: f32,
+    normal: Vec3,
+}
+
+impl Distribution<Vec3> for RandomLeafPoint {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec3 {
+        let a: f32 = rng.gen_range(0f32..self.max_angle);
+        let c: f32 = rng.gen_range(0f32..2. * std::f32::consts::PI);
+        let rot = Quat::from_rotation_z(c) * Quat::from_rotation_x(a) * Quat::from_rotation_z(-c);
+        rot * (self.length * self.normal)
     }
 }

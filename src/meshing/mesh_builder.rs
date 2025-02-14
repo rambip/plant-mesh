@@ -18,7 +18,7 @@ pub struct GeometryData {
     triangles: Vec<usize>,
     colors: Vec<Color>,
     points: Vec<Vec3>,
-    rng: StdRng,
+    pub rng: StdRng,
 }
 
 impl GeometryData {
@@ -42,7 +42,7 @@ impl GeometryData {
         result
     }
 
-    pub fn register_points(&mut self, points: &[Vec3]) -> Vec<usize> {
+    pub fn register_points_trunk(&mut self, points: &[Vec3]) -> Vec<usize> {
         let i0 = self.points.len();
         let n = points.len();
         self.points.extend(points);
@@ -50,6 +50,18 @@ impl GeometryData {
         for _ in 0..n {
             let blue: f32 = self.rng.gen_range(0.1f32..0.13);
             let color = Color::srgb(0.35, 0.2, blue);
+            self.colors.push(color);
+        }
+
+        (i0..i0 + n).into_iter().collect()
+    }
+    pub fn register_points_leaf(&mut self, points: &[Vec3]) -> Vec<usize> {
+        let i0 = self.points.len();
+        let n = points.len();
+        self.points.extend(points);
+
+        for _ in 0..n {
+            let color = Color::srgb(0.1, 0.8, 0.3);
             self.colors.push(color);
         }
 

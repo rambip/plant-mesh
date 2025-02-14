@@ -1,5 +1,6 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
+use crate::meshing::MeshConfig;
 use crate::meshing::VolumetricTree;
 use bevy::{asset::{AsyncReadExt, LoadContext}, input::{
     gestures::PinchGesture,
@@ -111,6 +112,7 @@ mod tools;
 struct TreeConfig {
     grow: GrowConfig,
     strands: StrandsConfig,
+    mesh: MeshConfig,
 }
 
 // TODO: easiest way to do it ?
@@ -362,7 +364,7 @@ fn draw_tree(
 
         if camera_settings.show_mesh || flags.need_render_mesh() {
             let tree_mesh = strands
-                .grow::<Mesh>(&(), &mut mesh_builder);
+                .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
 
 
             let mesh = meshes.add(tree_mesh);
