@@ -2,6 +2,7 @@
 
 use crate::meshing::MeshConfig;
 use crate::meshing::VolumetricTree;
+use bevy::asset::AssetMetaCheck;
 use bevy::{asset::{AsyncReadExt, LoadContext}, input::{
     gestures::PinchGesture,
     mouse::{MouseMotion, MouseWheel},
@@ -151,13 +152,18 @@ impl AssetLoader for TreeConfigLoader {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                canvas: Some("#bevy".into()),
+        .add_plugins(DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    canvas: Some("#bevy".into()),
+                    ..default()
+                }),
                 ..default()
-            }),
-            ..default()
-        }))
+            }).set(AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            })
+        )
         .init_asset::<TreeConfig>()
         .register_asset_loader(TreeConfigLoader)
         .add_plugins(bevy_sprite::SpritePlugin {})
