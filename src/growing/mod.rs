@@ -294,11 +294,12 @@ impl TreeSkeleton {
         (self.position(child) - self.position(parent)).length()
     }
 
-    pub fn branch_length_to_main_children(&self, node: usize) -> f32 {
-        let child = self
-            .main_children(node)
-            .expect("a leaf does not have a length");
-        (self.position(node) - self.position(child)).length()
+    pub fn average_branch_length_to_children(&self, node: usize) -> f32 {
+        let sum: f32 = self.children(node)
+            .iter()
+            .map(|&child| (self.position(node) - self.position(child)).length())
+            .sum();
+        sum / (self.children(node).len() as f32)
     }
 
     pub(crate) fn node_count(&self) -> usize {
@@ -321,7 +322,7 @@ impl TreeSkeleton {
                 .position
                 .lerp(self.node_props[parent].position, -pos.length / length)
         } else {
-            let length = self.branch_length_to_main_children(pos.node);
+            let length = self.average_branch_length_to_children(pos.node);
             let child = *self.node_info[pos.node]
                 .children
                 .get(0)

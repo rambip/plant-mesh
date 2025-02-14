@@ -250,6 +250,12 @@ We must find the right step size for both
 #image("images/mesh_non_uniform_triangulation.png")
 #image("images/mesh_uniform_triangulation.png")
 
+
+but it is still an issue for branch fusion. To have a really regular mesh, the solution would be to have a good reparametrization of the spline. I decided not to go this way but to approximate it branch section by branch section. It works until there is a large ratio between the lengths of the 2 branches.
+
+
+setting the right parameter for the convex hull / delaunay treshold is hard.
+
 = Step 4: Meshing and branch fusion
 
 
