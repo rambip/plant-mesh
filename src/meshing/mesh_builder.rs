@@ -4,63 +4,51 @@ use bevy::asset::RenderAssetUsages;
 use bevy::color::ColorToComponents;
 use bevy::math::Vec3;
 use bevy::prelude::{Color, Component, Mesh};
-use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy_gizmos::prelude::Gizmos;
+use bevy_render::mesh::{Indices, PrimitiveTopology};
 use rand::rngs::StdRng;
 use rand::Rng;
 
-use crate::growing::BranchSectionPosition;
-use crate::{TreePipelinePhase, VisualDebug};
+use crate::VisualDebug;
 
-use super::VolumetricTree;
-
-#[derive(Default, Component)]
+#[derive(Component)]
 pub struct GeometryData {
     contours: Vec<Vec<Vec3>>,
     debug_points: Vec<(Vec3, Color)>,
     triangles: Vec<usize>,
     colors: Vec<Color>,
     points: Vec<Vec3>,
+    rng: StdRng,
 }
 
-impl TreePipelinePhase for Mesh {
-    type Previous = VolumetricTree;
-    type Config = ();
-    type DebugCache = GeometryData;
-    fn generate_from(prev: Self::Previous, _: &Self::Config, cache: &mut Self::DebugCache, mut rng: StdRng) -> Self {
-        let pos_root = BranchSectionPosition::new(prev.tree.root(), 0.);
-        let root_section = prev.register_branch_contour(pos_root, cache, &mut rng);
-        prev.compute_each_branch_recursive(prev.tree.root(), root_section, cache, &mut rng);
-
+impl GeometryData {
+    pub fn to_mesh(&self) -> Mesh {
         let mut result = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
         )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, cache.points.clone())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, cache.colors
-            .iter()
-            .map(|a| a.to_linear().to_f32_array())
-            .collect::<Vec<_>>())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.points.clone())
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_COLOR,
+            self.colors
+                .iter()
+                .map(|a| a.to_linear().to_f32_array())
+                .collect::<Vec<_>>(),
+        )
         .with_inserted_indices(Indices::U32(
-            cache.triangles.iter().map(|x| *x as u32).collect(),
+            self.triangles.iter().map(|x| *x as u32).collect(),
         ));
         result.compute_smooth_normals();
         result
     }
-}
 
-impl GeometryData {
-    pub fn register_points(
-        &mut self,
-        points: &[Vec3],
-        rng: &mut StdRng,
-    ) -> Vec<usize> {
+    pub fn register_points(&mut self, points: &[Vec3]) -> Vec<usize> {
         let i0 = self.points.len();
         let n = points.len();
         self.points.extend(points);
 
         for _ in 0..n {
-            let blue: f32 = rng.gen_range(0.1f32..0.13);
+            let blue: f32 = self.rng.gen_range(0.1f32..0.13);
             let color = Color::srgb(0.35, 0.2, blue);
             self.colors.push(color);
         }
@@ -68,7 +56,7 @@ impl GeometryData {
         (i0..i0 + n).into_iter().collect()
     }
 
-    pub fn point(&self, i: impl Deref<Target=usize>) -> Vec3 {
+    pub fn point(&self, i: impl Deref<Target = usize>) -> Vec3 {
         self.points[*i.deref()]
     }
 
@@ -76,16 +64,12 @@ impl GeometryData {
         self.triangles.extend(triangles)
     }
 
-    pub fn mark_debug(&mut self, id: impl Deref<Target=usize>, color: Color) {
-        self.debug_points.push(
-            (self.point(id), color)
-        );
+    pub fn mark_debug(&mut self, id: impl Deref<Target = usize>, color: Color) {
+        self.debug_points.push((self.point(id), color));
     }
 
     pub fn add_debug(&mut self, pos: Vec3, color: Color) {
-        self.debug_points.push(
-            (pos, color)
-        );
+        self.debug_points.push((pos, color));
     }
 
     pub fn points(&self) -> &[Vec3] {
@@ -95,15 +79,23 @@ impl GeometryData {
     pub fn add_contour(&mut self, points: &[Vec3]) {
         self.contours.push(points.to_vec())
     }
+}
 
+impl From<StdRng> for GeometryData {
+    fn from(rng: StdRng) -> Self {
+        Self {
+            contours: vec![],
+            debug_points: vec![],
+            triangles: vec![],
+            colors: vec![],
+            points: vec![],
+            rng,
+        }
+    }
 }
 
 impl VisualDebug for GeometryData {
-    fn debug<R: rand::Rng + Clone>(&self, 
-        gizmos: &mut Gizmos, 
-        rng: R,
-        debug_flags: crate::DebugFlags
-        ) {
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
         if debug_flags.triangles {
             for i in 0..self.triangles.len() / 3 {
                 let (ia, ib, ic) = (
@@ -111,11 +103,7 @@ impl VisualDebug for GeometryData {
                     self.triangles[3 * i + 1],
                     self.triangles[3 * i + 2],
                 );
-                let (pa, pb, pc) = (
-                    self.points[ia],
-                    self.points[ib],
-                    self.points[ic],
-                );
+                let (pa, pb, pc) = (self.points[ia], self.points[ib], self.points[ic]);
                 let color = Color::srgb(0., 0.4, 0.);
                 gizmos.line(pa, pb, color);
                 gizmos.line(pb, pc, color);
@@ -124,7 +112,7 @@ impl VisualDebug for GeometryData {
         }
 
         if debug_flags.contours {
-            let mut rng = rng.clone();
+            let mut rng = self.rng.clone();
             for c in self.contours.iter() {
                 let t = rng.gen();
                 let n = c.len();
@@ -145,4 +133,3 @@ impl VisualDebug for GeometryData {
         }
     }
 }
-

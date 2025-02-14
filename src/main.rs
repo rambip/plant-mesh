@@ -1,17 +1,21 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
 use crate::meshing::VolumetricTree;
-use bevy::input::{gestures::PinchGesture, mouse::{MouseMotion, MouseWheel}};
+use bevy::{asset::{AsyncReadExt, LoadContext}, input::{
+    gestures::PinchGesture,
+    mouse::{MouseMotion, MouseWheel},
+}};
 pub(crate) use bevy::prelude::*;
-use growing::{GrowConfig, PlantNode, TreeSkeletonDebugData, Seed, TreeSkeleton};
-use meshing::{GeometryData, VolumetricTreeConfig, TrajectoryBuilder};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use growing::{GrowConfig, PlantNode, Seed, TreeSkeleton, TreeSkeletonDebugData};
+use meshing::{GeometryData, TrajectoryBuilder, StrandsConfig};
+use rand::{rngs::StdRng, SeedableRng};
+use serde::{Serialize, Deserialize};
 use shader::CustomEntity;
 use smallvec::SmallVec;
 use std::f32::consts::PI;
 
 use bevy_gizmos::prelude::Gizmos;
-
+use bevy::asset::AssetLoader;
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 struct DebugFlags {
@@ -40,50 +44,99 @@ pub struct PlantNodeProps {
 }
 
 trait VisualDebug {
-    fn debug<R: Rng + Clone>(&self,
-        gizmos: &mut Gizmos,
-        rng: R,
-        debug_flags: DebugFlags
-        );
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags);
 }
 
 impl VisualDebug for () {
-    fn debug<R: Rng + Clone>(&self, _: &mut Gizmos, _: R, _: DebugFlags) { }
+    fn debug(&self, _: &mut Gizmos, _: DebugFlags) {}
+}
+
+impl<T> VisualDebug for Option<&T>
+where
+    T: VisualDebug,
+{
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags) {
+        self.as_ref().map(|x| x.debug(gizmos, debug_flags));
+    }
+}
+
+impl VisualDebug for StdRng {
+    fn debug(&self, _: &mut Gizmos, _: DebugFlags) {}
 }
 
 trait TreePipelinePhase {
     type Previous;
-    type Config;
-    type DebugCache: Default + VisualDebug;
-    fn generate_from(prev: Self::Previous, config: &Self::Config, cache: &mut Self::DebugCache, rng: StdRng) -> Self;
+    type Config: Copy + Serialize + Deserialize<'static>;
+    type Builder: VisualDebug + From<StdRng>;
+
+    fn generate_from(
+        prev: Self::Previous,
+        config: &Self::Config,
+        builder: &mut Self::Builder,
+    ) -> Self;
 }
 
-trait Grow
-{
-    fn grow<Next>(self, config: &Next::Config, cache: &mut Next::DebugCache, rng: StdRng) -> Next
-        where Next: TreePipelinePhase<Previous=Self>;
+trait Grow {
+    fn grow<Next>(self, config: &Next::Config, cache: &mut Next::Builder) -> Next
+    where
+        Next: TreePipelinePhase<Previous = Self>;
 }
-
 
 impl<T> Grow for T {
-    fn grow<Next>(self, config: &<Next as TreePipelinePhase>::Config, cache: &mut <Next as TreePipelinePhase>::DebugCache, rng: StdRng) -> Next 
-where Next: TreePipelinePhase<Previous=T> {
-        Next::generate_from(self, config, cache, rng)
+    fn grow<Next>(
+        self,
+        config: &<Next as TreePipelinePhase>::Config,
+        builder: &mut <Next as TreePipelinePhase>::Builder,
+    ) -> Next
+    where
+        Next: TreePipelinePhase<Previous = T>,
+    {
+        Next::generate_from(self, config, builder)
     }
 }
 
-
-mod meshing;
 mod growing;
-
-#[derive(Component)]
-struct TreeConfig {
-    grow_config: GrowConfig,
-    strands_config: VolumetricTreeConfig,
-}
+mod meshing;
 
 mod shader;
 mod tools;
+
+// TODO: translate to component
+#[derive(Component, Serialize, Deserialize, TypePath, Asset)]
+struct TreeConfig {
+    grow: GrowConfig,
+    strands: StrandsConfig,
+}
+
+#[derive(Component)]
+struct TreeConfigHandle(Handle<TreeConfig>);
+
+struct TreeConfigLoader;
+
+impl AssetLoader for TreeConfigLoader {
+    type Asset = TreeConfig;
+
+    type Settings = ();
+
+    type Error = String;
+
+    fn load(
+        &self,
+        reader: &mut dyn bevy::asset::io::Reader,
+        _: &Self::Settings,
+        _: &mut LoadContext,
+    ) -> impl bevy::utils::ConditionalSendFuture<Output = Result<Self::Asset, Self::Error>> {
+        async {
+            // Read the content into a String
+            let mut content = String::new();
+            reader.read_to_string(&mut content).await.unwrap();
+
+            // Parse TOML content into our Config struct
+            let config: TreeConfig = toml::from_str(&content).unwrap();
+            Ok(config)
+        }
+    }
+}
 
 fn main() {
     App::new()
@@ -94,6 +147,8 @@ fn main() {
             }),
             ..default()
         }))
+        .init_asset::<TreeConfig>()
+        .register_asset_loader(TreeConfigLoader)
         .add_plugins(bevy_sprite::SpritePlugin {})
         .add_plugins(bevy_gizmos::GizmoPlugin)
         .add_plugins(shader::CustomMeshPipelinePlugin)
@@ -111,7 +166,9 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     //mut materials: ResMut<Assets<StandardMaterial>>,
     camera_settings: Res<CameraSettings>,
+    server: Res<AssetServer>,
 ) {
+    let config_handle: Handle<TreeConfig> = server.load("tree_config.toml");
     // draw a floor
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(100., 100., 0.1))),
@@ -124,7 +181,7 @@ fn setup(
         camera_settings.transform(0.),
     ));
     commands.spawn((
-        TreeConfig::default(),
+        TreeConfigHandle(config_handle),
         Mesh3d::default(),
         NeedRender(true),
         shader::CustomEntity,
@@ -197,16 +254,16 @@ fn handle_input(
     for ev in evr_motion.read() {
         if mouse.pressed(MouseButton::Left) {
             camera_settings.animate = false;
-            camera_settings.z += 0.0005*ev.delta.y * camera_settings.orbit_distance;
-            camera_settings.orbit_angle -= 0.0005*ev.delta.x * camera_settings.orbit_distance;
+            camera_settings.z += 0.0005 * ev.delta.y * camera_settings.orbit_distance;
+            camera_settings.orbit_angle -= 0.0005 * ev.delta.x * camera_settings.orbit_distance;
         }
     }
     for ev in evr_scroll.read() {
-        #[cfg(target_family="wasm")]
+        #[cfg(target_family = "wasm")]
         {
-            camera_settings.orbit_distance -= 0.03*ev.y;
+            camera_settings.orbit_distance -= 0.03 * ev.y;
         }
-        #[cfg(not(target_family="wasm"))]
+        #[cfg(not(target_family = "wasm"))]
         {
             camera_settings.orbit_distance -= ev.y;
         }
@@ -253,68 +310,58 @@ struct NeedRender(bool);
 
 fn draw_tree(
     mut commands: Commands,
-    mut trees: Query<(Entity, &mut Mesh3d, &TreeConfig, &mut NeedRender)>,
+    mut trees: Query<(Entity, &mut Mesh3d, &TreeConfigHandle, &mut NeedRender)>,
     mut meshes: ResMut<Assets<Mesh>>,
     camera_settings: Res<CameraSettings>,
+    configs: Res<Assets<TreeConfig>>,
 ) {
-    for (e, mut mesh, tree_config, mut need_render) in trees.iter_mut() {
-        if need_render.0 {
-            let rng = StdRng::seed_from_u64(rand::random::<u64>());
-
-            let (
-                 mut skeleton_builder,
-                 mut particle_builder,
-                 mut mesh_builder
-            ) = Default::default();
-
-            let tree_mesh = Seed
-                .grow::<PlantNode>(&tree_config.grow_config, &mut (), rng.clone())
-                .grow::<TreeSkeleton>(&(), &mut skeleton_builder, rng.clone())
-                .grow::<VolumetricTree>(&tree_config.strands_config, &mut particle_builder, rng.clone())
-                .grow::<Mesh>(&(), &mut mesh_builder, rng.clone());
-                
-            mesh.0 = meshes.add(tree_mesh);
-            need_render.0 = false;
-
-            commands.entity(e).insert((skeleton_builder, particle_builder, mesh_builder));
-        }
-
-
+    for (e, mut mesh, tree_config_handle, mut need_render) in trees.iter_mut() {
         if camera_settings.show_mesh {
             commands.entity(e).insert(CustomEntity);
         } else {
             commands.entity(e).remove::<CustomEntity>();
         }
+
+        if !need_render.0 {
+            return;
+        }
+
+        let rng = StdRng::seed_from_u64(rand::random::<u64>());
+
+        let mut plant_builder = rng.clone().into();
+        let mut skeleton_builder = rng.clone().into();
+        let mut particle_builder = rng.clone().into();
+        let mut mesh_builder = rng.clone().into();
+
+        let Some(tree_config) = configs.get(&tree_config_handle.0) else {return};
+        let tree_mesh = Seed
+            .grow::<PlantNode>(&tree_config.grow, &mut plant_builder)
+            .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
+            .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
+            .grow::<Mesh>(&(), &mut mesh_builder);
+
+        mesh.0 = meshes.add(tree_mesh);
+        need_render.0 = false;
+
+        commands
+            .entity(e)
+            .insert((skeleton_builder, particle_builder, mesh_builder));
     }
 }
 
 // TODO: more readable
 fn visual_debug(
-    query: Query<
-        (
-            Option<&TreeSkeletonDebugData>,
-            Option<&TrajectoryBuilder>,
-            Option<&GeometryData>,
-        )>,
+    query: Query<(
+        Option<&TreeSkeletonDebugData>,
+        Option<&TrajectoryBuilder>,
+        Option<&GeometryData>,
+    )>,
     flags: Res<DebugFlags>,
     mut gizmos: Gizmos,
 ) {
-    let rng = StdRng::seed_from_u64(42);
-    for (s, t, g) in &query {
-        s.map(|x| x.debug(&mut gizmos, rng.clone(), *flags));
-        t.map(|x| x.debug(&mut gizmos, rng.clone(), *flags));
-        g.map(|x| x.debug(&mut gizmos, rng.clone(), *flags));
-    }
-}
-
-
-impl Default for TreeConfig {
-    fn default() -> Self {
-        Self {
-            grow_config: GrowConfig {},
-            strands_config: VolumetricTreeConfig {
-                particles_per_leaf: 10,
-            }
-        }
+    for (a, b, c) in &query {
+        a.debug(&mut gizmos, *flags);
+        b.debug(&mut gizmos, *flags);
+        c.debug(&mut gizmos, *flags);
     }
 }

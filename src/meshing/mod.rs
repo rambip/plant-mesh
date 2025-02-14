@@ -1,21 +1,18 @@
 mod algorithms;
-mod particles;
 mod mesh_builder;
+mod particles;
 pub use mesh_builder::GeometryData;
 
 use bevy::color::Color;
 use bevy::math::{Mat3, Vec2, Vec3};
-use bevy::prelude::Component;
-use bevy_gizmos::gizmos::Gizmos;
-use rand::rngs::StdRng;
+use bevy::prelude::{Component, Mesh};
 
 use crate::growing::{BranchSectionPosition, TreeSkeleton};
 use crate::tools::{split_slice_circular, FloatProducer};
-use crate::{TreePipelinePhase, VisualDebug};
+use crate::TreePipelinePhase;
 
 use algorithms::{convex_hull_graham, extended_catmull_spline, mesh_between_contours, SplineIndex};
 pub use particles::TrajectoryBuilder;
-
 
 #[derive(Component)]
 pub struct VolumetricTree {
@@ -24,25 +21,47 @@ pub struct VolumetricTree {
     pub tree: TreeSkeleton,
 }
 
-pub struct VolumetricTreeConfig {
-    pub particles_per_leaf: usize
+#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StrandsConfig {
+    pub particles_per_leaf: usize,
+    pub repulsion: f32,
+    pub dt: f32,
+    pub n_steps: usize,
+    // TODO: compute depending on number of particles
+    pub particle_size: f32,
 }
 
 impl TreePipelinePhase for VolumetricTree {
     type Previous = TreeSkeleton;
-    type Config = VolumetricTreeConfig;
-    type DebugCache = TrajectoryBuilder;
-    fn generate_from(prev: Self::Previous, config: &Self::Config, builder: &mut Self::DebugCache, mut rng: StdRng) -> Self {
+    type Config = StrandsConfig;
+    type Builder = TrajectoryBuilder;
+    fn generate_from(
+        prev: Self::Previous,
+        config: &Self::Config,
+        builder: &mut Self::Builder,
+    ) -> Self {
         builder.clear_for_tree(&prev);
-        builder.compute_trajectories(&prev, 0, &mut rng, config.particles_per_leaf);
+        builder.compute_trajectories(&prev, 0, config);
         Self {
             trajectories: builder.trajectories.clone(),
             particles_per_node: builder.particles_per_node.clone(),
-            tree: prev
+            tree: prev,
         }
     }
 }
 
+impl TreePipelinePhase for Mesh {
+    type Previous = VolumetricTree;
+    type Config = ();
+    type Builder = GeometryData;
+    fn generate_from(prev: Self::Previous, _: &Self::Config, builder: &mut Self::Builder) -> Self {
+        let pos_root = BranchSectionPosition::new(prev.tree.root(), 0.);
+        let root_section = prev.register_branch_contour(pos_root, builder);
+        prev.compute_each_branch_recursive(prev.tree.root(), root_section, builder);
+
+        builder.to_mesh()
+    }
+}
 
 impl VolumetricTree {
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
@@ -74,15 +93,25 @@ impl VolumetricTree {
         let s_child = self.tree.children(pos.node)[1];
 
         let t = pos.length / self.tree.branch_length_to_main_children(pos.node);
-        let m_center = self.tree.position(pos.node).lerp(self.tree.position(m_child), t);
-        let s_center = self.tree.position(pos.node).lerp(self.tree.position(s_child), t);
+        let m_center = self
+            .tree
+            .position(pos.node)
+            .lerp(self.tree.position(m_child), t);
+        let s_center = self
+            .tree
+            .position(pos.node)
+            .lerp(self.tree.position(s_child), t);
 
         let pos_along_dir = |a: Vec3| a.dot(s_center - m_center);
 
-        let m_pos =
-            BranchSectionPosition::new(m_child, pos.length - self.tree.branch_length_to_parent(m_child));
-        let s_pos =
-            BranchSectionPosition::new(s_child, pos.length - self.tree.branch_length_to_parent(s_child));
+        let m_pos = BranchSectionPosition::new(
+            m_child,
+            pos.length - self.tree.branch_length_to_parent(m_child),
+        );
+        let s_pos = BranchSectionPosition::new(
+            s_child,
+            pos.length - self.tree.branch_length_to_parent(s_child),
+        );
         let m_relative_pos = self
             .particles_on_section(m_pos)
             .into_iter()
@@ -95,10 +124,13 @@ impl VolumetricTree {
         m_relative_pos.reduce(f32::max) < s_relative_pos.reduce(f32::min)
     }
 
-
-    fn register_branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData, rng: &mut StdRng) -> Vec<usize> {
+    fn register_branch_contour(
+        &self,
+        pos: BranchSectionPosition,
+        mesh: &mut GeometryData,
+    ) -> Vec<usize> {
         let contour = self.branch_contour(pos, mesh);
-        mesh.register_points(&contour, rng)
+        mesh.register_points(&contour)
     }
 
     fn branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData) -> Vec<Vec3> {
@@ -109,7 +141,10 @@ impl VolumetricTree {
             println!("node {} has no particles", pos.node);
         }
 
-        let projected_points: Vec<Vec2> = points.iter().map(|x: &Vec3| self.tree.space_to_plane(parent, *x)).collect();
+        let projected_points: Vec<Vec2> = points
+            .iter()
+            .map(|x: &Vec3| self.tree.space_to_plane(parent, *x))
+            .collect();
 
         let center = self.tree.branch_section_center(pos);
         mesh.add_debug(center, Color::srgb(1.0, 1.0, 1.0));
@@ -133,7 +168,6 @@ impl VolumetricTree {
         pos: BranchSectionPosition,
         previous_contour: Vec<usize>,
         mesh: &mut GeometryData,
-        rng: &mut StdRng,
     ) -> (
         (BranchSectionPosition, Vec<usize>),
         (BranchSectionPosition, Vec<usize>),
@@ -148,7 +182,7 @@ impl VolumetricTree {
             let branch_length = self.tree.branch_length_to_parent(child);
             let pos = BranchSectionPosition::new(child, pos.length - branch_length);
             let center = self.tree.branch_section_center(pos);
-            let contour = self.register_branch_contour(pos, mesh, rng);
+            let contour = self.register_branch_contour(pos, mesh);
             (pos, center, contour)
         };
 
@@ -161,9 +195,8 @@ impl VolumetricTree {
         let s_dist_center = |i: &usize| (mesh.point(i) - s_c).length();
         let dist_center = |i: &usize| (mesh.point(i) - center).length();
 
-        let side = |i: &usize| {
-            Mat3::from_cols(m_c - s_c, normal, mesh.point(i) - center).determinant()
-        };
+        let side =
+            |i: &usize| Mat3::from_cols(m_c - s_c, normal, mesh.point(i) - center).determinant();
 
         let i_m_furthest = m_cont.iter().map(s_dist_center).arg_min().unwrap() as i32;
         let i_s_furthest = s_cont.iter().map(m_dist_center).arg_min().unwrap() as i32;
@@ -225,7 +258,6 @@ impl VolumetricTree {
         dz: f32,
         condition: impl Fn(BranchSectionPosition, &Self) -> bool,
         mesh: &mut GeometryData,
-        rng: &mut StdRng,
     ) -> BranchSectionPosition {
         let mut p = pos;
         assert!(dz != 0.);
@@ -234,12 +266,9 @@ impl VolumetricTree {
             if p.length > 1000. * dz {
                 panic!("stopping, the branch at position {p:?} is already too long")
             }
-            let current_contour = self.register_branch_contour(p, mesh, rng);
-            let triangles = mesh_between_contours(
-                &mesh.points(),
-                &previous_contour, 
-                &current_contour,
-                true);
+            let current_contour = self.register_branch_contour(p, mesh);
+            let triangles =
+                mesh_between_contours(&mesh.points(), &previous_contour, &current_contour, true);
             mesh.register_triangles(&triangles);
             *previous_contour = current_contour;
             p += dz;
@@ -247,7 +276,12 @@ impl VolumetricTree {
         p
     }
 
-    fn compute_each_branch_recursive(&self, root: usize, mut previous_contour: Vec<usize>, mesh: &mut GeometryData, rng: &mut StdRng) {
+    fn compute_each_branch_recursive(
+        &self,
+        root: usize,
+        mut previous_contour: Vec<usize>,
+        mesh: &mut GeometryData,
+    ) {
         let pos_root = BranchSectionPosition::new(root, 0.);
 
         let radius = self.tree.radius(root);
@@ -255,8 +289,9 @@ impl VolumetricTree {
 
         match self.tree.children(root) {
             [] => {
-                let leaf = self.tree.position(root) + self.tree.radius(root) * self.tree.normal(root);
-                let i_end = mesh.register_points(&vec![leaf], rng)[0];
+                let leaf =
+                    self.tree.position(root) + self.tree.radius(root) * self.tree.normal(root);
+                let i_end = mesh.register_points(&vec![leaf])[0];
                 let n = previous_contour.len();
                 for i in 0..n {
                     mesh.register_triangles(&[
@@ -268,60 +303,34 @@ impl VolumetricTree {
             }
             &[child] => {
                 let branch_length = self.tree.branch_length_to_parent(child);
-                self.compute_branch_while(pos_root, &mut previous_contour, dz, 
+                self.compute_branch_while(
+                    pos_root,
+                    &mut previous_contour,
+                    dz,
                     |p, _| p.length < branch_length,
                     mesh,
-                    rng
                 );
-                self.compute_each_branch_recursive(child, previous_contour, mesh, rng)
+                self.compute_each_branch_recursive(child, previous_contour, mesh)
             }
             &[m_child, s_child] => {
-                let pos_split =
-                    self.compute_branch_while(pos_root, &mut previous_contour, dz, |p, me| !me.branch_is_spliting(p), mesh, rng
-                    );
+                let pos_split = self.compute_branch_while(
+                    pos_root,
+                    &mut previous_contour,
+                    dz,
+                    |p, me| !me.branch_is_spliting(p),
+                    mesh,
+                );
 
                 let ((m_pos, mut m_cont), (s_pos, mut s_cont)) =
-                    self.compute_branch_join(pos_split, previous_contour, mesh, rng);
+                    self.compute_branch_join(pos_split, previous_contour, mesh);
 
-                self.compute_branch_while(m_pos, &mut m_cont, dz, 
-                    |p, _| p.length < 0.,
-                    mesh, rng
-                );
-                self.compute_each_branch_recursive(m_child, m_cont, mesh, rng);
+                self.compute_branch_while(m_pos, &mut m_cont, dz, |p, _| p.length < 0., mesh);
+                self.compute_each_branch_recursive(m_child, m_cont, mesh);
 
-                self.compute_branch_while(s_pos, &mut s_cont, dz, |p, _| 
-                    p.length < 0.,
-                    mesh, rng
-                );
-                self.compute_each_branch_recursive(s_child, s_cont, mesh, rng);
+                self.compute_branch_while(s_pos, &mut s_cont, dz, |p, _| p.length < 0., mesh);
+                self.compute_each_branch_recursive(s_child, s_cont, mesh);
             }
             _ => panic!("did not expect more than 2 childs for node {root}"),
         }
     }
-
 }
-
-impl VisualDebug for TrajectoryBuilder {
-    fn debug<R: rand::Rng + Clone>(&self, 
-        gizmos: &mut Gizmos,
-        rng: R,
-        debug_flags: crate::DebugFlags
-) {
-        if debug_flags.strands {
-            let mut rng = rng.clone();
-            for (i_t, traj) in self.trajectories.iter().enumerate() {
-                let a: f32 = i_t as f32 / self.trajectories.len() as f32;
-                let b : f32 = rng.gen();
-                let color = Color::srgb(1., 0.3+0.5*a, 0.3+0.5*b);
-                for i in 1..100 {
-                    let t1 = i as f32 / 100.;
-                    let t2 = (i + 1) as f32 / 100.;
-                    let pos1 = extended_catmull_spline(traj, SplineIndex::Global(t1));
-                    let pos2 = extended_catmull_spline(traj, SplineIndex::Global(t2));
-                    gizmos.line(pos1, pos2, color);
-                }
-            }
-        }
-    }
-}
-

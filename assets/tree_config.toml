@@ -1,0 +1,18 @@
+[grow]
+min_radius = 0.1
+max_turn_angle = 1.0
+min_split_angle = 0.4
+max_zigzag_angle = 0.4
+radius_to_branch_ratio = 4.0
+branch_variance = 0.5
+main_children_radius_factor = 0.8
+secondary_children_radius_factor = 0.5
+radius_variance = 0.1
+
+[strands]
+particles_per_leaf = 10
+repulsion = 0.1
+dt = 0.001
+n_steps = 10
+particle_size = 0.002
+
