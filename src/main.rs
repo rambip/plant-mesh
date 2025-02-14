@@ -144,6 +144,9 @@ impl AssetLoader for TreeConfigLoader {
             Ok(config)
         }
     }
+    fn extensions(&self) -> &[&str] {
+        &["toml"]
+    }
 }
 
 fn main() {
