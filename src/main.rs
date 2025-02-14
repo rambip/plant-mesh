@@ -2,22 +2,24 @@
 
 use crate::meshing::MeshConfig;
 use crate::meshing::VolumetricTree;
-use bevy::asset::AssetMetaCheck;
-use bevy::{asset::{AsyncReadExt, LoadContext}, input::{
-    gestures::PinchGesture,
-    mouse::{MouseMotion, MouseWheel},
-}};
 pub(crate) use bevy::prelude::*;
+use bevy::{
+    asset::{AsyncReadExt, LoadContext, AssetMetaCheck},
+    input::{
+        gestures::PinchGesture,
+        mouse::{MouseMotion, MouseWheel},
+    },
+};
 use growing::{GrowConfig, PlantNode, Seed, TreeSkeleton, TreeSkeletonDebugData};
-use meshing::{GeometryData, TrajectoryBuilder, StrandsConfig};
+use meshing::{GeometryData, StrandsConfig, TrajectoryBuilder};
 use rand::{rngs::StdRng, SeedableRng};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use shader::CustomEntity;
 use smallvec::SmallVec;
 use std::f32::consts::PI;
 
-use bevy_gizmos::prelude::Gizmos;
 use bevy::asset::AssetLoader;
+use bevy_gizmos::prelude::Gizmos;
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 struct DebugFlags {
@@ -152,17 +154,19 @@ impl AssetLoader for TreeConfigLoader {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    canvas: Some("#bevy".into()),
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        canvas: Some("#bevy".into()),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
                     ..default()
                 }),
-                ..default()
-            }).set(AssetPlugin {
-                meta_check: AssetMetaCheck::Never,
-                ..default()
-            })
         )
         .init_asset::<TreeConfig>()
         .register_asset_loader(TreeConfigLoader)
@@ -232,7 +236,7 @@ impl CameraSettings {
     fn transform(&self, time: f32) -> Transform {
         let mut camera = Transform::default();
         let angle = self.orbit_angle + if self.animate { 0.5 * time } else { 0. };
-        camera.rotation = 
+        camera.rotation =
               Quat::from_rotation_z(angle)
             * Quat::from_rotation_x(0.5*PI + self.tilt) // swap y and z
         ;
@@ -271,10 +275,10 @@ fn handle_input(
         camera_settings.orbit_angle += camera_settings.sensibility * time.delta_secs()
     }
     if keyboard.just_pressed(KeyCode::ArrowUp) {
-        camera_settings.tilt += 0.1*std::f32::consts::PI;
+        camera_settings.tilt += 0.1 * std::f32::consts::PI;
     }
     if keyboard.just_pressed(KeyCode::ArrowDown) {
-        camera_settings.tilt -= 0.1*std::f32::consts::PI;
+        camera_settings.tilt -= 0.1 * std::f32::consts::PI;
     }
     for ev in evr_motion.read() {
         if mouse.pressed(MouseButton::Left) {
@@ -360,29 +364,25 @@ fn draw_tree(
         let mut particle_builder = rng.clone().into();
         let mut mesh_builder = rng.clone().into();
 
-        let Some(tree_config) = configs.get(&tree_config_handle.0) else {return};
+        let Some(tree_config) = configs.get(&tree_config_handle.0) else {
+            return;
+        };
         let strands = Seed
             .grow::<PlantNode>(&tree_config.grow, &mut plant_builder)
             .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
             .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder);
-
 
         commands
             .entity(e)
             .insert((skeleton_builder, particle_builder));
 
         if camera_settings.show_mesh || flags.need_render_mesh() {
-            let tree_mesh = strands
-                .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
-
+            let tree_mesh = strands.grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
 
             let mesh = meshes.add(tree_mesh);
-            commands.entity(e)
-                .insert(Mesh3d(mesh));
+            commands.entity(e).insert(Mesh3d(mesh));
 
-            commands
-                .entity(e)
-                .insert(mesh_builder);
+            commands.entity(e).insert(mesh_builder);
         }
     }
 }

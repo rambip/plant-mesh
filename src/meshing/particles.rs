@@ -8,7 +8,10 @@ use rand::{prelude::Distribution, rngs::StdRng, Rng};
 
 use crate::{growing::TreeSkeleton, VisualDebug};
 
-use super::{algorithms::{extended_catmull_spline, SplineIndex}, StrandsConfig};
+use super::{
+    algorithms::{extended_catmull_spline, SplineIndex},
+    StrandsConfig,
+};
 
 struct UniformDisk {
     radius: f32,
@@ -36,7 +39,6 @@ fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let typical_distance = radius * (n as f32).sqrt();
     let max_force = config.max_force_factor * repulsion / typical_distance.squared() / config.dt;
 
-
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
 
     let scale = 0.9 * radius / max_radius;
@@ -59,9 +61,8 @@ fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
         for i in 0..n {
             let target_position = points[i] + config.dt * velocities[i];
             if target_position.length() > radius {
-                points[i] -= config.dt * wall_repulsion*target_position.normalize()
-            }
-            else {
+                points[i] -= config.dt * wall_repulsion * target_position.normalize()
+            } else {
                 points[i] = target_position;
             }
         }

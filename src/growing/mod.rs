@@ -48,7 +48,6 @@ pub struct PlantNode {
 
 pub struct Seed;
 
-
 #[derive(Component)]
 pub struct TreeSkeletonDebugData {
     copy: TreeSkeleton,
@@ -58,11 +57,7 @@ impl TreePipelinePhase for PlantNode {
     type Previous = Seed;
     type Config = GrowConfig;
     type Builder = StdRng;
-    fn generate_from(
-        _: Self::Previous,
-        config: &Self::Config,
-        rng: &mut Self::Builder
-        ) -> Self {
+    fn generate_from(_: Self::Previous, config: &Self::Config, rng: &mut Self::Builder) -> Self {
         let root = PlantNodeProps {
             radius: 0.5,
             orientation: Quat::default(),
@@ -76,11 +71,7 @@ impl TreePipelinePhase for TreeSkeleton {
     type Previous = PlantNode;
     type Config = ();
     type Builder = TreeSkeletonDebugData;
-    fn generate_from(
-        prev: Self::Previous,
-        _: &Self::Config, 
-        cache: &mut Self::Builder
-        ) -> Self {
+    fn generate_from(prev: Self::Previous, _: &Self::Config, cache: &mut Self::Builder) -> Self {
         let mut node_props = Vec::new();
         prev.register_node_properties(&mut node_props);
         let mut node_info = Vec::new();
@@ -321,8 +312,7 @@ impl TreeSkeleton {
     pub fn branch_section_center(&self, pos: BranchSectionPosition) -> Vec3 {
         if pos.length == 0. {
             self.node_props[pos.node].position
-        }
-        else if pos.length < 0. {
+        } else if pos.length < 0. {
             let parent = self
                 .parent(pos.node)
                 .expect("there is no branch under root");

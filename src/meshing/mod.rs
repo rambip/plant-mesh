@@ -62,10 +62,11 @@ impl TreePipelinePhase for Mesh {
     type Previous = VolumetricTree;
     type Config = MeshConfig;
     type Builder = GeometryData;
-    fn generate_from(prev: Self::Previous, 
-        config: &Self::Config, 
-        builder: &mut Self::Builder
-        ) -> Self {
+    fn generate_from(
+        prev: Self::Previous,
+        config: &Self::Config,
+        builder: &mut Self::Builder,
+    ) -> Self {
         let pos_root = BranchSectionPosition::new(prev.tree.root(), 0.);
         let root_section = prev.register_branch_contour(pos_root, builder);
         prev.compute_each_branch_recursive(prev.tree.root(), root_section, builder, config);
@@ -76,10 +77,9 @@ impl TreePipelinePhase for Mesh {
 
 impl VolumetricTree {
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
-        let t = if pos.length == 0.{
+        let t = if pos.length == 0. {
             0.
-        }
-        else if pos.length < 0. {
+        } else if pos.length < 0. {
             let parent = self.tree.parent(pos.node).unwrap();
             let branch_len = (self.tree.position(pos.node) - self.tree.position(parent)).length();
             (branch_len + pos.length) / branch_len
@@ -129,12 +129,8 @@ impl VolumetricTree {
         let m_part = self.particles_on_section(m_pos);
         let s_part = self.particles_on_section(s_pos);
 
-        let m_relative_pos = m_part
-            .into_iter()
-            .map(pos_along_dir);
-        let s_relative_pos = s_part
-            .into_iter()
-            .map(pos_along_dir);
+        let m_relative_pos = m_part.into_iter().map(pos_along_dir);
+        let s_relative_pos = s_part.into_iter().map(pos_along_dir);
 
         m_relative_pos.reduce(f32::max) < s_relative_pos.reduce(f32::min)
     }
@@ -195,8 +191,7 @@ impl VolumetricTree {
 
         let mut compute_properties = |child| {
             let branch_length = self.tree.branch_length_to_parent(child);
-            let pos = BranchSectionPosition::new(child, 
-                f32::min(0., pos.length - branch_length));
+            let pos = BranchSectionPosition::new(child, f32::min(0., pos.length - branch_length));
             let center = self.tree.branch_section_center(pos);
             let contour = self.register_branch_contour(pos, mesh);
             (pos, center, contour)
@@ -205,7 +200,10 @@ impl VolumetricTree {
         let (m_p, m_c, m_cont) = compute_properties(m_child);
         let (s_p, s_c, s_cont) = compute_properties(s_child);
 
-        assert!(m_cont.len() >= 3 && s_cont.len() >= 3, "not enough particles in the branch to compute join");
+        assert!(
+            m_cont.len() >= 3 && s_cont.len() >= 3,
+            "not enough particles in the branch to compute join"
+        );
         let center = 0.5 * (m_c + s_c);
 
         let m_dist_center = |i: &usize| (mesh.point(i) - m_c).length();
@@ -298,7 +296,7 @@ impl VolumetricTree {
         root: usize,
         mut previous_contour: Vec<usize>,
         mesh: &mut GeometryData,
-        config: &MeshConfig
+        config: &MeshConfig,
     ) {
         let pos_root = BranchSectionPosition::new(root, 0.);
 
@@ -324,17 +322,17 @@ impl VolumetricTree {
                     normal: self.tree.normal(root),
                 };
 
-                let p1 = leaf+mesh.rng.sample(random_point_distrib);
-                let p2 = leaf+mesh.rng.sample(random_point_distrib);
-                let i_leaf = mesh.register_points_leaf(&[
-                    leaf, p1, p2 ]
-                )[0];
+                let p1 = leaf + mesh.rng.sample(random_point_distrib);
+                let p2 = leaf + mesh.rng.sample(random_point_distrib);
+                let i_leaf = mesh.register_points_leaf(&[leaf, p1, p2])[0];
                 mesh.register_triangles(&[
-                    i_leaf, i_leaf+1, i_leaf+2,
-                    i_leaf, i_leaf+2, i_leaf+1,
+                    i_leaf,
+                    i_leaf + 1,
+                    i_leaf + 2,
+                    i_leaf,
+                    i_leaf + 2,
+                    i_leaf + 1,
                 ]);
-
-
             }
             &[child] => {
                 let branch_length = self.tree.branch_length_to_parent(child);
