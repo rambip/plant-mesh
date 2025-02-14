@@ -101,13 +101,13 @@ mod meshing;
 mod shader;
 mod tools;
 
-// TODO: translate to component
 #[derive(Component, Serialize, Deserialize, TypePath, Asset)]
 struct TreeConfig {
     grow: GrowConfig,
     strands: StrandsConfig,
 }
 
+// TODO: easiest way to do it ?
 #[derive(Component)]
 struct TreeConfigHandle(Handle<TreeConfig>);
 
@@ -190,9 +190,10 @@ fn setup(
 
 #[derive(Resource, Debug)]
 struct CameraSettings {
-    pub orbit_distance: f32,
-    pub orbit_angle: f32,
-    pub sensibility: f32,
+    orbit_distance: f32,
+    orbit_angle: f32,
+    sensibility: f32,
+    tilt: f32,
     z: f32,
     animate: bool,
     show_mesh: bool,
@@ -205,6 +206,7 @@ impl Default for CameraSettings {
             orbit_angle: 0.,
             sensibility: 1.,
             z: 5.,
+            tilt: 0.,
             animate: true,
             show_mesh: true,
         }
@@ -214,8 +216,9 @@ impl CameraSettings {
     fn transform(&self, time: f32) -> Transform {
         let mut camera = Transform::default();
         let angle = self.orbit_angle + if self.animate { 0.5 * time } else { 0. };
-        camera.rotation = Quat::from_rotation_z(angle)
-                        * Quat::from_rotation_x(0.5*PI) // swap y and z
+        camera.rotation = 
+              Quat::from_rotation_z(angle)
+            * Quat::from_rotation_x(0.5*PI + self.tilt) // swap y and z
         ;
 
         // Adjust the translation to maintain the correct orientation toward the orbit target.
@@ -250,6 +253,12 @@ fn handle_input(
     }
     if keyboard.pressed(KeyCode::ArrowLeft) {
         camera_settings.orbit_angle += camera_settings.sensibility * time.delta_secs()
+    }
+    if keyboard.just_pressed(KeyCode::ArrowUp) {
+        camera_settings.tilt += 0.1*std::f32::consts::PI;
+    }
+    if keyboard.just_pressed(KeyCode::ArrowDown) {
+        camera_settings.tilt -= 0.1*std::f32::consts::PI;
     }
     for ev in evr_motion.read() {
         if mouse.pressed(MouseButton::Left) {
