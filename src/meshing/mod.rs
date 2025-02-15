@@ -1,6 +1,6 @@
 mod algorithms;
 mod mesh_builder;
-mod particles;
+pub mod particles;
 pub use mesh_builder::GeometryData;
 
 use bevy::color::Color;
@@ -30,7 +30,7 @@ pub struct StrandsConfig {
     pub wall_repulsion: f32,
     pub dt: f32,
     pub n_steps: usize,
-    pub max_force_factor: f32,
+    pub max_velocity_factor: f32,
 }
 
 impl TreePipelinePhase for VolumetricTree {

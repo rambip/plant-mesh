@@ -14,30 +14,31 @@ use super::{
 };
 
 pub struct UniformDisk {
+    center: Vec2,
     radius: f32,
 }
 
 impl UniformDisk {
-    fn new(radius: f32) -> Self {
-        Self { radius }
+    pub fn new(center: Vec2,radius: f32) -> Self {
+        Self { center, radius }
     }
 }
 
 impl Distribution<Vec2> for UniformDisk {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec2 {
-        Vec2::from_angle(rng.gen_range(0f32..std::f32::consts::TAU))
+        self.center +
+            Vec2::from_angle(rng.gen_range(0f32..std::f32::consts::TAU))
             * self.radius
             * rng.gen_range(0f32..1f32).sqrt()
     }
 }
 
-fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
+pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let n = points.len();
     let mut velocities = vec![Vec2::ZERO; n];
     let wall_repulsion = config.wall_repulsion * radius;
     let repulsion = config.repulsion * radius.squared() / (n as f32).sqrt();
-    let typical_distance = radius * (n as f32).sqrt();
-    let max_force = config.max_force_factor * repulsion / typical_distance.squared() / config.dt;
+    let max_velocity = radius * config.max_velocity_factor / config.dt;
 
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
 
@@ -53,15 +54,18 @@ fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
             for j in 0..n {
                 if i != j {
                     let relative_pos = points[i] - points[j];
-                    let force = f32::min(max_force, repulsion / relative_pos.length_squared());
+                    let force = repulsion / relative_pos.length_squared();
                     velocities[i] += force * relative_pos.normalize();
                 }
+            }
+            if velocities[i].length() > max_velocity {
+                velocities[i] = max_velocity * velocities[i].normalize()
             }
         }
         for i in 0..n {
             let target_position = points[i] + config.dt * velocities[i];
             if target_position.length() > radius {
-                points[i] -= config.dt * wall_repulsion * target_position.normalize()
+                points[i] -= wall_repulsion * target_position.normalize()
             } else {
                 points[i] = target_position;
             }
@@ -159,7 +163,7 @@ impl TrajectoryBuilder {
                 let mut cloud = self
                     .rng
                     .clone()
-                    .sample_iter(UniformDisk::new(radius))
+                    .sample_iter(UniformDisk::new(Vec2::ZERO, radius))
                     .take(config.particles_per_leaf)
                     .collect();
 

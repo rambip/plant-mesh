@@ -82,5 +82,6 @@ pub use growing::{
     TreeSkeletonDebugData
 };
 pub use meshing::{
-    StrandsConfig, MeshConfig, GeometryData,  VolumetricTree, TrajectoryBuilder
+    StrandsConfig, MeshConfig, GeometryData,  VolumetricTree, TrajectoryBuilder,
+    particles::spread_points
 };
