@@ -1,5 +1,5 @@
 [grow]
-min_radius = 0.05
+min_radius = 0.03
 max_turn_angle = 1.0
 min_split_angle = 0.4
 max_zigzag_angle = 0.3
@@ -14,8 +14,9 @@ particles_per_leaf = 10
 wall_repulsion = 0.01
 repulsion = 0.1
 dt = 0.05
-n_steps = 15
+n_steps = 20
 max_velocity_factor = 0.05
+jump = 5
 
 [mesh]
 leaf_size = 0.5

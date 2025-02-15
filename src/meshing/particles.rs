@@ -33,30 +33,42 @@ impl Distribution<Vec2> for UniformDisk {
     }
 }
 
+fn compute_neighbourgs(points: &[Vec2], d: f32) -> Vec<Vec<usize>> {
+    let n = points.len();
+    (0..n)
+    .map(|i| (0..n).filter(
+            |&j| i != j && (points[i] - points[j]).length() < d)
+        .collect())
+    .collect()
+}
+
 pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let n = points.len();
     let mut velocities = vec![Vec2::ZERO; n];
     let wall_repulsion = config.wall_repulsion * radius;
     let repulsion = config.repulsion * radius.squared() / (n as f32).sqrt();
+    let typical_distance = 5.*radius / (n as f32).sqrt();
     let max_velocity = radius * config.max_velocity_factor / config.dt;
 
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
 
     let scale = 0.9 * radius / max_radius;
-
     for i in 0..n {
         points[i] *= scale;
     }
 
-    for _ in 0..config.n_steps {
+    let mut neighbourgs = vec![];
+
+    for step in 0..config.n_steps {
+        if step % config.jump == 0 {
+            neighbourgs = compute_neighbourgs(&points, typical_distance);
+        }
         for i in 0..n {
             velocities[i] = Vec2::ZERO;
-            for j in 0..n {
-                if i != j {
-                    let relative_pos = points[i] - points[j];
-                    let force = repulsion / relative_pos.length_squared();
-                    velocities[i] += force * relative_pos.normalize();
-                }
+            for &j in &neighbourgs[i] {
+                let relative_pos = points[i] - points[j];
+                let force = repulsion / relative_pos.length_squared();
+                velocities[i] += force * relative_pos.normalize();
             }
             if velocities[i].length() > max_velocity {
                 velocities[i] = max_velocity * velocities[i].normalize()

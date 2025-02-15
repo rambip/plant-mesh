@@ -11,6 +11,8 @@
 
 ])
 
+#set heading(numbering:"1.1")
+
 In this project, I tried to reproduce and extend the work done in:
 
 Bosheng Li, Nikolas A. Schwarz, Wojtek Pałubicki, Sören Pirk, and Bedrich
@@ -186,8 +188,7 @@ diagram(
 ))
 }
 
-
-= Step 1
+== Step 1
 
 As I said, I will detail the plant growing strategy later.
 
@@ -197,30 +198,206 @@ For all the tests and illustrations you will see, I used a manually crafted tree
 #align(center, image("images/manually_crafted_tree.png", width: 30%))
 
 
-= Step 2: Particle flow and interpolation
+== Step 2: Particle flow and interpolation
 
 *code*: `src/meshing/particles.rs`
 
-- particle positioning
-    - 1) projection
-    - 2) offsets
-    - 3) particle based dynamics
+
+The pseudo-code for this step is the following:
+
+```
+compute_paticles(node):
+    if node is a leaf:
+        create a set of particles for this leaf
+    else:
+        for each child:
+            compute_particles(child)
+        project particles onto parent
+        do particle based collision detection
+        return the set of particles
+```
+
+As you see, they are 2 main parts in this algorithm:
+- projecting the particles
+- doing the particle simulation
+
+#note[
+The paper proposed to use arbitrary shaped for the section, I only implemented circles. It may improve slightly the diversity of possible trees, but most trees have circular branches.
+]
+
+=== Particle projection
+
+When there is only one child, the projection operation is pretty easy. For 2 children, it is more complicated.
+The paper did not describe how they defined the projection entirely, so I had to interpret what they did.
+
+We want to compute the positions of the 2 clouds of points (orange and red) on the root parent plane:
+
+#image("images/projection_1.svg")
+
+The first step is to use the position of the parent and the 2 children to compute the important directions:
+- from child1 to parent
+- from child2 to parent
+- from child1 to child2, in the parent plane
+
+#image("images/projection_2.svg")
 
 
-- recurring problem: strands "demangling"
-    - the strands are based on particle positions, and they can easily mix together
-        - particles inside move outside
-        - particles a and b are swaped
+Then, the a point on the cloud of child1 will be projected on the plane parallel to $D_1$ and moved with an offset in the direction of -$D_{12}$. Similarly, a point in the cloud of child2 will be projected parralel to $D_2$ and offset in the direction $D_12$.
 
-    - problem in the meshing algorithm: vertices can appear and disappear.
-        - rectangles when 2 particles are present before and after
-        - triangle when two particles merge
-        - triangle when one particle merge into two
-        - case when one particle is replaced or 2 particles swap: we hope it will not appear ?
+The offsets are calculated such that the two set of points are adjacent in the parent plane.
+
+
+After projection and scaling, the particle trajectories look like:
+#image("images/strands_without_collision.png")
+
+=== Particle simulation
+
+Again, the paper was not very precise regarding the type of particle simulation they used.
+
+I tried to use an electrostatic-like repulsion force, with collisions on the border. The force is defined as:
+
+$
+arrow(F_(a b)) = -k/(A B)^2 arrow(u_(a b))
+$
+
+My simulation has normalized parameters like:
+- the repulsion force between particles
+- the repulsion force with the wall
+- the time step
+
+For numeric stability, I had to update the parameters depending on the radius and the number of particles. For example, the repulsion is proportionnal to the radius squared. 
+
+I used an euler integration scheme.
+
+Here is the result on an example:
+
+#for i in range(1,9) {
+    image("images/particles_visu_a"+str(i)+".png")
+}
+
+It works, but as you can see there is a problem: there are too much particles on the contours and not enough inside. This is due to the fact that the initial speed of the particles is too high.
+
+To solve this problem, I introduced a maximum velocity. I also multiplied the repulsion constant by $1/sqrt(N)$ where $N$ is the number of particles. This way, the average speed is the same no matter the number of particles.
+
+
+
+#for i in range(1,8) {
+    image("images/particles_visu_b"+str(i)+".png")
+}
+
+
+Before:
+#image("images/base_strands_non_uniform.png")
+
+After:
+#image("images/base_strands_uniform.png")
+
+
+The particle simulation step is also the most resource-intensive part, because of the $O(n^2)$ complexity to compute the interactions between particles. (see @performance). This is why I tried to optimize it, by constructing the neighbourgs less frequently.
+
+
+#image("images/numerical_instability.png")
+
+
+
+=== Strands
+
+Once we know the particle positions on each node, we can interpolate them using splines.
+
+The paper proposed *B-splines*, but as this type of spline does not interploate the points, I chose the #link("https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline")[Catmull-Rom spline].
+
+A very frequent problem in this project is strands "mangling". After the projection operations and the simulation, strands can:
+- go inside or outside the branch
+- turn one around another
+
+This can cause a number of problems for the next steps, like contours calculation and triangulation. The paper proposed some techniques like swapping the points positions when it is minimizes the distance, but I did not implement it.
+
+#image("images/strands_zigzag.png")
+
+
 
 = Step 3: Contours calculation
 
 *code*: `src/meshing/mod.rs`
+
+
+The pseudo-code for this part is the following:
+
+```
+compute_contours(points):
+    // project
+
+compute_contours(node):
+    if node is a leaf:
+        stop
+    else if one children:
+        for each position from parent to children:
+            
+            
+    else if 2 children:
+        while branch does not split:
+            
+        
+
+        
+```
+
+TODO: computing branch split ?
+
+
+Note that this algorithm is bottom-up, contrary to the previous one which is top-down.
+
+
+=== Parametrization
+
+At the start, I used a fixed number of steps for each branch. This resulted in a non-uniform mesh:
+
+#image("images/mesh_non_uniform_triangulation.png")
+
+Other issue: When the two children branches are not the same length, it creates a gap between the 2 sides:
+
+#image("images/tree_branch_non_uniform.svg")
+
+After, I changed the approach to create a fixed-length step.
+
+The branch position is defined by :
+- the node 
+- a signed length from this node
+
+```rust
+pub struct BranchSectionPosition {
+    // the node being considered
+    pub node: usize,
+    // the distance we traveled from the node to the leaves
+    // it can be negative, in this case we consider the parent
+    pub length: f32,
+}
+```
+
+It was a lot better:
+
+#image("images/mesh_uniform_triangulation.png")
+
+New error: 
+
+#image("images/step_error_branch_node.png")
+
+(you can see the gap is too big)
+
+
+New solution: do not reset the branch position after new node.
+
+Then: 
+
+#image("images/trunk_very_regular.png")
+
+
+
+
+=== Point selection and convex hull
+
+#image("images/ugly_contours.png")
+#image("images/convex_hull_points.png")
 
 we go from bottom to top(s)
 
@@ -246,9 +423,6 @@ we go from bottom to top(s)
 - parametrization: if 2 branches are not the same size, it's very hard to merge them.
 We must find the right step size for both
 
-#image("images/tree_branch_non_uniform.svg")
-#image("images/mesh_non_uniform_triangulation.png")
-#image("images/mesh_uniform_triangulation.png")
 
 
 but it is still an issue for branch fusion. To have a really regular mesh, the solution would be to have a good reparametrization of the spline. I decided not to go this way but to approximate it branch section by branch section. It works until there is a large ratio between the lengths of the 2 branches.
@@ -347,3 +521,8 @@ setting the right parameter for the convex hull / delaunay treshold is hard.
 #diagram(branches(),
     node((0, 0), box({set text(stroke: blue); $times$}))
 )
+
+
+= Analysis
+
+== Performance <performance>

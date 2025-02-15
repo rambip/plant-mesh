@@ -31,6 +31,7 @@ pub struct StrandsConfig {
     pub dt: f32,
     pub n_steps: usize,
     pub max_velocity_factor: f32,
+    pub jump: usize,
 }
 
 impl TreePipelinePhase for VolumetricTree {
