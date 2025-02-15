@@ -1,7 +1,5 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
 
-use crate::meshing::MeshConfig;
-use crate::meshing::VolumetricTree;
 pub(crate) use bevy::prelude::*;
 use bevy::{
     asset::{AsyncReadExt, LoadContext, AssetMetaCheck},
@@ -10,106 +8,32 @@ use bevy::{
         mouse::{MouseMotion, MouseWheel},
     },
 };
-use growing::{GrowConfig, PlantNode, Seed, TreeSkeleton, TreeSkeletonDebugData};
-use meshing::{GeometryData, StrandsConfig, TrajectoryBuilder};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use shader::CustomEntity;
-use smallvec::SmallVec;
 use std::f32::consts::PI;
 
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
-#[derive(Copy, Clone, Default, Debug, Resource)]
-struct DebugFlags {
-    triangles: bool,
-    strands: bool,
-    skeleton: bool,
-    other: bool,
-    contours: bool,
-}
-
-impl DebugFlags {
-    fn need_render_mesh(&self) -> bool {
-        self.triangles || self.other || self.contours
-    }
-}
-
-#[derive(Clone)]
-pub struct NodeInfo {
-    pub depth: usize,
-    pub parent: Option<usize>,
-    // id in prefix traversal order of tree
-    pub id: usize,
-    // TODO: bigger children first
-    pub children: SmallVec<[usize; 2]>,
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct PlantNodeProps {
-    pub position: Vec3,
-    pub radius: f32,
-    pub orientation: Quat,
-}
-
-trait VisualDebug {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags);
-}
-
-impl VisualDebug for () {
-    fn debug(&self, _: &mut Gizmos, _: DebugFlags) {}
-}
-
-impl<T> VisualDebug for Option<&T>
-where
-    T: VisualDebug,
-{
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags) {
-        self.as_ref().map(|x| x.debug(gizmos, debug_flags));
-    }
-}
-
-impl VisualDebug for StdRng {
-    fn debug(&self, _: &mut Gizmos, _: DebugFlags) {}
-}
-
-trait TreePipelinePhase {
-    type Previous;
-    type Config: Copy + Serialize + Deserialize<'static>;
-    type Builder: VisualDebug + From<StdRng>;
-
-    fn generate_from(
-        prev: Self::Previous,
-        config: &Self::Config,
-        builder: &mut Self::Builder,
-    ) -> Self;
-}
-
-trait Grow {
-    fn grow<Next>(self, config: &Next::Config, cache: &mut Next::Builder) -> Next
-    where
-        Next: TreePipelinePhase<Previous = Self>;
-}
-
-impl<T> Grow for T {
-    fn grow<Next>(
-        self,
-        config: &<Next as TreePipelinePhase>::Config,
-        builder: &mut <Next as TreePipelinePhase>::Builder,
-    ) -> Next
-    where
-        Next: TreePipelinePhase<Previous = T>,
-    {
-        Next::generate_from(self, config, builder)
-    }
-}
-
-mod growing;
-mod meshing;
 
 mod shader;
-mod tools;
+
+use plant_mesh::{
+    GrowConfig,
+    StrandsConfig,
+    MeshConfig,
+    DebugFlags,
+    Seed,
+    GeometryData,
+    TreeSkeleton,
+    Grow,
+    PlantNode,
+    TreeSkeletonDebugData,
+    VisualDebug,
+    VolumetricTree,
+    TrajectoryBuilder
+};
 
 #[derive(Component, Serialize, Deserialize, TypePath, Asset)]
 struct TreeConfig {

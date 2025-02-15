@@ -10,6 +10,13 @@ use smallvec::SmallVec;
 
 use crate::VisualDebug;
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PlantNodeProps {
+    pub position: Vec3,
+    pub radius: f32,
+    pub orientation: Quat,
+}
+
 #[derive(Clone)]
 pub struct NodeInfo {
     pub depth: usize,
@@ -22,13 +29,6 @@ pub struct NodeInfo {
 
 mod generation;
 pub use generation::GrowConfig;
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct PlantNodeProps {
-    pub position: Vec3,
-    pub radius: f32,
-    pub orientation: Quat,
-}
 
 impl PlantNodeProps {
     fn new(position: Vec3, radius: f32, orientation: Vec3) -> Self {

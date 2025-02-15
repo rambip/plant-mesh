@@ -13,7 +13,7 @@ use super::{
     StrandsConfig,
 };
 
-struct UniformDisk {
+pub struct UniformDisk {
     radius: f32,
 }
 
