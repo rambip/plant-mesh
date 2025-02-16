@@ -1,5 +1,4 @@
 use crate::TreePipelinePhase;
-use std::ops::{Add, AddAssign};
 
 use bevy::color::Color;
 use bevy::math::{Isometry3d, Quat, Vec2, Vec3};
@@ -181,37 +180,6 @@ impl PlantNode {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct BranchSectionPosition {
-    // the node being considered
-    pub node: usize,
-    // the distance we traveled from the node to the leaves
-    // it can be negative, in this case we consider the parent
-    pub length: f32,
-}
-
-impl Add<f32> for BranchSectionPosition {
-    type Output = BranchSectionPosition;
-
-    fn add(self, rhs: f32) -> Self::Output {
-        Self {
-            node: self.node,
-            length: self.length + rhs,
-        }
-    }
-}
-
-impl AddAssign<f32> for BranchSectionPosition {
-    fn add_assign(&mut self, rhs: f32) {
-        self.length += rhs
-    }
-}
-
-impl BranchSectionPosition {
-    pub fn new(node: usize, length: f32) -> Self {
-        Self { node, length }
-    }
-}
 
 #[derive(Clone)]
 pub struct TreeSkeleton {
@@ -315,28 +283,5 @@ impl TreeSkeleton {
 
     pub(crate) fn children(&self, root: usize) -> &[usize] {
         &self.node_info[root].children[..]
-    }
-
-    pub fn branch_section_center(&self, pos: BranchSectionPosition) -> Vec3 {
-        if pos.length == 0. {
-            self.node_props[pos.node].position
-        } else if pos.length < 0. {
-            let parent = self
-                .parent(pos.node)
-                .expect("there is no branch under root");
-            let length = self.branch_length_to_parent(pos.node);
-            self.node_props[pos.node]
-                .position
-                .lerp(self.node_props[parent].position, -pos.length / length)
-        } else {
-            let length = self.min_branch_length_to_children(pos.node);
-            let child = *self.node_info[pos.node]
-                .children
-                .get(0)
-                .expect("there is no branch after this leaf");
-            self.node_props[pos.node]
-                .position
-                .lerp(self.node_props[child].position, pos.length / length)
-        }
     }
 }

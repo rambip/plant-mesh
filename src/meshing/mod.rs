@@ -4,12 +4,12 @@ pub mod particles;
 pub use mesh_builder::GeometryData;
 
 use bevy::color::Color;
-use bevy::math::{Mat3, Quat, Vec2, Vec3};
+use bevy::math::{FloatExt, Mat3, Quat, Vec2, Vec3};
 use bevy::prelude::{Component, Mesh};
 use rand::prelude::Distribution;
 use rand::Rng;
 
-use crate::growing::{BranchSectionPosition, TreeSkeleton};
+use crate::growing::TreeSkeleton;
 use crate::tools::{split_slice_circular, FloatProducer};
 use crate::TreePipelinePhase;
 
@@ -58,6 +58,7 @@ pub struct MeshConfig {
     leaf_size: f32,
     leaf_angle: f32,
     interior_angle: f32,
+    spacing: f32,
 }
 
 impl TreePipelinePhase for Mesh {
@@ -69,164 +70,97 @@ impl TreePipelinePhase for Mesh {
         config: &Self::Config,
         builder: &mut Self::Builder,
     ) -> Self {
-        let pos_root = BranchSectionPosition::new(prev.tree.root(), 0.);
-        let root_section = prev.register_branch_contour(pos_root, builder, config);
-        prev.compute_each_branch_recursive(pos_root, root_section, builder, config);
+        let spline_index = SplineIndex::Local(0, 0.);
+        let points_base = 
+            prev.particles_per_node[0]
+                .iter()
+                .map(|&particle| extended_catmull_spline(&prev.trajectories[particle], spline_index));
+        let contour = builder.register_points_trunk(points_base);
+        prev.compute_each_branch_recursive(0, 0., contour, builder, config);
 
         builder.to_mesh()
     }
 }
 
 impl VolumetricTree {
-    fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
-        let depth = self.tree.depth(pos.node);
-        if pos.length == 0. {
-            let spline_index = SplineIndex::Local(depth, 0.);
-            self.particles_per_node[pos.node]
-                .iter()
-                .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
-                .collect()
-        } else if pos.length < 0. {
-            let parent = self.tree.parent(pos.node).unwrap();
-            let branch_len = (self.tree.position(pos.node) - self.tree.position(parent)).length();
-            let t = (branch_len + pos.length) / branch_len;
-            let spline_index = SplineIndex::Local(depth-1, t);
-            self.particles_per_node[pos.node]
-                .iter()
-                .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
-                .collect()
-        } else {
-            match self.tree.children(pos.node) {
-                &[child] => {
-                    let t = pos.length / self.tree.branch_length_to_parent(child);
-                    let spline_index = SplineIndex::Local(depth, t);
-                    self.particles_per_node[pos.node]
-                        .iter()
-                        .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
-                        .collect()
-                },
-                &[child1, child2] => {
-                    let t1 = pos.length / self.tree.branch_length_to_parent(child1);
-                    let t2 = pos.length / self.tree.branch_length_to_parent(child2);
-                    let spline_index_1 = SplineIndex::Local(depth, t1);
-                    let spline_index_2 = SplineIndex::Local(depth, t2);
-                    let part_1 = self.particles_per_node[child1]
-                        .iter()
-                        .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index_1));
-                    let part_2 = self.particles_per_node[child2]
-                        .iter()
-                        .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index_2));
+    fn branch_is_spliting(&self, 
+        parent: usize,
+        m_child: usize,
+        s_child: usize,
+        l: f32,
+        ) -> bool {
+        let depth = self.tree.depth(parent);
+        let m_t = l / self.tree.branch_length_to_parent(m_child);
+        let m_spline_index = SplineIndex::Local(depth, m_t);
 
-                    part_1.chain(part_2).collect()
-                },
-                _ => panic!("leaf does not have outgoing branch")
+        let s_t = l / self.tree.branch_length_to_parent(s_child);
+        let s_spline_index = SplineIndex::Local(depth, s_t);
+
+        let radius = self.tree.radius(parent);
+
+        let m_part: Vec<Vec3> = self.particles_per_node[m_child]
+            .iter()
+            .map(|&particle| extended_catmull_spline(&self.trajectories[particle], m_spline_index))
+            .collect();
+
+        let s_part: Vec<Vec3> = self.particles_per_node[s_child]
+            .iter()
+            .map(|&particle| extended_catmull_spline(&self.trajectories[particle], s_spline_index))
+            .collect();
+
+        let mut min_dist = f32::INFINITY;
+        for &m in &m_part {
+            for &s in &s_part {
+                min_dist = f32::min(min_dist, (m-s).length());
             }
         }
 
-    }
-
-    fn branch_is_spliting(&self, pos: BranchSectionPosition) -> bool {
-        if self.tree.children(pos.node).len() != 2 {
-            return false;
-        };
-        let m_child = self.tree.children(pos.node)[0];
-        let s_child = self.tree.children(pos.node)[1];
-
-        let t = pos.length / self.tree.average_branch_length_to_children(pos.node);
-        let m_center = self
-            .tree
-            .position(pos.node)
-            .lerp(self.tree.position(m_child), t);
-        let s_center = self
-            .tree
-            .position(pos.node)
-            .lerp(self.tree.position(s_child), t);
-
-        let pos_along_dir = |a: Vec3| a.dot(s_center - m_center);
-
-        let m_pos = BranchSectionPosition::new(
-            m_child,
-            f32::min(0., pos.length - self.tree.branch_length_to_parent(m_child)),
-        );
-        let s_pos = BranchSectionPosition::new(
-            s_child,
-            f32::min(0., pos.length - self.tree.branch_length_to_parent(s_child)),
-        );
-        let m_part = self.particles_on_section(m_pos);
-        let s_part = self.particles_on_section(s_pos);
-
-        let m_relative_pos = m_part.into_iter().map(pos_along_dir);
-        let s_relative_pos = s_part.into_iter().map(pos_along_dir);
-
-        m_relative_pos.reduce(f32::max) < s_relative_pos.reduce(f32::min)
-    }
-
-    fn register_branch_contour(
-        &self,
-        pos: BranchSectionPosition,
-        mesh: &mut GeometryData,
-        config: &MeshConfig,
-    ) -> Vec<usize> {
-        let contour = self.branch_contour(pos, mesh, config);
-        mesh.register_points_trunk(&contour)
-    }
-
-    fn branch_contour(&self, pos: BranchSectionPosition, mesh: &mut GeometryData, config: &MeshConfig) -> Vec<Vec3> {
-        let parent = pos.node;
-        let points = self.particles_on_section(pos);
-
-        if points.len() == 0 {
-            println!("node {} has no particles", pos.node);
-        }
-
-        let projected_points: Vec<Vec2> = points
-            .iter()
-            .map(|x: &Vec3| self.tree.space_to_plane(parent, *x))
-            .collect();
-
-        let center = self.tree.branch_section_center(pos);
-        mesh.add_debug(center, Color::srgb(1.0, 1.0, 1.0));
-        let center = self.tree.space_to_plane(parent, center);
-        let result: Vec<Vec3> = convex_hull_graham(
-            Some(center),
-            &projected_points,
-            Some(config.interior_angle),
-        )
-        .into_iter()
-        // TODO: project point to avoid strands with too much diff ?
-        .map(|i| points[i])
-        .collect();
-        mesh.add_contour(&result);
-
-        result
+        min_dist >= 0.1 * radius
     }
 
     fn compute_branch_join(
         &self,
-        pos: BranchSectionPosition,
+        parent: usize,
+        m_child: usize,
+        s_child: usize,
+        l: f32,
         previous_contour: Vec<usize>,
         mesh: &mut GeometryData,
         config: &MeshConfig,
-    ) -> (
-        (BranchSectionPosition, Vec<usize>),
-        (BranchSectionPosition, Vec<usize>),
-    ) {
-        assert!(self.tree.children(pos.node).len() == 2);
-        let normal = self.tree.normal(pos.node);
+    ) -> ( Vec<usize>, Vec<usize>) {
+        let normal = self.tree.normal(parent);
+        let depth = self.tree.depth(parent);
 
-        let m_child = self.tree.children(pos.node)[0];
-        let s_child = self.tree.children(pos.node)[1];
+        let mut compute_properties = |child: usize| {
+            let branch_len = self.tree.branch_length_to_parent(child);
+            let t = l / branch_len;
+            let center = self.tree.position(parent).lerp(
+                self.tree.position(child), t);
+            let spline_index = SplineIndex::Local(depth, t);
+            let points: Vec<Vec3> = self.particles_per_node[child]
+                .iter()
+                .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
+                .collect();
+            let projected_points: Vec<Vec2> = points
+                .iter()
+                .map(|&x: &Vec3| self.tree.space_to_plane(parent, x))
+                .collect();
 
-        let mut compute_properties = |child| {
-            let branch_length = self.tree.branch_length_to_parent(child);
-            let pos = BranchSectionPosition::new(child, f32::min(0., pos.length - branch_length));
-            let center = self.tree.branch_section_center(pos);
-            let contour = self.register_branch_contour(pos, mesh, config);
-            (pos, center, contour)
+            let result: Vec<Vec3> = convex_hull_graham(
+                Some(self.tree.space_to_plane(child, center)),
+                &projected_points,
+                Some(config.interior_angle),
+            )
+            .into_iter()
+            .map(|i| points[i])
+            .collect();
+            let contour = mesh.register_points_trunk(result);
+            mesh.add_contour(&contour);
+            (center, contour)
         };
 
-        let (m_p, m_c, m_cont) = compute_properties(m_child);
-        let (s_p, s_c, s_cont) = compute_properties(s_child);
+        let (m_c, m_cont) = compute_properties(m_child);
+        let (s_c, s_cont) = compute_properties(s_child);
 
         assert!(
             m_cont.len() >= 3 && s_cont.len() >= 3,
@@ -296,50 +230,63 @@ impl VolumetricTree {
             s_junction[2],
         ]);
 
-        ((m_p, m_cont), (s_p, s_cont))
+        (m_cont, s_cont)
     }
-
-    fn compute_branch_while(
-        &self,
-        pos: BranchSectionPosition,
+    
+    fn join_contours(&self, 
+        parent: usize,
         previous_contour: &mut Vec<usize>,
-        dz: f32,
-        condition: impl Fn(BranchSectionPosition, &Self) -> bool,
+        point_cloud: impl IntoIterator<Item=Vec3>,
+        center: Vec3,
         mesh: &mut GeometryData,
         config: &MeshConfig,
-    ) -> BranchSectionPosition {
-        let mut p = pos;
-        assert!(dz != 0.);
-        while condition(p, self) {
-            if p.length > 1000. * dz {
-                panic!("stopping, the branch at position {p:?} is already too long")
-            }
-            let current_contour = self.register_branch_contour(p, mesh, config);
-            let triangles =
-                mesh_between_contours(&mesh.points(), &previous_contour, &current_contour, true);
-            mesh.register_triangles(&triangles);
-            *previous_contour = current_contour;
-            p += dz;
-        }
-        p
+        ) {
+        let points: Vec<Vec3> = point_cloud.into_iter().collect();
+        mesh.add_debug(center, Color::srgb(1.0, 1.0, 1.0));
+        let center = self.tree.space_to_plane(parent, center);
+
+        let projected_points: Vec<Vec2> = points
+            .iter()
+            .map(|&x: &Vec3| self.tree.space_to_plane(parent, x))
+            .collect();
+
+        let result: Vec<Vec3> = convex_hull_graham(
+            Some(center),
+            &projected_points,
+            Some(config.interior_angle),
+        )
+        .into_iter()
+        .map(|i| points[i])
+        .collect();
+
+        let current_contour = mesh.register_points_trunk(result);
+        mesh.add_contour(&current_contour);
+        let triangles = mesh_between_contours(
+            &mesh.points(),
+            &previous_contour,
+            &current_contour, 
+            true
+        );
+        mesh.register_triangles(&triangles);
+        *previous_contour = current_contour;
     }
 
     fn compute_each_branch_recursive(
         &self,
-        pos: BranchSectionPosition,
+        root: usize,
+        mut l: f32,
         mut previous_contour: Vec<usize>,
         mesh: &mut GeometryData,
         config: &MeshConfig,
     ) {
-        let root = pos.node;
-        let radius = self.tree.radius(root);
-        let dz = 0.2 * radius;
+        let depth = self.tree.depth(root);
+        let parent_radius = self.tree.radius(root);
 
         match self.tree.children(root) {
             [] => {
                 let leaf =
-                    self.tree.position(root) + self.tree.radius(root) * self.tree.normal(root);
-                let i_end = mesh.register_points_trunk(&[leaf])[0];
+                    self.tree.position(root) + parent_radius * self.tree.normal(root);
+                let i_end = mesh.register_points_trunk([leaf])[0];
                 let n = previous_contour.len();
                 for i in 0..n {
                     mesh.register_triangles(&[
@@ -356,7 +303,7 @@ impl VolumetricTree {
 
                 let p1 = leaf + mesh.rng.sample(random_point_distrib);
                 let p2 = leaf + mesh.rng.sample(random_point_distrib);
-                let i_leaf = mesh.register_points_leaf(&[leaf, p1, p2])[0];
+                let i_leaf = mesh.register_points_leaf([leaf, p1, p2])[0];
                 mesh.register_triangles(&[
                     i_leaf,
                     i_leaf + 1,
@@ -367,44 +314,71 @@ impl VolumetricTree {
                 ]);
             }
             &[child] => {
+                let child_radius = self.tree.radius(child);
                 let branch_length = self.tree.branch_length_to_parent(child);
-                let new_pos = BranchSectionPosition {
-                    node: child,
-                    length: pos.length - branch_length
-                };
-                let last_pos = self.compute_branch_while(
-                    new_pos,
-                    &mut previous_contour,
-                    dz,
-                    |p, _| p.length < 0.,
-                    mesh,
-                    config
-                );
-                self.compute_each_branch_recursive(last_pos, previous_contour, mesh, config)
+                while l < branch_length {
+                    let t = l / branch_length;
+                    let dz = (config.spacing*parent_radius).lerp(config.spacing*child_radius, t);
+                    let spline_index = SplineIndex::Local(depth, t);
+                    let points = self.particles_per_node[child] .iter() .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index));
+                    let center = self.tree.position(root).lerp(
+                        self.tree.position(child), t);
+                    self.join_contours(root, &mut previous_contour, points, center, mesh, config);
+                    l += dz;
+                }
+                self.compute_each_branch_recursive(child, l-branch_length, previous_contour, mesh, config)
             }
             &[m_child, s_child] => {
-                let max_branch_length = f32::max(
-                    self.tree.branch_length_to_parent(m_child),
-                    self.tree.branch_length_to_parent(s_child),
-                );
-                let pos_split = self.compute_branch_while(
-                    pos,
-                    &mut previous_contour,
-                    dz,
-                    |p, me| !me.branch_is_spliting(p) && p.length < max_branch_length,
-                    mesh,
-                    config
-                );
+                let m_branch_length = self.tree.branch_length_to_parent(m_child);
+                let s_branch_length = self.tree.branch_length_to_parent(s_child);
+                let min_branch_length = f32::min(m_branch_length, s_branch_length);
+                let dz = config.spacing*parent_radius;
+                let m_radius = self.tree.radius(m_child);
+                let s_radius = self.tree.radius(s_child);
+                while l < min_branch_length && !self.branch_is_spliting(root, m_child, s_child, l) {
+                    let m_t = l / m_branch_length;
+                    let s_t = l / s_branch_length;
+                    let m_spline_index = SplineIndex::Local(depth, m_t);
+                    let s_spline_index = SplineIndex::Local(depth, s_t);
+                    let m_points = self.particles_per_node[m_child] .iter() .map(|&particle| extended_catmull_spline(&self.trajectories[particle], m_spline_index));
+                    let s_points = self.particles_per_node[s_child] .iter() .map(|&particle| extended_catmull_spline(&self.trajectories[particle], s_spline_index));
+                    let points = m_points.chain(s_points);
+                    let m_center = self.tree.position(root).lerp(
+                        self.tree.position(m_child), m_t);
+                    let s_center = self.tree.position(root).lerp(
+                        self.tree.position(s_child), s_t);
+                    let center = 0.5*(m_center + s_center);
+                    self.join_contours(root, &mut previous_contour, points, center, mesh, config);
+                    l += dz;
+                }
+                let (mut m_cont, mut s_cont) =
+                    self.compute_branch_join(root, m_child, s_child, l, previous_contour, mesh, config);
 
-                let ((m_pos, mut m_cont), (s_pos, mut s_cont)) =
-                    self.compute_branch_join(pos_split, previous_contour, mesh, config);
+                let mut m_l = l+dz;
+                while m_l < m_branch_length {
+                    let m_t = m_l / m_branch_length;
+                    let m_dz = (config.spacing*parent_radius).lerp(config.spacing*m_radius, (m_l - l)/(m_branch_length - l));
+                    let m_spline_index = SplineIndex::Local(depth, m_t);
+                    let m_points = self.particles_per_node[m_child] .iter() .map(|&particle| extended_catmull_spline(&self.trajectories[particle], m_spline_index));
+                    let m_center = self.tree.position(root).lerp(
+                        self.tree.position(m_child), m_t);
+                    self.join_contours(root, &mut m_cont, m_points, m_center, mesh, config);
+                    m_l += m_dz;
+                }
+                self.compute_each_branch_recursive(m_child, m_l - m_branch_length, m_cont, mesh, config);
 
-                let last_pos = self.compute_branch_while(m_pos+dz, &mut m_cont, dz, |p, _| p.length < 0., mesh, config);
-                self.compute_each_branch_recursive(last_pos, m_cont, mesh, config);
-
-                let last_pos = self.compute_branch_while(s_pos+dz, &mut s_cont, dz, |p, _| p.length < 0., mesh, config);
-                self.compute_each_branch_recursive(last_pos, s_cont, mesh, config);
-            }
+                let mut s_l = l+dz;
+                while s_l < s_branch_length {
+                    let s_t = s_l / s_branch_length;
+                    let s_dz = (config.spacing*parent_radius).lerp(config.spacing*s_radius, (s_l - l)/(s_branch_length - l));
+                    let s_spline_index = SplineIndex::Local(depth, s_t);
+                    let s_points = self.particles_per_node[s_child] .iter() .map(|&particle| extended_catmull_spline(&self.trajectories[particle], s_spline_index));
+                    let s_center = self.tree.position(root).lerp(
+                        self.tree.position(s_child), s_t);
+                    self.join_contours(root, &mut s_cont, s_points, s_center, mesh, config);
+                    s_l += s_dz;
+                }
+                self.compute_each_branch_recursive(s_child, s_l - s_branch_length, s_cont, mesh, config)            }
             _ => panic!("did not expect more than 2 childs for node {root}"),
         }
     }

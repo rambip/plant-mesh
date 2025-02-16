@@ -295,6 +295,8 @@ After:
 
 The particle simulation step is also the most resource-intensive part, because of the $O(n^2)$ complexity to compute the interactions between particles. (see @performance). This is why I tried to optimize it, by constructing the neighbourgs less frequently.
 
+Building the neighbourgs depending on some interaction radius every 5 steps worked quite well.
+
 
 #image("images/numerical_instability.png")
 

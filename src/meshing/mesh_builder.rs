@@ -13,7 +13,7 @@ use crate::VisualDebug;
 
 #[derive(Component)]
 pub struct GeometryData {
-    contours: Vec<Vec<Vec3>>,
+    contours: Vec<Vec<usize>>,
     debug_points: Vec<(Vec3, Color)>,
     triangles: Vec<usize>,
     colors: Vec<Color>,
@@ -42,30 +42,30 @@ impl GeometryData {
         result
     }
 
-    pub fn register_points_trunk(&mut self, points: &[Vec3]) -> Vec<usize> {
-        let i0 = self.points.len();
-        let n = points.len();
-        self.points.extend(points);
+    pub fn register_points_trunk(&mut self, points: impl IntoIterator<Item=Vec3>) -> Vec<usize> {
+        let mut result = Vec::new();
 
-        for _ in 0..n {
+        for p in points {
             let blue: f32 = self.rng.gen_range(0.1f32..0.13);
             let color = Color::srgb(0.35, 0.2, blue);
             self.colors.push(color);
+            result.push(self.points.len());
+            self.points.push(p);
         }
 
-        (i0..i0 + n).into_iter().collect()
+        result
     }
-    pub fn register_points_leaf(&mut self, points: &[Vec3]) -> Vec<usize> {
-        let i0 = self.points.len();
-        let n = points.len();
-        self.points.extend(points);
+    pub fn register_points_leaf(&mut self, points: impl IntoIterator<Item=Vec3>) -> Vec<usize> {
+        let mut result = Vec::new();
 
-        for _ in 0..n {
+        for p in points {
             let color = Color::srgb(0.1, 0.8, 0.3);
             self.colors.push(color);
+            result.push(self.points.len());
+            self.points.push(p);
         }
 
-        (i0..i0 + n).into_iter().collect()
+        result
     }
 
     pub fn point(&self, i: impl Deref<Target = usize>) -> Vec3 {
@@ -88,8 +88,8 @@ impl GeometryData {
         &self.points
     }
 
-    pub fn add_contour(&mut self, points: &[Vec3]) {
-        self.contours.push(points.to_vec())
+    pub fn add_contour(&mut self, indices: &[usize]) {
+        self.contours.push(indices.to_vec())
     }
 }
 
@@ -131,8 +131,8 @@ impl VisualDebug for GeometryData {
                 for i in 0..n {
                     let r = i as f32 / n as f32;
                     let color = Color::srgb(t, 0.3 + 0.2 * r, 0.3 + 0.2 * r);
-                    let pos1 = c[i];
-                    let pos2 = c[(i + 1) % n];
+                    let pos1 = self.points[c[i]];
+                    let pos2 = self.points[c[(i + 1) % n]];
                     gizmos.line(pos1, pos2, color);
                 }
             }
