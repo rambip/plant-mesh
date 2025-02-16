@@ -108,6 +108,7 @@ fn main() {
         .add_plugins(bevy_sprite::SpritePlugin {})
         .add_plugins(bevy_gizmos::GizmoPlugin)
         .add_plugins(shader::CustomMeshPipelinePlugin)
+        .insert_resource(ClearColor(Color::srgb(0.3, 0.6, 0.4)))
         .init_resource::<CameraSettings>()
         .init_resource::<DebugFlags>()
         .add_systems(Startup, setup)
