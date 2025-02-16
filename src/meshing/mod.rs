@@ -79,26 +79,50 @@ impl TreePipelinePhase for Mesh {
 
 impl VolumetricTree {
     fn particles_on_section(&self, pos: BranchSectionPosition) -> Vec<Vec3> {
-        let t = if pos.length == 0. {
-            0.
+        let depth = self.tree.depth(pos.node);
+        if pos.length == 0. {
+            let spline_index = SplineIndex::Local(depth, 0.);
+            self.particles_per_node[pos.node]
+                .iter()
+                .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
+                .collect()
         } else if pos.length < 0. {
             let parent = self.tree.parent(pos.node).unwrap();
             let branch_len = (self.tree.position(pos.node) - self.tree.position(parent)).length();
-            (branch_len + pos.length) / branch_len
+            let t = (branch_len + pos.length) / branch_len;
+            let spline_index = SplineIndex::Local(depth-1, t);
+            self.particles_per_node[pos.node]
+                .iter()
+                .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
+                .collect()
         } else {
-            pos.length / self.tree.average_branch_length_to_children(pos.node)
-        };
-        let depth = if pos.length < 0. {
-            self.tree.depth(pos.node) - 1
-        } else {
-            self.tree.depth(pos.node)
-        };
-        let spline_index = SplineIndex::Local(depth, t);
+            match self.tree.children(pos.node) {
+                &[child] => {
+                    let t = pos.length / self.tree.branch_length_to_parent(child);
+                    let spline_index = SplineIndex::Local(depth, t);
+                    self.particles_per_node[pos.node]
+                        .iter()
+                        .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
+                        .collect()
+                },
+                &[child1, child2] => {
+                    let t1 = pos.length / self.tree.branch_length_to_parent(child1);
+                    let t2 = pos.length / self.tree.branch_length_to_parent(child2);
+                    let spline_index_1 = SplineIndex::Local(depth, t1);
+                    let spline_index_2 = SplineIndex::Local(depth, t2);
+                    let part_1 = self.particles_per_node[child1]
+                        .iter()
+                        .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index_1));
+                    let part_2 = self.particles_per_node[child2]
+                        .iter()
+                        .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index_2));
 
-        self.particles_per_node[pos.node]
-            .iter()
-            .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index))
-            .collect()
+                    part_1.chain(part_2).collect()
+                },
+                _ => panic!("leaf does not have outgoing branch")
+            }
+        }
+
     }
 
     fn branch_is_spliting(&self, pos: BranchSectionPosition) -> bool {
