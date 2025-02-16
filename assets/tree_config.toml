@@ -13,13 +13,14 @@ radius_variance = 0.2
 particles_per_leaf = 10
 wall_repulsion = 0.01
 repulsion = 0.1
-dt = 0.05
+dt = 0.02
 n_steps = 20
 max_velocity_factor = 0.05
+interaction_radius_factor = 10.0
 jump = 5
 
 [mesh]
 spacing = 0.3
 leaf_size = 0.5
 leaf_angle = 0.4
-interior_angle = 3.14
+interior_angle = 2.5
