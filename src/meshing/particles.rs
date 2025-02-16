@@ -47,7 +47,7 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
     let mut velocities = vec![Vec2::ZERO; n];
     let wall_repulsion = config.wall_repulsion * radius;
     let repulsion = config.repulsion * radius.squared() / (n as f32).sqrt();
-    let typical_distance = 5.*radius / (n as f32).sqrt();
+    let typical_distance = config.interaction_radius_factor*radius / (n as f32).sqrt();
     let max_velocity = radius * config.max_velocity_factor / config.dt;
 
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();

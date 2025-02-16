@@ -32,6 +32,7 @@ pub struct StrandsConfig {
     pub n_steps: usize,
     pub max_velocity_factor: f32,
     pub jump: usize,
+    pub interaction_radius_factor: f32,
 }
 
 impl TreePipelinePhase for VolumetricTree {
@@ -147,7 +148,6 @@ impl VolumetricTree {
                 .collect();
 
             let result: Vec<Vec3> = convex_hull_graham(
-                Some(self.tree.space_to_plane(parent, center)),
                 &projected_points,
                 Some(config.interior_angle),
             )
@@ -243,7 +243,6 @@ impl VolumetricTree {
         ) {
         let points: Vec<Vec3> = point_cloud.into_iter().collect();
         mesh.add_debug(center, Color::srgb(1.0, 1.0, 1.0));
-        let center = self.tree.space_to_plane(parent, center);
 
         let projected_points: Vec<Vec2> = points
             .iter()
@@ -251,7 +250,6 @@ impl VolumetricTree {
             .collect();
 
         let result: Vec<Vec3> = convex_hull_graham(
-            Some(center),
             &projected_points,
             Some(config.interior_angle),
         )

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::cmp::Ordering;
 
 use bevy::math::{FloatExt, Vec2, Vec3};
 
@@ -66,45 +66,45 @@ pub fn extended_catmull_spline(points: &[Vec3], pos: SplineIndex) -> Vec3 {
     b1.lerp(b2, ratio(1, 2))
 }
 
-pub fn angle_to(a: Vec2, b: Vec2) -> f32 {
-    if a.length_squared() * b.length_squared() == 0. {
-        return 0.;
+fn angle_to(a: Vec2, b: Vec2) -> f32 {
+    let mut result = a.angle_to(b);
+    if result < 0. {
+        result += std::f32::consts::TAU
     }
-
-    // TODO: more efficient
-    let angle = f32::acos(0.99 * a.dot(b) / f32::sqrt(a.length_squared() * b.length_squared()));
-
-    if a.perp_dot(b) >= 0. {
-        angle
-    } else {
-        2. * std::f32::consts::PI - angle
-    }
+    result
 }
 
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
 /// we suppose that the barycenter is in the convex hull
 pub fn convex_hull_graham(
-    pivot: Option<Vec2>,
     points: &[Vec2],
     min_angle: Option<f32>,
-) -> VecDeque<usize> {
+) -> Vec<usize> {
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
     assert!(!points.is_empty());
     let n = points.len();
-    let i_min_y = points
-        .into_iter()
-        .map(|point| point.y)
+    let pivot = points.iter().sum::<Vec2>()  / n as f32;
+
+    let i0 = points
+        .iter()
+        .map(|&p| p.y)
         .arg_min()
         .expect("some points are NaN when computing convex hull");
-    let pivot = pivot.unwrap_or((1. / n as f32) * points.iter().sum::<Vec2>());
-    let u0 = points[i_min_y] - pivot;
 
-    let compare_angle = |a: &usize, b: &usize| {
-        angle_to(u0, points[*a] - pivot)
-            .partial_cmp(&angle_to(u0, points[*b] - pivot))
-            .unwrap()
+    let u = points[i0] - pivot;
+
+    let compare_angle = |&a: &usize, &b: &usize| {
+        if a == i0 {
+            return Ordering::Greater
+        }
+        if b == i0 {
+            return Ordering::Less
+        }
+        let angle_a = angle_to(u, points[a] - pivot);
+        let angle_b = angle_to(u, points[b] - pivot);
+        angle_a.partial_cmp(&angle_b).unwrap()
     };
 
     assert!(n >= 3, "not enough particles to compute convex hull");
@@ -113,9 +113,10 @@ pub fn convex_hull_graham(
         result.sort_by(compare_angle);
         result
     };
+    assert_eq!(sorted_points[n-1], i0);
 
-    let mut result = VecDeque::new();
-    let is_sharp_angle = |result: &VecDeque<usize>, i| {
+
+    let is_sharp_angle = |result: &Vec<usize>, i| {
         let n_hull = result.len();
         let p_1 = result[n_hull - 2];
         let p_2 = result[n_hull - 1];
@@ -123,14 +124,16 @@ pub fn convex_hull_graham(
         angle < min_angle
     };
 
-    for &i in sorted_points.iter().cycle().take(n+2) {
+    let mut result = vec![i0];
+    for i in sorted_points {
         while result.len() >= 2 && is_sharp_angle(&result, i) {
-            result.pop_back().unwrap();
+            result.pop().unwrap();
         }
-        result.push_back(i);
+        result.push(i);
     }
-    result.pop_front();
-    result.pop_back();
+    // we remove the last `i0` we added to the list,
+    // because it was already added at the begining.
+    result.pop();
     result
 }
 
@@ -212,8 +215,9 @@ mod test {
             .map(|(a, b)| Vec2::new(a, b))
             .collect();
 
-        let convex = convex_hull_graham(Some(points[0]), &points, None);
-        assert_eq!(convex, vec![1, 3, 4, 0]);
+        let mut convex: Vec<usize> = convex_hull_graham(&points, None).into();
+        convex.sort();
+        assert_eq!(convex, vec![0, 1, 3, 4]);
     }
 
     #[test]
@@ -232,8 +236,9 @@ mod test {
         .map(|(a, b)| Vec2::new(a - 10., b))
         .collect();
 
-        let convex = convex_hull_graham(Some(points[5]), &points, None);
-        assert_eq!(convex, vec![3, 5, 6, 7, 0]);
+        let mut convex: Vec<usize> = convex_hull_graham(&points, None).into();
+        convex.sort();
+        assert_eq!(convex, vec![0, 3, 5, 6, 7]);
     }
 
     #[test]
@@ -248,7 +253,7 @@ mod test {
 
             dbg!(&points);
 
-            let result = convex_hull_graham(None, &points, None);
+            let result = convex_hull_graham(&points, None);
 
             let mut turns = (0..result.len() - 2)
                 .map(|i| (result[i + 0], result[i + 1], result[i + 2]))
