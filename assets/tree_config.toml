@@ -1,5 +1,5 @@
 [grow]
-min_radius = 0.03
+min_radius = 0.05
 max_turn_angle = 1.0
 min_split_angle = 0.4
 max_zigzag_angle = 0.3
@@ -24,3 +24,6 @@ spacing = 0.3
 leaf_size = 0.5
 leaf_angle = 0.4
 interior_angle = 2.5
+
+[animation]
+update_time = 5.0
