@@ -37,7 +37,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
-        Transform::from_xyz(0., 0., 10.)
+        Transform::from_xyz(0., 0., 3.)
     ));
     commands.spawn(
         SimulationResult {
@@ -50,9 +50,11 @@ fn setup(
             particles_per_leaf : 300,
             wall_repulsion : 0.01,
             repulsion : 0.05,
-            dt : 0.01,
+            dt : 0.02,
             n_steps : 20,
             max_velocity_factor: 0.05,
+            interaction_radius_factor: 10.,
+            jump: 5
         }
     ));
     commands.insert_resource(NeedCompute(true));
