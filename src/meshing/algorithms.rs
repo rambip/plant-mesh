@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::math::{FloatExt, Vec2, Vec3};
 
 use crate::tools::FloatProducer;
@@ -86,7 +88,7 @@ pub fn convex_hull_graham(
     pivot: Option<Vec2>,
     points: &[Vec2],
     min_angle: Option<f32>,
-) -> Vec<usize> {
+) -> VecDeque<usize> {
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
     assert!(!points.is_empty());
@@ -105,15 +107,15 @@ pub fn convex_hull_graham(
             .unwrap()
     };
 
-    assert!(n >= 3);
+    assert!(n >= 3, "not enough particles to compute convex hull");
     let sorted_points: Vec<usize> = {
         let mut result: Vec<usize> = (0..n).into_iter().collect();
         result.sort_by(compare_angle);
         result
     };
 
-    let mut result: Vec<usize> = sorted_points[..2].into();
-    let is_sharp_angle = |result: &Vec<usize>, i| {
+    let mut result = VecDeque::new();
+    let is_sharp_angle = |result: &VecDeque<usize>, i| {
         let n_hull = result.len();
         let p_1 = result[n_hull - 2];
         let p_2 = result[n_hull - 1];
@@ -121,13 +123,14 @@ pub fn convex_hull_graham(
         angle < min_angle
     };
 
-    for &i in sorted_points.iter().cycle().skip(2).take(n - 1) {
+    for &i in sorted_points.iter().cycle().take(n+2) {
         while result.len() >= 2 && is_sharp_angle(&result, i) {
-            result.pop().unwrap();
+            result.pop_back().unwrap();
         }
-        result.push(i);
+        result.push_back(i);
     }
-    result.pop();
+    result.pop_front();
+    result.pop_back();
     result
 }
 
@@ -210,7 +213,7 @@ mod test {
             .collect();
 
         let convex = convex_hull_graham(Some(points[0]), &points, None);
-        assert_eq!(convex, vec![0, 1, 3, 4]);
+        assert_eq!(convex, vec![1, 3, 4, 0]);
     }
 
     #[test]
@@ -230,7 +233,7 @@ mod test {
         .collect();
 
         let convex = convex_hull_graham(Some(points[5]), &points, None);
-        assert_eq!(convex, vec![0, 3, 5, 6, 7]);
+        assert_eq!(convex, vec![3, 5, 6, 7, 0]);
     }
 
     #[test]

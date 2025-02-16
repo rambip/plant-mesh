@@ -1,4 +1,4 @@
-mod algorithms;
+pub mod algorithms;
 mod mesh_builder;
 pub mod particles;
 pub use mesh_builder::GeometryData;
@@ -147,7 +147,7 @@ impl VolumetricTree {
                 .collect();
 
             let result: Vec<Vec3> = convex_hull_graham(
-                Some(self.tree.space_to_plane(child, center)),
+                Some(self.tree.space_to_plane(parent, center)),
                 &projected_points,
                 Some(config.interior_angle),
             )
