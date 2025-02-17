@@ -30,8 +30,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     // hardcoded light direction
     var light_direction = -vec3(0., 0.3, 0.9);
-    var diffuse_light: f32 = 0.2*dot(vertex.normal, -light_direction);
-    var intensity : f32 = 0.5+diffuse_light;
+    var diffuse_light: f32 = 0.3*dot(vertex.normal, -light_direction);
+    var intensity : f32 = 0.6+diffuse_light;
     vertex_output.color = vec4(intensity*vertex.color.rgb, vertex.color.a);
     return vertex_output;
 }

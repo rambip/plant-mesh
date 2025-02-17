@@ -46,8 +46,8 @@ impl GeometryData {
         let mut result = Vec::new();
 
         for p in points {
-            let blue: f32 = self.rng.gen_range(0.1f32..0.13);
-            let color = Color::srgb(0.35, 0.2, blue);
+            let blue: f32 = self.rng.gen_range(0.1f32..0.2);
+            let color = Color::srgb(0.4, 0.3, blue);
             self.colors.push(color);
             result.push(self.points.len());
             self.points.push(p);
