@@ -1,23 +1,47 @@
 #import "@preview/fletcher:0.5.4" as fletcher: diagram, node, edge
 #import "@preview/note-me:0.3.0": *
 
+#show link: underline
+#show image: it => {
+    set align(center)
+    it
+}
+#show heading: it => {
+    v(15pt)
+    it
+}
+
+#show raw: it => {
+    set text(8pt)
+    it
+}
+
+#let scale_center(x) = {
+    set align(center)
+    scale(70%, reflow: true, x)
+}
+
 
 #align(center, [
-#set text(size: 20pt)
-    = Final semester project IGR
-    == Interactive Invigoration: Volumetric Modeling of Trees with Strands
+#set text(size: 30pt)
+    = IGR \ Final semester project
+    == Procedural geometry generation \ for plants and trees
 
+    #v(50pt)
+
+#set text(size: 20pt)
+    Based on the paper:
+
+#link("https://dl.acm.org/doi/10.1145/3658206")[_Bosheng Li, Nikolas A. Schwarz, Wojtek Pałubicki, Sören Pirk, and Bedrich Benes. 2018. Interactive Invigoration: Volumetric Modeling of Trees with Strands. In . ACM, New York, NY, USA, 13 pages_]
+
+    #v(100pt)
     PERONNET Antonin
 
 ])
 
+#pagebreak()
+
 #set heading(numbering:"1.1")
-
-In this project, I tried to reproduce and extend the work done in:
-
-Bosheng Li, Nikolas A. Schwarz, Wojtek Pałubicki, Sören Pirk, and Bedrich
-Benes. 2018. Interactive Invigoration: Volumetric Modeling of Trees with
-Strands. In . ACM, New York, NY, USA, 13 pages
 
 = Related work
 
@@ -54,6 +78,8 @@ Very often, the geometry part uses very well established techniques in the field
 - mesh techniques such as smoothed normal calculation, mesh smoothing.
 
 
+#pagebreak()
+
 = Implementation
 
 From a very high level, the pipeline is the following:
@@ -77,6 +103,8 @@ From a very high level, the pipeline is the following:
 
 I focused on the particle and meshing parts (2, 3, 4) and spend very little time on the skeleton calculation (1). Thus, I will present the steps 2), 3), 4) and 1) at the very end.
 
+#v(30pt)
+
 
 For this project, I used #link("https://bevyengine")[bevy], a rust cross-platfrom game design library. I decided to use it because of the following features:
 - a `gizmos` tool that allow to draw 3d points and lines, vey useful for debuging
@@ -85,12 +113,14 @@ For this project, I used #link("https://bevyengine")[bevy], a rust cross-platfro
 - the ability to compile to `wasm` and `webgl`
 
 
-My work is available #link("https://github.com/rambip/plant-mesh")[on github] under the MIT license and can be tested on a web interface here: #link("https://rambip.github.io/plant-mesh/")[https://rambip.github.io/plant-mesh/]
+My work is available #link("https://github.com/rambip/plant-mesh")[on github] under the MIT license and can be tested on a web interface here: https://rambip.github.io/plant-mesh/
+
+In the online demo, a tree is generated automatically every 5s. The user can visualize the different steps (see @gallery). I did not implement the ability to change the parameters, but it can easily be added#footnote[In the desktop version, the parameters are loaded from a config file.]
 
 
 #pagebreak()
 
-= Step 0: Defining the skeleton
+== Step 0: Defining the skeleton
 
 The skeleton is a simple tree structure with some properties stored in each node:
 
@@ -131,7 +161,7 @@ inset: 10pt,
 stroke: black,
 [=== Pointer-based],
 diagram(
-  spacing: (15pt, 15pt),
+  spacing: (15pt, 10pt),
   node-stroke: 1pt,
   edge-stroke: 1pt+blue,
   mark-scale: 60%,
@@ -154,10 +184,10 @@ diagram(
   edge(<c>, <vc>, "..|>"),
 ),
 
-[],
+grid.cell(fill: black, inset: -2pt,[]),
 [=== Array based],
 diagram(
-    spacing: (12pt, 10pt),
+    spacing: (12pt, 8pt),
     node-stroke: 1pt,
     edge-stroke: 1pt+blue,
     mark-scale: 60%,
@@ -225,6 +255,8 @@ As you see, they are 2 main parts in this algorithm:
 The paper proposed to use arbitrary shaped for the section, I only implemented circles. It may improve slightly the diversity of possible trees, but most trees have circular branches.
 ]
 
+#pagebreak()
+
 === Particle projection
 
 When there is only one child, the projection operation is pretty easy. For 2 children, it is more complicated.
@@ -232,14 +264,14 @@ The paper did not describe how they defined the projection entirely, so I had to
 
 We want to compute the positions of the 2 clouds of points (orange and red) on the root parent plane:
 
-#image("images/projection_1.svg")
+#image("images/projection_1.svg", height: 200pt)
 
 The first step is to use the position of the parent and the 2 children to compute the important directions:
 - from child1 to parent
 - from child2 to parent
 - from child1 to child2, in the parent plane
 
-#image("images/projection_2.svg")
+#image("images/projection_2.svg", height: 200pt)
 
 
 Then, the a point on the cloud of child1 will be projected on the plane parallel to $D_1$ and moved with an offset in the direction of -$D_{12}$. Similarly, a point in the cloud of child2 will be projected parralel to $D_2$ and offset in the direction $D_12$.
@@ -247,14 +279,20 @@ Then, the a point on the cloud of child1 will be projected on the plane parallel
 The offsets are calculated such that the two set of points are adjacent in the parent plane.
 
 
+#pagebreak()
+
 After projection and scaling, the particle trajectories look like:
-#image("images/strands_without_collision.png")
+#image("images/strands_without_collision.png", height: 150pt)
+
+In order to give the realistic result of trunks, we need to make the particles interact with each other.
 
 === Particle simulation
 
 Again, the paper was not very precise regarding the type of particle simulation they used.
 
-I tried to use an electrostatic-like repulsion force, with collisions on the border. The force is defined as:
+I tried to use an electrostatic-like repulsion force with an euler integratino scheme, with collisions on the border. 
+
+The force is defined as:
 
 $
 arrow(F_(a b)) = -k/(A B)^2 arrow(u_(a b))
@@ -267,58 +305,70 @@ My simulation has normalized parameters like:
 
 For numeric stability, I had to update the parameters depending on the radius and the number of particles. For example, the repulsion is proportionnal to the radius squared. 
 
-I used an euler integration scheme.
-
 Here is the result on an example:
 
-#for i in range(1,9) {
-    image("images/particles_visu_a"+str(i)+".png")
-}
+#let images = range(1,8).map(i => image("images/particles_visu_a"+str(i)+".png"))
+#grid(columns: 8, ..images)
 
 It works, but as you can see there is a problem: there are too much particles on the contours and not enough inside. This is due to the fact that the initial speed of the particles is too high.
 
-To solve this problem, I introduced a maximum velocity. I also multiplied the repulsion constant by $1/sqrt(N)$ where $N$ is the number of particles. This way, the average speed is the same no matter the number of particles.
+To solve this problem, I introduced a maximum velocity. I also multiplied the repulsion constant by $1/sqrt(N)$ where $N$ is the number of particles. This way, the average speed is the same no matter the number of particles. After these adjustments, I got a more uniform particle density:
 
+#let images = range(1,8).map(i => image("images/particles_visu_b"+str(i)+".png"))
+#grid(columns: 8, ..images)
 
+#pagebreak()
 
-#for i in range(1,8) {
-    image("images/particles_visu_b"+str(i)+".png")
-}
+It made a huge difference for the phases after that:
 
+#grid(columns: (1fr, 1fr),
+figure(image("images/base_strands_non_uniform.png", height: 140pt),
+caption: "particles without max veolcity"),
 
-Before:
-#image("images/base_strands_non_uniform.png")
+figure(image("images/base_strands_uniform.png", height: 140pt),
+caption: "particles with max velocity")
+)
 
-After:
-#image("images/base_strands_uniform.png")
+#v(50pt)
 
 
 The particle simulation step is also the most resource-intensive part, because of the $O(n^2)$ complexity to compute the interactions between particles. (see @performance). This is why I tried to optimize it, by constructing the neighbourgs less frequently.
 
-Building the neighbourgs depending on some interaction radius every 5 steps worked quite well.
+Building the neighbourgs depending on some interaction radius every 5 steps worked quite well. To improve the performance further, I used a quadtree implementation for efficient retrieval. See @performance for more details.
 
 
-#image("images/numerical_instability.png")
+#{
+set align(horizon)
+figure(image("images/numerical_instability.png", height: 200pt),
+caption: "if dt is not small enough, it lead to numerical instability")
+}
 
 
+
+#pagebreak()
 
 === Strands
 
 Once we know the particle positions on each node, we can interpolate them using splines.
 
-The paper proposed *B-splines*, but as this type of spline does not interploate the points, I chose the #link("https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline")[Catmull-Rom spline].
+The paper proposed *B-splines*, but as this type of spline does not interploate the points, \ I chose the #link("https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline")[Catmull-Rom spline].
 
 A very frequent problem in this project is strands "mangling". After the projection operations and the simulation, strands can:
 - go inside or outside the branch
 - turn one around another
 
+
+#grid(columns: (1fr, 1fr),
+figure(image("images/strands_zigzag.png", height: 120pt), caption: "strands can zigzag"),
+figure(image("images/strands_mangling.png", height: 120pt), caption: "strands can mangle")
+)
+
 This can cause a number of problems for the next steps, like contours calculation and triangulation. The paper proposed some techniques like swapping the points positions when it is minimizes the distance, but I did not implement it.
 
-#image("images/strands_zigzag.png")
 
 
-
-= Step 3: Contours calculation
+#pagebreak()
+== Step 3: Contours calculation
 
 *code*: `src/meshing/mod.rs`
 
@@ -326,137 +376,215 @@ This can cause a number of problems for the next steps, like contours calculatio
 The pseudo-code for this part is the following:
 
 ```
-compute_contours(points):
-    // project
-
 compute_contours(node):
     if node is a leaf:
         stop
     else if one children:
         for each position from parent to children:
-            
+            compute the positions of the point cloud
+            select the boundary of the point cloud
+        compute_contours(children)
             
     else if 2 children:
-        while branch does not split:
-            
-        
+        compute the position when the branch splits
+        for each position before the split:
+            compute the positions of the point cloud
+            select the boundary of the point cloud
 
-        
+        for each position between the split and first children:
+            compute the positions of the point cloud
+            select the boundary of the point cloud
+        compute_contours(first children)
+
+        for each position between the split and second children:
+            compute the positions of the point cloud
+            select the boundary of the point cloud
+        compute_contours(second children)
 ```
-
-TODO: computing branch split ?
-
 
 Note that this algorithm is bottom-up, contrary to the previous one which is top-down.
 
 
-=== Parametrization
+=== Detecting if branch is spliting
 
-At the start, I used a fixed number of steps for each branch. This resulted in a non-uniform mesh:
+To detect if the branch is splitting, I compute the minimum distance between the points in the first cloud and the points in the second cloud. If this distance is bigger than a treshold, that means the branch is splitting.#footnote[I realized I can do it by dichotomy]
 
-#image("images/mesh_non_uniform_triangulation.png")
+Before the detected branch split, I use the union of the 2 points clouds to compute the contour. After the split, I compute the contours separately.
 
-Other issue: When the two children branches are not the same length, it creates a gap between the 2 sides:
+#image("images/contours_with_branch_split.png", height: 100pt)
 
-#image("images/tree_branch_non_uniform.svg")
+#warning[
+In some cases, the branch never splits. It is an edge case I did not imagine at first, but it can happen with lot's of branches. In this case, we stop at the shortest branch.
+]
 
-After, I changed the approach to create a fixed-length step.
 
-The branch position is defined by :
-- the node 
-- a signed length from this node
 
+#pagebreak()
+
+=== Points selection
+
+This was probably the hardest part of the entire project.
+
+The paper proposed delaynay triangulation to compute the boundary of the points, but early on I thought this was not the best idea. Indeed:
+- it is very costly, $O(n^2)$ in the worst case even more complex in 3d.
+- it builds the entire triangulation of the section, but uses only the contour
+- it does not give the contour directly, one must do a graph traversal afterwards.
+- the paper removed the edges from the triangulation when they are longer than a treshold, but don't indicate how to set this treshold.
+
+#note[
+    To convert from 3d points (splines in space) to 2d, I considered using a minimization algorithm, to find the 2d plane that miminimize the error from the reality. After, I figured out I can simply project the points using the orientation vector of the nearest parent.
+
+]
+
+So my first intuition was to use a convex hull algorithm like #link("https://en.wikipedia.org/wiki/Graham_scan")[Graham scan]. It worked, but the issue is that it does not follow the contour when 2 branch merge (see below). I had to adapt the algorithm.
+
+
+After a lot of work and debuging, I ended up with this algorithm:
+
+$
+ "select_contours" & ((P_i)): \
+    & O <- 1/n sum P_i \
+    & i_0 <- "argmin"_i (e_y dot P_i) \
+    & L <- [i_0] \
+    & sigma <- "sort points depending on" P_i |-> P_(i_0) O P_i  \
+    & "for" i in sigma : \
+    & | | "add i to" L \
+    & | | "remove the points in L depending on angle" \
+    & "return L"
+$
+
+#v(20pt)
+
+To illustrate: 
+#grid(columns: (1fr, 1fr),
+figure(image("images/convex_hull_1.svg", height: 150pt), caption: "First, sort the points around the center"),
+figure(image("images/convex_hull_2.svg", height: 150pt), caption: [Each time one point is added, \ remove the previous one depending on angle])
+)
+
+
+This algorithm is $O(n log n)$ in the worst case, because of the sort.
+
+By varying the angle treshold, we can select different boundaries:
+
+#grid(columns: (1fr, 1fr, 1fr),
+image("images/convex_hull_no_treshold.png"),
+image("images/convex_hull_treshold_1.png"),
+image("images/convex_hull_treshold_2.png"),
+)
+
+But setting the right treshold for the convex hull is not trivial.
+- very high treshold: the contour does not follow the shape of the strands, it is especially problematic for meshing (see @meshing)
+- very low treshold: too much noise and not enough regularity in the contour that is seleted.
+
+#warning[ 
+When computing the mesh of a large number of points, I noticed some strange behaviours:
+
+#image("images/branch_join_convex_bug.png", height: 100pt)
+
+I was able to reproduce it and to understand where the issue was coming from:
+
+#figure(image("images/convex_hull_instability.png", height: 130pt), caption: "some points are added, but they are not on the boundary.")
+
+After checking my code again and again, I discovered that the issue comes from the way the angle is calculated in the math library:
 ```rust
-pub struct BranchSectionPosition {
-    // the node being considered
-    pub node: usize,
-    // the distance we traveled from the node to the leaves
-    // it can be negative, in this case we consider the parent
-    pub length: f32,
+pub fn angle_to(self, rhs: Self) -> f32 {
+    let angle = math::acos_approx( 
+        self.dot(rhs) / math::sqrt(self.length_squared() * rhs.length_squared())
+    );
+    angle * math::signum(self.perp_dot(rhs))
 }
 ```
 
+The floating points error caused the sign to flip when the points are almost colinear, and thus to be treated as almost 360deg.
+]
+
+#pagebreak() 
+
+=== Parametrization
+
+The paper did not mention how the step between 2 consecutive sections is calculated.
+
+At the start, I used a fixed number of steps for each branch. This resulted in a non-uniform mesh:
+
+#image("images/mesh_non_uniform_triangulation.png", height: 180pt)
+
+Other issue: When the two children branches are not the same length, it creates a gap between the 2 sides:
+
+#image("images/tree_branch_non_uniform.svg", height: 150pt)
+
+TO solve these issues, I changed the approach and used a step $d z$ computed according to the radius of the branch. To get the spline parameter, I use $t = k (d z) / L$ with $L$ the total branch length.
+
 It was a lot better:
 
-#image("images/mesh_uniform_triangulation.png")
+#image("images/mesh_uniform_triangulation.png", height: 180pt)
 
-New error: 
+Unfrtunately, it did not solve all the problems. In particular, there was an irregularity between the last contour of the branch and the first of the next branch.
 
-#image("images/step_error_branch_node.png")
+#figure(image("images/parametrization_gap.png", height: 200pt), caption: "the distance between contours is too small")
 
-(you can see the gap is too big)
+The solution was to pass the offset from the end of the branch in the recursive call to the function.
 
+After all of this, I got a good parametrization:
 
-New solution: do not reset the branch position after new node.
-
-Then: 
-
-#image("images/trunk_very_regular.png")
+#image("images/good_parametrization.png", height: 300pt)
 
 
-
-
-=== Point selection and convex hull
-
-#image("images/ugly_contours.png")
-#image("images/convex_hull_points.png")
-
-we go from bottom to top(s)
+#note[
+    I could have used a parametrization of the spline directly, but it would have been unpractical to compute the branch joins.
+]
 
 
 
-- delaunay is not ideal
-    - complex and costly
-    - need to recompute the convex hull after
-    - what we need is an algorithm for convex hull with added constraints
 
-- convex hull is better
-    - problem 1: the points are not on a plane
-        - solution: project the points on a plane. PCA is possible but inefficient
-          to minimize the vertical distance, we can use the pseudo-inverse. works if points not almost vertical.
-          At the end, the choice was to 
+== Step 4: Meshing and branch fusion <meshing>
 
-    - problem 2: we don't want too long vertices
-        - solution: modified graham scan to ignore vertices when length too long
+The final step is to comupte the mesh (vertices, colors, normals and triangles) of the entire tree
 
-    - problem 3: multiple connected components
+The basic idea is to take 2 contours, and join them together using triangles on the lateral surface. Again, it was not entirely clear from the paper so I had to adapt.
 
+=== Joining contours
 
-- parametrization: if 2 branches are not the same size, it's very hard to merge them.
-We must find the right step size for both
+I looked at the problem as a minimazation problem.
 
+Given two lists of points $P_i$ and $Q_i$, you want to interlace them in the way that minimizes the sum of the perimeters of the triangles.
 
+The perimeter of the triangle at one moment of the algotihm is one of 2 possibilities:  
+- $P_i P_(i+1) + P_(i+1) Q_j + Q_j P_i$ 
+- $P_i Q_(j) + Q_j Q_(j+1) + Q_(j+1) P_i$
 
-but it is still an issue for branch fusion. To have a really regular mesh, the solution would be to have a good reparametrization of the spline. I decided not to go this way but to approximate it branch section by branch section. It works until there is a large ratio between the lengths of the 2 branches.
+#figure(image("images/contour_algorithm_1.svg", width: 400pt), caption: "the 2 possible choices of triangles")
 
+Since the terms $P_i P_(i+1)$ and $Q_j Q_(j+1)$ will be added either way, we just have to minimize the sum of $P_i Q_j$.
 
-setting the right parameter for the convex hull / delaunay treshold is hard.
+This leads to the following greedy algorithm:
 
-= Step 4: Meshing and branch fusion
+```
+join_contours(P, Q):
+    (i, j) = (0, 0)
+    if d(P[i], Q[j+1]) < d(P[i+1], Q[j]):
+        add the triangle P[i],Q[j],Q[j+1]
+        i += 1
+    else:
+        add the triangle P[i],P[i+1],Q[j]
+        j += 1
+```
 
+#note[
+    At the end, $P_n$ and $P_0$, $Q_n$ and $Q_0$ must be linked together to close the lateral surface.
+]
 
-- non-uniform sampling: too much triangles in some parts
-    - adapt dt according to radius and length of branch
-        
+#pagebreak()
 
+=== Branch fusion
 
-- normals: compute using neighbourgs. strategy: average of 4 neighbourgs
+There is a very particular case of meshing when 2 branch split: there is one contour above and 2 contours over.
 
-
-- a lot of edge cases:
-    - when not enough points to merge
-    - when two children branches do not split
-    - when the branches split just before or just after a node in the tree
-
-
-- branch fusion
-
+#let n = 20
 
 #let branches() = {
-        let n = 20
-        let points_m = range(2, n)
+        let points_m = range(1, n - 1)
         .map(i => {
-                let θ = i*360deg/n
+                let θ = i*360deg/n + 180deg/n
                 let x = calc.cos(θ)-1.5
                 let y = calc.sin(θ)
                 (x, y)
@@ -468,7 +596,7 @@ setting the right parameter for the convex hull / delaunay treshold is hard.
 
         let points_aam = range(2, n)
         .map(i => {
-                let θ = 45deg + i*275deg/n
+                let θ = 45deg + i*260deg/n
                 let x = 3*calc.cos(θ)-1.5
                 let y = 3*calc.sin(θ)
                 (x, y)
@@ -489,15 +617,14 @@ setting the right parameter for the convex hull / delaunay treshold is hard.
                 0.5*(points_s.at(i).at(1) + points_aas.at(i).at(1)),
             ))
 
-        let n = 19
         for i in range(n - 2) {
         let pos = points_m.at(i)
-            node(pos, [$times$], name: "s"+str(i))
+            node(pos, [$times$], name: "m"+str(i))
         }
 
         for i in range(n - 2) {
         let pos = points_s.at(i)
-            node(pos, [$times$], name: "m"+str(i))
+            node(pos, [$times$], name: "s"+str(i))
         }
         for i in range(n - 2) {
         let pos = points_am.at(i)
@@ -518,13 +645,145 @@ setting the right parameter for the convex hull / delaunay treshold is hard.
 }
 
 
-#diagram(branches())
+The situation can be represented by:
+#scale_center(diagram(
+    branches(),
+    node((0, 1.5), [x]),
+    node((0, -1.5), [x]),
+    node((-0.5, 0.0), [x]),
+    node((0.5, 0.0), [x]),
+))
 
-#diagram(branches(),
-    node((0, 0), box({set text(stroke: blue); $times$}))
+In this situation, we want to mesh everything such that the result has no hole. In order to create the mesh, I start by finding the 2 nearest points from the 2 branches:
+
+#scale_center(diagram(
+    branches(),
+    node((-0.5, 0.0), [P], fill: red),
+    node((0.5, 0.0), [Q], fill: red),
+    node((0, 1.5), [x]),
+    node((0, -1.5), [x]),
+))
+
+And then I find the points on the above contour that are the nearest from them:
+
+
+#scale_center(diagram(
+    branches(),
+    node((-0.5, 0.0), [P], fill: red),
+    node((0.5, 0.0), [Q], fill: red),
+    node((0, 1.5), [A], fill: blue),
+    node((0, -1.5), [B], fill: blue),
+))
+
+#note[
+    To be sure the 2 selected points $A$ and $B$ are not on the same side, I compute the determinant $det(P Q, Q A)$ and det $(P Q, Q B)$ . They must be opposite signs.
+]
+
+Once I found all these special points, I can use the previous algorithm to create 3 strips. There are 2 special triangles, represented in gray on the figure.
+
+#diagram(
+    mark-scale: 10%,
+    branches(),
+    node((-0.5, 0.0), [P], fill: red, name: <p>),
+    node((0.5, 0.0), [Q], fill: red, name: <q>),
+    node((0, 1.5), [A], fill: blue, name: <a>),
+    node((0, -1.5), [B], fill: blue, name: <b>),
+    edge(<s1>, <as0>, "-", stroke: yellow),
+    edge(<m1>, <am0>, "-", stroke: green),
+    for i in range(1, n - 3) {
+    // refer to nodes by label, e.g., <1>
+        edge(label("m"+str(i)), label("am"+str(i)), "-", stroke: green)
+        edge(label("m"+str(i)), label("am"+str(i+1)), "-", stroke: green)
+        edge(label("s"+str(i)), label("as"+str(i)), "-", stroke: yellow)
+        edge(label("s"+str(i)), label("as"+str(i+1)), "-", stroke: yellow)
+    },
+    edge(<a>, <m1>, stroke: gray),
+    edge(<a>, <s1>, stroke: gray),
+    edge(<m1>, <s1>, stroke: gray),
+
+    edge(<b>, <m16>, stroke: gray),
+    edge(<b>, <s16>, stroke: gray),
+    edge(<m16>, <s16>, stroke: gray),
+
+    edge(<m17>, <s17>, stroke: purple),
+    edge(<m0>, <s0>, stroke: purple),
+    edge(<p>, <q>, stroke: purple),
+
+    edge(<m17>, <s16>, stroke: purple),
+    edge(<s0>, <m1>, stroke: purple),
+    edge(<p>, <s17>, stroke: purple),
+    edge(<m0>, <q>, stroke: purple),
 )
 
+=== Normals
 
+The first version of my algorithm computed the normals section by section, computing the bisector for each segment and interpolating. The result was very unstable and did not work when the branch changed direction abruptly. To solve this issue I computed the normals when my mesh was completely generated, using a pre-existing algorithm.
+
+=== Adding leaves
+
+For the visual aspect, I added leaves by creating random triangles at the end of each trunk.
+
+#image("images/green_leaves.png", height: 150pt)
+
+
+#pagebreak()
+
+== Skeleton generation
+
+For the skeleton generation, I used a simpler version than what has done the paper. I adapted the ideas from another paper that used L-systems to generate the skeleton.
+
+I create the tree from the root, and add 1 or 2 children with random rotations and random branch lengths. Some details:
+- the probablity of having 2 childrens increase with depth
+- I make sure that the angle between 2 children is not too small, because in reality 2 children branches interact one with another
+- the radiuses of the 2 children don't have the same probability distribution.
+- I stop when the branch radius is smaller than a treshold.
+
+
+As I said, I chose to focus on the mesh generation and performance, and not the skeleton generation part.
+
+#pagebreak()
 = Analysis
 
 == Performance <performance>
+
+With the quadtree implementation, my algorithm took around 15s to generate 200_000 particles and 16_000 strands. This is slower than the paper. For reference:#footnote[PC is time for particle simulation in seconds, M is time for mesh generation in second]
+
+#image("images/stats_from_paper.png")
+
+I think my particle simulation code is slower, but my mesh generation code is faster. Also, I don't know what machine they used.
+
+Iw would be very valuable to benchmark each phase to know what is the bottleneck, but I did not have time to do it.
+
+== Limitations and improvements
+
+My implementation suffer from some edge cases, and some of them can make the app panic.
+    - when there are not enough points to merge
+    - when two children branches do not split (solved)
+    - when the branches split just before or just after a node in the tree
+
+
+The most useful improvements in the current state of the project are:
+- using a biology-based model to generate the skeleton
+- being able to specify custom branch profiles, not just circles.
+- benchmarking each phase to know which phase should be optimized
+- testing other data-structures to improve the performance of the simulation.
+- using paralelization
+
+
+
+
+
+
+#pagebreak()
+= Gallery <gallery>
+
+I spent some time adding visualization code for each phase of the generation. They can be enabled or disabled in the web interface also.
+
+#for i in range(1, 4) {
+    grid(columns: (1fr, 1fr),
+    image("images/tree_"+str(i)+"_skeleton.png"),
+    image("images/tree_"+str(i)+"_strands.png"),
+    image("images/tree_"+str(i)+"_contours.png"),
+    image("images/tree_"+str(i)+"_render.png"),
+    )
+}
