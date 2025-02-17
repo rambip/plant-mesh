@@ -158,26 +158,11 @@ impl TrajectoryBuilder {
         child: usize,
         offset: Vec3,
     ) -> Vec<Vec2> {
-        let origin = tree.position(parent);
-        let normal = tree.normal(parent);
-        let orientation = tree.orientation(parent);
-        let p_child = tree.position(child);
-
-        let d = (origin - p_child).normalize();
-
         let projected = |particle_id: &usize| {
             let pos_particle = self.trajectories[*particle_id][tree.depth(child)];
-            let u = pos_particle - origin;
-
-            let l = normal.dot(u) / normal.dot(d.normalize());
-            if l.is_nan() {
-                return u.truncate();
-            }
-            //assert!(!l.is_nan());
-            (orientation.inverse() * offset + (u - l * d.normalize())).truncate()
+            tree.space_to_plane(child, offset+pos_particle);
         };
 
-        // TODO: no collect for opti
         self.particles_per_node[child]
             .iter()
             .map(projected)
