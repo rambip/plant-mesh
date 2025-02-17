@@ -44,8 +44,8 @@ fn setup(
     commands.spawn( SimulationResult::default());
 
     commands.insert_resource(SimulationSetup {
-        n_points: 100,
-        min_angle: 2.5,
+        n_points: 20000,
+        min_angle: 2.0,
         seed: 0,
     });
     commands.insert_resource(NeedCompute(true));
@@ -75,10 +75,15 @@ fn simulate(
         need_compute.0 = false;
 
         let rng = StdRng::seed_from_u64(config.seed);
-        let cloud: Vec<Vec2> = rng
-            .sample_iter(UniformDisk::new(Vec2::ZERO, 1.))
-            .take(config.n_points)
-            .collect();
+        let cloud1 = rng.clone()
+            .sample_iter(UniformDisk::new(Vec2::ZERO, 0.4))
+            .take(config.n_points);
+
+        let cloud2 = rng.clone()
+            .sample_iter(UniformDisk::new(Vec2::X, 0.6))
+            .take(config.n_points);
+
+        let cloud: Vec<Vec2> = cloud1.chain(cloud2).collect();
 
         let result = convex_hull_graham(
             &cloud,
@@ -95,10 +100,10 @@ fn draw(
     result: Query<&SimulationResult>,
 ) {
     for r in &result {
-        for &p in &r.points {
-            let color = Color::srgba(0.0, 0.5, 0.0, 0.3);
-            gizmos.cross(p.extend(0.), 0.05, color);
-        }
+        //for &p in &r.points {
+        //    let color = Color::srgba(0.0, 0.5, 0.0, 0.3);
+        //    gizmos.cross(p.extend(0.), 0.05, color);
+        //}
         let n = r.border.len();
         for i in 0..n {
             let p1 = r.points[r.border[i]];
