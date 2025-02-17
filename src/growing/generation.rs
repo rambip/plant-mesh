@@ -55,16 +55,6 @@ impl Distribution<(f32, f32)> for ChildrenBranchRadiuses {
     }
 }
 
-struct ChildrenBranchSize {
-    radius: f32,
-}
-
-impl Distribution<f32> for ChildrenBranchSize {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f32 {
-        self.radius * rng.gen_range(3f32..5f32)
-    }
-}
-
 #[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GrowConfig {
     pub min_radius: f32,
@@ -76,6 +66,8 @@ pub struct GrowConfig {
     pub main_children_radius_factor: f32,
     pub secondary_children_radius_factor: f32,
     pub radius_variance: f32,
+    pub birth_coefficient: f32,
+    pub birth_power: f32,
 }
 
 impl GrowConfig {
@@ -120,7 +112,7 @@ pub fn grow_tree_basic(
 
     let children = if root.radius < config.min_radius {
         vec![]
-    } else if rng.gen_range(0f32..1f32) > 1. / f32::powf(2., depth as f32) {
+    } else if rng.gen_range(0f32..1f32) > 1. / config.birth_coefficient / (depth as f32).powf(config.birth_power) {
         let (rot1, rot2) = rng.sample(config.branch_rotation_2_child());
         let (r1, r2) = rng.sample(config.branch_radius(root.radius));
         let (s1, s2) = (
@@ -134,9 +126,7 @@ pub fn grow_tree_basic(
     } else {
         let rot = rng.sample(config.branch_rotation_1_child());
         let r = root.radius;
-        let s = rng.sample(ChildrenBranchSize {
-            radius: root.radius,
-        });
+        let s = rng.sample(config.branch_size(root.radius));
         vec![grow_tree_basic(config, rng, location(rot, r, s), depth + 1)]
     };
 

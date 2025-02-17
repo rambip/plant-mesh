@@ -77,7 +77,8 @@ impl TreePipelinePhase for Mesh {
                 .map(|&particle| extended_catmull_spline(&prev.trajectories[particle], spline_index));
         let contour = builder.register_points_trunk(points_base);
         prev.compute_each_branch_recursive(0, 0., contour, builder, config);
-        println!("number of particles: {}", prev.trajectories.len());
+        println!("number of strands: {}", prev.trajectories.len());
+        println!("number of particles: {}", prev.particles_per_node.iter().map(|x| x.len()).sum::<usize>());
 
         builder.to_mesh()
     }

@@ -160,7 +160,7 @@ impl TrajectoryBuilder {
     ) -> Vec<Vec2> {
         let projected = |particle_id: &usize| {
             let pos_particle = self.trajectories[*particle_id][tree.depth(child)];
-            tree.space_to_plane(child, offset+pos_particle);
+            tree.space_to_plane(child, offset+pos_particle)
         };
 
         self.particles_per_node[child]
