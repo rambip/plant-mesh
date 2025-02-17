@@ -121,6 +121,11 @@ pub fn convex_hull_graham(
         let p_1 = result[n_hull - 2];
         let p_2 = result[n_hull - 1];
         let angle = angle_to(points[p_1] - points[p_2], points[i] - points[p_2]);
+        if angle > 0.99*std::f32::consts::TAU {
+            // very strange: the convex hull is very pointy.
+            // it is probably a numerical instability.
+            return true
+        }
         angle < min_angle
     };
 
