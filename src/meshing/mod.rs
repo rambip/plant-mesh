@@ -119,6 +119,27 @@ impl VolumetricTree {
         min_dist >= 0.1 * radius
     }
 
+    fn find_branch_split(&self, root: usize, m_child: usize, s_child: usize, dz: f32) -> Option<f32> {
+        let min_branch_length = f32::min(
+            self.tree.branch_length_to_parent(m_child),
+            self.tree.branch_length_to_parent(s_child)
+        );
+        if !self.branch_is_spliting(root, m_child, s_child, min_branch_length) {
+            return None
+        }
+        let mut interval = 0f32..min_branch_length;
+        while (interval.end - interval.start) > dz {
+            let middle = 0.5*(interval.start + interval.end);
+            if self.branch_is_spliting(root, m_child, s_child, middle) {
+                interval = interval.start..middle
+            }
+            else {
+                interval = middle..interval.end
+            }
+        }
+        Some(interval.start)
+    }
+
     fn compute_branch_join(
         &self,
         parent: usize,
@@ -333,7 +354,11 @@ impl VolumetricTree {
                 let dz = config.spacing*parent_radius;
                 let m_radius = self.tree.radius(m_child);
                 let s_radius = self.tree.radius(s_child);
-                while l < min_branch_length && !self.branch_is_spliting(root, m_child, s_child, l) {
+
+                let l_split = self.find_branch_split(root, m_child, s_child, dz)
+                    .unwrap_or(min_branch_length);
+
+                while l < l_split {
                     let m_t = l / m_branch_length;
                     let s_t = l / s_branch_length;
                     let m_spline_index = SplineIndex::Local(depth, m_t);
