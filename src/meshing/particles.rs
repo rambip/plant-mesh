@@ -4,6 +4,7 @@ use bevy::{
     prelude::Component,
 };
 use bevy_gizmos::gizmos::Gizmos;
+use quadtree::{shapes::{Circle, Rect}, Point, QuadTree, P2};
 use rand::{prelude::Distribution, rngs::StdRng, Rng};
 
 use crate::{growing::TreeSkeleton, VisualDebug};
@@ -42,6 +43,21 @@ fn compute_neighbourgs(points: &[Vec2], d: f32) -> Vec<Vec<usize>> {
     .collect()
 }
 
+#[derive(Clone)]
+struct Particle<'a> {
+    id: usize,
+    points: &'a [Vec2],
+}
+
+impl<'a> Point for Particle<'a> {
+    fn point(&self) -> P2 {
+        P2::new(
+            self.points[self.id].x as f64,
+            self.points[self.id].y as f64,
+        )
+    }
+}
+
 pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let n = points.len();
     let mut velocities = vec![Vec2::ZERO; n];
@@ -57,15 +73,23 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
         points[i] *= scale;
     }
 
-    let mut neighbourgs = vec![];
+    let boundary = Rect::new(
+        P2::new(-radius as f64, -radius as f64),
+        P2::new(radius as f64, radius as f64),
+    );
 
-    for step in 0..config.n_steps {
-        if step % config.jump == 0 {
-            neighbourgs = compute_neighbourgs(&points, typical_distance);
+    for _ in 0..config.n_steps {
+        let mut qt = QuadTree::new(boundary, 20);
+        for i in 0..n {
+            qt.insert(&Particle {id: i, points});
         }
         for i in 0..n {
             velocities[i] = Vec2::ZERO;
-            for &j in &neighbourgs[i] {
+            let p = Particle {id: i, points};
+            let zone = Circle::new(p.point(), typical_distance as f64);
+            for particle in qt.query(&zone) {
+                if particle.id==i {continue}
+                let j = particle.id;
                 let relative_pos = points[i] - points[j];
                 let force = repulsion / relative_pos.length_squared();
                 velocities[i] += force * relative_pos.normalize();
@@ -83,6 +107,7 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
             }
         }
     }
+    assert!(points.iter().all(|x| !x.is_nan()));
 }
 
 #[derive(Component)]

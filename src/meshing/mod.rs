@@ -31,7 +31,6 @@ pub struct StrandsConfig {
     pub dt: f32,
     pub n_steps: usize,
     pub max_velocity_factor: f32,
-    pub jump: usize,
     pub interaction_radius_factor: f32,
 }
 
@@ -78,6 +77,7 @@ impl TreePipelinePhase for Mesh {
                 .map(|&particle| extended_catmull_spline(&prev.trajectories[particle], spline_index));
         let contour = builder.register_points_trunk(points_base);
         prev.compute_each_branch_recursive(0, 0., contour, builder, config);
+        println!("number of particles: {}", prev.trajectories.len());
 
         builder.to_mesh()
     }

@@ -12,6 +12,7 @@ rand = "0.8.5"
 smallvec = "1.13.2"
 toml = "0.8.20"
 serde = "1.0"
+quadtree = "0.3.5"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
