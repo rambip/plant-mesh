@@ -4,7 +4,7 @@ use bevy::{
     prelude::Component,
 };
 use bevy_gizmos::gizmos::Gizmos;
-use quadtree::{shapes::{Circle, Rect}, Point, QuadTree, P2};
+use quadtree_f32::{Rect, QuadTree, ItemId, Item};
 use rand::{prelude::Distribution, rngs::StdRng, Rng};
 
 use crate::{growing::TreeSkeleton, VisualDebug};
@@ -34,30 +34,6 @@ impl Distribution<Vec2> for UniformDisk {
     }
 }
 
-fn compute_neighbourgs(points: &[Vec2], d: f32) -> Vec<Vec<usize>> {
-    let n = points.len();
-    (0..n)
-    .map(|i| (0..n).filter(
-            |&j| i != j && (points[i] - points[j]).length() < d)
-        .collect())
-    .collect()
-}
-
-#[derive(Clone)]
-struct Particle<'a> {
-    id: usize,
-    points: &'a [Vec2],
-}
-
-impl<'a> Point for Particle<'a> {
-    fn point(&self) -> P2 {
-        P2::new(
-            self.points[self.id].x as f64,
-            self.points[self.id].y as f64,
-        )
-    }
-}
-
 pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let n = points.len();
     let mut velocities = vec![Vec2::ZERO; n];
@@ -68,28 +44,32 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
 
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
 
-    let scale = 0.9 * radius / max_radius;
+    let scale = radius / max_radius;
     for i in 0..n {
         points[i] *= scale;
     }
 
-    let boundary = Rect::new(
-        P2::new(-radius as f64, -radius as f64),
-        P2::new(radius as f64, radius as f64),
-    );
+    let mut qt = QuadTree::new(None.into_iter());
+    let particle_box = |p: Vec2| Rect {
+        min_x: p.x-typical_distance, 
+        min_y: p.y-typical_distance,
+        max_x: p.x+typical_distance, 
+        max_y: p.y+typical_distance,
+    };
 
-    for _ in 0..config.n_steps {
-        let mut qt = QuadTree::new(boundary, 20);
-        for i in 0..n {
-            qt.insert(&Particle {id: i, points});
+    for step in 0..config.n_steps {
+        if step%config.jump == 0 {
+            qt = QuadTree::new(
+                points.iter().enumerate().map(
+                    |(i, &p)| (ItemId(i), Item::Rect(particle_box(p))
+                )),
+            );
         }
         for i in 0..n {
             velocities[i] = Vec2::ZERO;
-            let p = Particle {id: i, points};
-            let zone = Circle::new(p.point(), typical_distance as f64);
-            for particle in qt.query(&zone) {
-                if particle.id==i {continue}
-                let j = particle.id;
+            for item in qt.get_ids_that_overlap(&particle_box(points[i])) {
+                let j = item.0;
+                if i==j {continue}
                 let relative_pos = points[i] - points[j];
                 let force = repulsion / relative_pos.length_squared();
                 velocities[i] += force * relative_pos.normalize();
@@ -154,7 +134,6 @@ impl TrajectoryBuilder {
     fn project_particles(
         &mut self,
         tree: &TreeSkeleton,
-        parent: usize,
         child: usize,
         offset: Vec3,
     ) -> Vec<Vec2> {
@@ -194,7 +173,7 @@ impl TrajectoryBuilder {
             }
             &[child] => {
                 self.compute_trajectories(tree, child, config);
-                let mut cloud = self.project_particles(tree, root, child, Vec3::ZERO);
+                let mut cloud = self.project_particles(tree, child, Vec3::ZERO);
                 spread_points(&mut cloud, radius, config);
                 let particle_ids = self.particles_per_node[child].clone();
                 self.register_particles_for_node(tree, root, &cloud, &particle_ids);
@@ -209,13 +188,11 @@ impl TrajectoryBuilder {
                 };
                 let m_cloud = self.project_particles(
                     tree,
-                    root,
                     m_child,
                     offset_direction * tree.radius(m_child),
                 );
                 let s_cloud = self.project_particles(
                     tree,
-                    root,
                     s_child,
                     -offset_direction * tree.radius(s_child),
                 );

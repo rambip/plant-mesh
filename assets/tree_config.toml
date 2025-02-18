@@ -14,13 +14,14 @@ up_attraction_factor = 0.3
 base_radius = 1.0
 
 [strands]
-particles_per_leaf = 10
+particles_per_leaf = 8
 wall_repulsion = 0.01
 repulsion = 0.1
 dt = 0.1
-n_steps = 10
-max_velocity_factor = 0.1
-interaction_radius_factor = 1.5
+n_steps = 15
+max_velocity_factor = 0.3
+interaction_radius_factor = 0.3
+jump = 3
 
 [mesh]
 spacing = 0.3
