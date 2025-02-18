@@ -779,7 +779,7 @@ The most useful improvements in the current state of the project are:
 
 I spent some time adding visualization code for each phase of the generation. They can be enabled or disabled in the web interface also.
 
-#for i in range(1, 4) {
+#for i in range(1, 5) {
     grid(columns: (1fr, 1fr),
     image("images/tree_"+str(i)+"_skeleton.png"),
     image("images/tree_"+str(i)+"_strands.png"),

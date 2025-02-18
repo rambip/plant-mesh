@@ -68,6 +68,8 @@ pub struct GrowConfig {
     pub radius_variance: f32,
     pub birth_coefficient: f32,
     pub birth_power: f32,
+    pub up_attraction_factor: f32,
+    pub base_radius: f32,
 }
 
 impl GrowConfig {
@@ -106,7 +108,7 @@ pub fn grow_tree_basic(
 ) -> PlantNode {
     let location = |rotation, radius, size| PlantNodeProps {
         position: root.position + root.orientation * rotation * (size * Vec3::Z),
-        orientation: root.orientation * rotation,
+        orientation: root.orientation.lerp(Quat::IDENTITY, config.up_attraction_factor) * rotation,
         radius,
     };
 

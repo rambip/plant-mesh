@@ -58,7 +58,7 @@ impl TreePipelinePhase for PlantNode {
     type Builder = StdRng;
     fn generate_from(_: Self::Previous, config: &Self::Config, rng: &mut Self::Builder) -> Self {
         let root = PlantNodeProps {
-            radius: 0.5,
+            radius: config.base_radius,
             orientation: Quat::default(),
             position: Vec3::ZERO,
         };
@@ -86,7 +86,7 @@ impl TreePipelinePhase for TreeSkeleton {
 }
 
 impl PlantNode {
-    pub fn _demo() -> Self {
+    pub fn demo() -> Self {
         Self {
             props: PlantNodeProps::new(Vec3::new(0., 0., -2.), 1.1, Vec3::new(0., 0., 1.)),
             children: vec![PlantNode {

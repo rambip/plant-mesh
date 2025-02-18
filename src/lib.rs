@@ -73,6 +73,7 @@ impl<T> Grow for T {
 mod tools;
 pub mod growing;
 pub mod meshing;
+pub mod shader;
 
 pub use growing::{
     GrowConfig,
@@ -85,3 +86,4 @@ pub use meshing::{
     StrandsConfig, MeshConfig, GeometryData,  VolumetricTree, TrajectoryBuilder,
     particles::spread_points
 };
+pub use shader::{CustomEntity, CustomMeshPipelinePlugin};

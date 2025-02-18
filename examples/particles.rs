@@ -54,7 +54,6 @@ fn setup(
             n_steps : 20,
             max_velocity_factor: 0.05,
             interaction_radius_factor: 10.,
-            jump: 5
         }
     ));
     commands.insert_resource(NeedCompute(true));

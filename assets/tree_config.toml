@@ -1,15 +1,17 @@
 [grow]
 min_radius = 0.05
-birth_coefficient = 0.8
-birth_power = 0.5
-max_turn_angle = 1.0
+birth_coefficient = 1.0
+birth_power = 0.8
+max_turn_angle = 1.2
 min_split_angle = 0.4
 max_zigzag_angle = 0.3
 radius_to_branch_ratio = 1.5
 branch_variance = 0.4
-main_children_radius_factor = 0.7
-secondary_children_radius_factor = 0.7
+main_children_radius_factor = 0.8
+secondary_children_radius_factor = 0.5
 radius_variance = 0.2
+up_attraction_factor = 0.3
+base_radius = 1.0
 
 [strands]
 particles_per_leaf = 10
@@ -21,10 +23,10 @@ max_velocity_factor = 0.1
 interaction_radius_factor = 1.5
 
 [mesh]
-spacing = 0.2
-leaf_size = 0.2
+spacing = 0.3
+leaf_size = 0.3
 leaf_angle = 0.8
-interior_angle = 2.3
+interior_angle = 2.5
 
 [animation]
 update_time = 5.0

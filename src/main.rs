@@ -319,7 +319,7 @@ fn draw_tree(
 
         let rng = StdRng::seed_from_u64(tree.seed);
 
-        let mut plant_builder = rng.clone().into();
+        let mut plant_builder: StdRng = rng.clone().into();
         let mut skeleton_builder = rng.clone().into();
         let mut particle_builder = rng.clone().into();
         let mut mesh_builder = rng.clone().into();
@@ -332,6 +332,11 @@ fn draw_tree(
             .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
             .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
             .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
+        //let tree_mesh = 
+        //    PlantNode::demo()
+        //    .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
+        //    .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
+        //    .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
 
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
