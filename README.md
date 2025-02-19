@@ -1,4 +1,4 @@
-= Plant mesh generation
+# Plant mesh generation
 
 ![image](https://github.com/user-attachments/assets/00e5496e-69df-4470-a771-6a1ce873c0ff)
 
