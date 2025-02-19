@@ -33,6 +33,11 @@ pub struct StrandsConfig {
     pub jump: usize,
     pub max_velocity_factor: f32,
     pub interaction_radius_factor: f32,
+    pub contour_attraction: f32,
+    // if alpha is near 0, the particles will initially be placed
+    // with a smaller density at the center
+    // and with a greater density at the edges.
+    pub alpha: f32,
 }
 
 impl TreePipelinePhase for VolumetricTree {

@@ -43,10 +43,11 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
     let max_velocity = radius * config.max_velocity_factor / config.dt;
 
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
+    let contour_attraction = config.contour_attraction * radius;
 
-    let scale = radius / max_radius;
     for i in 0..n {
-        points[i] *= scale;
+        let l = points[i].length();
+        points[i] *= radius * l.powf(config.alpha-1.) / max_radius.powf(config.alpha);
     }
 
     let mut qt = QuadTree::new(None.into_iter());
@@ -74,6 +75,7 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
                 let force = repulsion / relative_pos.length_squared();
                 velocities[i] += force * relative_pos.normalize();
             }
+            velocities[i] += contour_attraction * points[i];
             if velocities[i].length() > max_velocity {
                 velocities[i] = max_velocity * velocities[i].normalize()
             }
