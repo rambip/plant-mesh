@@ -230,13 +230,9 @@ impl VisualDebug for TrajectoryBuilder {
                 let a: f32 = i_t as f32 / self.trajectories.len() as f32;
                 let b: f32 = rng.gen();
                 let color = Color::srgb(1., 0.3 + 0.5 * a, 0.3 + 0.5 * b);
-                for i in 1..100 {
-                    let t1 = i as f32 / 100.;
-                    let t2 = (i + 1) as f32 / 100.;
-                    let pos1 = extended_catmull_spline(traj, SplineIndex::Global(t1));
-                    let pos2 = extended_catmull_spline(traj, SplineIndex::Global(t2));
-                    gizmos.line(pos1, pos2, color);
-                }
+                let positions = (0..50)
+                    .map(|i| extended_catmull_spline(traj, SplineIndex::Global((i as f32 / 49.).powf(2.))));
+                gizmos.linestrip(positions, color);
             }
         }
     }
