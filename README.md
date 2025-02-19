@@ -1,2 +1,6 @@
-Please look at https://github.com/rambip/plant-mesh for the code.
-If you just want to run it and play with the tree, go at https://rambip.github.io/plant-mesh
+= Plant mesh generation
+
+![image](https://github.com/user-attachments/assets/00e5496e-69df-4470-a771-6a1ce873c0ff)
+
+This work was done as part of my computer geometry course. 
+For more details, see [my report](./report.pdf)
