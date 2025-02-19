@@ -47,13 +47,16 @@ fn setup(
 
     commands.insert_resource(SimulationSetup (
         StrandsConfig {
-            particles_per_leaf : 300,
+            alpha: 1.0,
+            contour_attraction: 0.,
+            jump: 1,
+            particles_per_leaf : 1000,
             wall_repulsion : 0.01,
-            repulsion : 0.05,
-            dt : 0.02,
-            n_steps : 20,
+            repulsion : 0.1,
+            dt : 0.03,
+            n_steps : 1,
             max_velocity_factor: 0.05,
-            interaction_radius_factor: 10.,
+            interaction_radius: 0.1,
         }
     ));
     commands.insert_resource(NeedCompute(true));
@@ -65,12 +68,12 @@ fn handle_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut need_compute: ResMut<NeedCompute>,
 ) {
-    if keyboard.pressed(KeyCode::ArrowRight) {
+    if keyboard.just_pressed(KeyCode::ArrowRight) {
         simulation_params.0.n_steps += 1;
         println!("n steps: {}", simulation_params.0.n_steps);
         need_compute.0 = true;
     }
-    if keyboard.pressed(KeyCode::ArrowLeft) {
+    if keyboard.just_pressed(KeyCode::ArrowLeft) {
         if simulation_params.0.n_steps > 0 {
             simulation_params.0.n_steps -= 1;
         }

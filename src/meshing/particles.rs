@@ -4,8 +4,8 @@ use bevy::{
     prelude::Component,
 };
 use bevy_gizmos::gizmos::Gizmos;
-use quadtree_f32::{Rect, QuadTree, ItemId, Item};
 use rand::{prelude::Distribution, rngs::StdRng, Rng};
+use smallvec::SmallVec;
 
 use crate::{growing::TreeSkeleton, VisualDebug};
 
@@ -13,6 +13,118 @@ use super::{
     algorithms::{extended_catmull_spline, SplineIndex},
     StrandsConfig,
 };
+
+
+#[derive(Debug)]
+struct HGrid {
+    corner_a: Vec2,
+    corner_b: Vec2,
+    cells: Vec<SmallVec<[usize; SIZE_CELL]>>,
+    n_x: usize,
+    n_y: usize,
+}
+
+impl std::ops::IndexMut<(usize, usize)> for HGrid {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+        &mut self.cells[index.1*self.n_x + index.0]
+    }
+}
+
+impl std::ops::Index<(usize, usize)> for HGrid {
+    type Output = SmallVec<[usize; SIZE_CELL]>;
+
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        &self.cells[index.1*self.n_x + index.0]
+    }
+}
+
+const SIZE_CELL: usize = 1000;
+
+impl HGrid {
+    fn new_in_region(corner_a: Vec2, corner_b: Vec2, n_x: usize, n_y: usize) -> Self {
+        let cells = vec![SmallVec::new(); n_x*n_y];
+        Self {
+            corner_a,
+            corner_b,
+            cells,
+            n_x,
+            n_y
+        }
+    }
+    fn clear(&mut self) {
+        for i_x in 0..self.n_x {
+            for i_y in 0..self.n_y {
+                self[(i_x, i_y)].clear()
+            }
+        }
+    }
+    fn width(&self) -> f32 {
+        (self.corner_b - self.corner_a).x
+    }
+    fn height(&self) -> f32 {
+        (self.corner_b - self.corner_a).y
+    }
+    fn point_to_cell(&self, point: Vec2) -> (usize, usize) {
+        let x = f32::min(
+            (point.x - self.corner_a.x) / self.width() * self.n_x as f32,
+            self.n_x as f32 - 1.
+        );
+        let y = f32::min(
+            (point.y - self.corner_a.y) / self.height() * self.n_y as f32,
+            self.n_y as f32 - 1.
+        );
+        (x as usize, y as usize)
+    }
+    fn insert(&mut self, point: Vec2, id: usize) {
+        let i_grid = self.point_to_cell(point);
+        self[i_grid].push(id)
+    }
+    fn query_rect(&self, mut corner_a: Vec2, mut corner_b: Vec2, condition: impl Fn(usize) -> bool) -> SmallVec<[usize; SIZE_CELL]> {
+        let mut result = SmallVec::new();
+        corner_a.x = f32::max(corner_a.x, self.corner_a.x);
+        corner_a.y = f32::max(corner_a.y, self.corner_a.y);
+        corner_b.x = f32::min(corner_b.x, self.corner_b.x);
+        corner_b.y = f32::min(corner_b.y, self.corner_b.y);
+        let cell_a = self.point_to_cell(corner_a);
+        let cell_b = self.point_to_cell(corner_b);
+        for i_x in cell_a.0..=cell_b.0 {
+            for i_y in cell_a.1..=cell_b.1 {
+                for &i in &self[(i_x, i_y)] {
+                    if condition(i) {
+                        result.push(i)
+                    }
+                }
+            }
+        }
+        result
+    }
+}
+
+struct CubicKernel {
+    h: f32
+}
+
+impl CubicKernel {
+    fn f(&self, q: f32) -> f32 {
+        if q<1e0 {
+            1e0 - q.squared()*1.5 + q.cubed()*0.75
+        }
+        else if q<2e0 {
+            0.25*(2e0-q).cubed()
+        }
+        else {
+            0.
+        }
+    }
+
+    fn c(&self) -> f32 {
+        10e0/(7e0*std::f32::consts::PI*self.h.squared())
+    }
+
+    fn w(&self, l: f32) -> f32 {
+        self.c() * self.f(2.*l/self.h) 
+    }
+}
 
 pub struct UniformDisk {
     center: Vec2,
@@ -34,58 +146,73 @@ impl Distribution<Vec2> for UniformDisk {
     }
 }
 
+fn average<I: IntoIterator<Item=Vec2>>(i: I) -> Option<Vec2> {
+    let mut result = Vec2::ZERO;
+    let mut n = 0.;
+    for x in i.into_iter() {
+        result += x;
+        n += 1.
+    }
+    if n == 0. {
+        None
+    }
+    else {
+        Some(result / n)
+    }
+}
+
 pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let n = points.len();
-    let mut velocities = vec![Vec2::ZERO; n];
-    let wall_repulsion = config.wall_repulsion * radius;
-    let repulsion = config.repulsion * radius.squared() / (n as f32).sqrt();
-    let typical_distance = config.interaction_radius_factor*radius / (n as f32).sqrt();
-    let max_velocity = radius * config.max_velocity_factor / config.dt;
+    let mut pressures = vec![Vec2::ZERO; n];
+    let repulsion = config.repulsion * radius / config.interaction_radius;
 
-    let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
-    let contour_attraction = config.contour_attraction * radius;
+    let d = radius*config.interaction_radius;
+    let n_cells = (1./config.interaction_radius) as usize + 1;
+    let diag = Vec2::new(d, d);
 
-    for i in 0..n {
-        let l = points[i].length();
-        points[i] *= radius * l.powf(config.alpha-1.) / max_radius.powf(config.alpha);
-    }
+    let mut grid = HGrid::new_in_region(
+        Vec2::new(-radius, -radius),
+        Vec2::new(radius, radius),
+        n_cells, n_cells,
+    );
+    let mut neighbourghs = vec![SmallVec::new(); n];
 
-    let mut qt = QuadTree::new(None.into_iter());
-    let particle_box = |p: Vec2| Rect {
-        min_x: p.x-typical_distance, 
-        min_y: p.y-typical_distance,
-        max_x: p.x+typical_distance, 
-        max_y: p.y+typical_distance,
+    let kernel = CubicKernel {
+        h: d,
     };
 
-    for step in 0..config.n_steps {
-        if step%config.jump == 0 {
-            qt = QuadTree::new(
-                points.iter().enumerate().map(
-                    |(i, &p)| (ItemId(i), Item::Rect(particle_box(p))
-                )),
-            );
+
+    let max_radius = points.iter().map(|x| x.length()).reduce(f32::max)
+        .unwrap();
+    for i in 0..n {
+        points[i] *= 0.9*radius / max_radius
+    }
+
+    for _ in 0..config.n_steps {
+        grid.clear();
+        for i in 0..n {
+            grid.insert(points[i], i)
         }
         for i in 0..n {
-            velocities[i] = Vec2::ZERO;
-            for item in qt.get_ids_that_overlap(&particle_box(points[i])) {
-                let j = item.0;
-                if i==j {continue}
-                let relative_pos = points[i] - points[j];
-                let force = repulsion / relative_pos.length_squared();
-                velocities[i] += force * relative_pos.normalize();
-            }
-            velocities[i] += contour_attraction * points[i];
-            if velocities[i].length() > max_velocity {
-                velocities[i] = max_velocity * velocities[i].normalize()
-            }
+            neighbourghs[i] = grid.query_rect(points[i]-diag, points[i]+diag, |j| (points[i] - points[j]).length() < d);
         }
         for i in 0..n {
-            let target_position = points[i] + config.dt * velocities[i];
-            if target_position.length() > radius {
-                points[i] -= wall_repulsion * target_position.normalize()
-            } else {
-                points[i] = target_position;
+            pressures[i] = repulsion*
+                average(neighbourghs[i]
+                .iter()
+                .filter(|&&j| points[i] != points[j])
+                .map(|&j| (points[i] - points[j]).normalize())
+            ).unwrap_or(Vec2::ZERO);
+        }
+        for i in 0..n {
+            let mut velocity = Vec2::ZERO;
+            for &j in &neighbourghs[i] {
+                let l = (points[i] - points[j]).length();
+                velocity += kernel.w(l) * pressures[j];
+            };
+            points[i] += config.dt*velocity;
+            if points[i].length() > radius {
+                points[i] = 0.99*radius*points[i].normalize()
             }
         }
     }

@@ -25,19 +25,14 @@ pub struct VolumetricTree {
 
 #[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StrandsConfig {
-    pub particles_per_leaf: usize,
-    pub repulsion: f32,
-    pub wall_repulsion: f32,
-    pub dt: f32,
-    pub n_steps: usize,
-    pub jump: usize,
-    pub max_velocity_factor: f32,
-    pub interaction_radius_factor: f32,
-    pub contour_attraction: f32,
+    particles_per_leaf: usize,
+    repulsion: f32,
+    dt: f32,
+    n_steps: usize,
+    interaction_radius: f32,
     // if alpha is near 0, the particles will initially be placed
     // with a smaller density at the center
     // and with a greater density at the edges.
-    pub alpha: f32,
 }
 
 impl TreePipelinePhase for VolumetricTree {
