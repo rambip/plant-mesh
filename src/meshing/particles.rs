@@ -164,7 +164,7 @@ fn average<I: IntoIterator<Item=Vec2>>(i: I) -> Option<Vec2> {
 pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
     let n = points.len();
     let mut pressures = vec![Vec2::ZERO; n];
-    let repulsion = config.repulsion * radius / config.interaction_radius;
+    let repulsion = config.repulsion * radius / config.interaction_radius / (n as f32).sqrt();
 
     let d = radius*config.interaction_radius;
     let n_cells = (1./config.interaction_radius) as usize + 1;
