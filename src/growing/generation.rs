@@ -95,7 +95,8 @@ impl GrowConfig {
             max_turn_angle: self.max_turn_angle,
             length: radius*self.radius_to_branch_ratio,
             variability: radius*self.branch_variance,
-            min_distance: radius
+            // FIXME: use radius
+            min_distance: 0.5*radius
         }
     }
     fn branch_rotation_1_child(&self, radius: f32) -> ChildBranch {
