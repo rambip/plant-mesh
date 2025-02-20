@@ -1,16 +1,15 @@
 [grow]
 min_radius = 0.04
-birth_coefficient = 1.0
-birth_power = 0.8
-max_turn_angle = 1.3
-min_split_angle = 0.7
+birth_coefficient = 0.8
+birth_power = 0.6
+max_turn_angle = 0.8
 max_zigzag_angle = 0.3
 radius_to_branch_ratio = 1.5
 branch_variance = 0.4
-main_children_radius_factor = 0.8
-secondary_children_radius_factor = 0.5
-radius_variance = 0.2
-up_attraction_factor = 0.3
+main_children_radius_factor = 0.75
+secondary_children_radius_factor = 0.65
+radius_variance = 0.1
+up_attraction_factor = 0.2
 base_radius = 1.0
 
 [strands]
