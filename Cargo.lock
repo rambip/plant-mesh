@@ -2531,7 +2531,6 @@ dependencies = [
  "bevy_gizmos 0.15.1",
  "bevy_render",
  "bevy_simple_graphics",
- "quadtree-f32",
  "rand",
  "serde",
  "smallvec",
@@ -2610,12 +2609,6 @@ name = "profiling"
 version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afbdc74edc00b6f6a218ca6a5364d6226a259d4b8ea1af4a0ea063f27e179f4d"
-
-[[package]]
-name = "quadtree-f32"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeadc5f99b07f16cf97b1792193b7248a6239a305f68fdce625eda523f568612"
 
 [[package]]
 name = "quote"
