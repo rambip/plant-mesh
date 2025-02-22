@@ -8,7 +8,7 @@
 //! for better reuse of parts of Bevy's built-in mesh rendering logic.
 
 use bevy_app::{App, Plugin};
-use bevy_asset::{AssetId, Handle};
+use bevy_asset::{AssetId, DirectAssetAccessExt, Handle};
 use bevy_core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT};
 use bevy_ecs::{
     prelude::*,
@@ -141,11 +141,8 @@ where
 type DrawCustomMeshCommands = (SetItemPipeline, DrawCustomMesh);
 
 pub struct CustomMeshPipelinePlugin {
-    pub shader: Handle<Shader>,
+    pub shader_path: &'static str,
 }
-
-#[derive(Resource)]
-struct CustomMeshPipelineShader(Handle<Shader>);
 
 impl Plugin for CustomMeshPipelinePlugin {
     fn build(&self, app: &mut App) {
@@ -154,7 +151,6 @@ impl Plugin for CustomMeshPipelinePlugin {
         };
         // We make sure to add these to the render app, not the main app.
         render_app
-            .insert_resource(CustomMeshPipelineShader(self.shader.clone()))
             .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
             .init_resource::<MeshInstances>()
             .add_render_command::<Transparent3d, DrawCustomMeshCommands>()
@@ -168,12 +164,14 @@ impl Plugin for CustomMeshPipelinePlugin {
             );
     }
     fn finish(&self, app: &mut App) {
+        let shader: Handle<Shader> = app.world_mut().load_asset(self.shader_path);
+        let pipeline = CustomMeshPipeline::from_world_and_shader(&mut app.world_mut(), shader);
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
         // Creating this pipeline needs the RenderDevice and RenderQueue
         // which are only available once rendering plugins are initialized.
-        render_app.init_resource::<CustomMeshPipeline>();
+        render_app.insert_resource(pipeline);
     }
 }
 
@@ -333,11 +331,10 @@ fn extract_meshes(
     }
 }
 
-impl FromWorld for CustomMeshPipeline {
-    fn from_world(world: &mut World) -> Self {
+impl CustomMeshPipeline {
+    fn from_world_and_shader(world: &mut World, shader: Handle<Shader>) -> Self {
         // Load and compile the shader in the background.
         let render_device = world.resource::<RenderDevice>();
-        let shader = world.resource::<CustomMeshPipelineShader>();
 
         let view_layout_entries: Vec<BindGroupLayoutEntry> =
             DynamicBindGroupLayoutEntries::new_with_indices(
@@ -354,7 +351,7 @@ impl FromWorld for CustomMeshPipeline {
 
         CustomMeshPipeline {
             view_layout,
-            shader: shader.0.clone(),
+            shader
         }
     }
 }

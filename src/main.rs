@@ -1,5 +1,3 @@
-//! A simple 3D scene with light shining over a cube sitting on a plane.
-
 pub(crate) use bevy::prelude::*;
 use bevy::{
     asset::{AssetMetaCheck, AsyncReadExt, LoadContext},
@@ -91,24 +89,23 @@ fn main() {
     )
     .init_asset::<TreeConfig>()
     .register_asset_loader(TreeConfigLoader)
-    .add_plugins(bevy_gizmos::GizmoPlugin);
-    let shader: Handle<Shader> = app.world_mut().load_asset("shader.wgsl");
-    app.add_plugins(CustomMeshPipelinePlugin { shader })
-        .insert_resource(ClearColor(Color::srgb(0.2, 0.25, 0.2)))
-        .init_resource::<CameraSettings>()
-        .init_resource::<DebugFlags>()
-        .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (
-                handle_input,
-                update_view,
-                automatic_mode,
-                draw_tree,
-                visual_debug,
-            ),
-        )
-        .run();
+    .add_plugins(bevy_gizmos::GizmoPlugin)
+    .add_plugins(CustomMeshPipelinePlugin { shader_path: "shader.wgsl" })
+    .insert_resource(ClearColor(Color::srgb(0.2, 0.25, 0.2)))
+    .init_resource::<CameraSettings>()
+    .init_resource::<DebugFlags>()
+    .add_systems(Startup, setup)
+    .add_systems(
+        Update,
+        (
+            handle_input,
+            update_view,
+            automatic_mode,
+            draw_tree,
+            visual_debug,
+        ),
+    )
+    .run();
 }
 
 /// set up a simple 3D scene
