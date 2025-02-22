@@ -198,8 +198,9 @@ impl From<StdRng> for TreeSkeletonDebugData {
 }
 
 impl VisualDebug for TreeSkeletonDebugData {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
-        if debug_flags.skeleton {
+    type Flags = bool;
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags) {
+        if debug_flags {
             for i in 0..self.copy.node_count() {
                 let isometry = Isometry3d {
                     translation: self.copy.position(i).into(),

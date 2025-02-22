@@ -14,6 +14,7 @@ use crate::tools::{split_slice_circular, FloatProducer};
 use crate::TreePipelinePhase;
 
 use algorithms::{convex_hull_graham, extended_catmull_spline, mesh_between_contours, SplineIndex};
+pub use mesh_builder::MeshDebugFlags;
 pub use particles::TrajectoryBuilder;
 
 #[derive(Component)]

@@ -17,10 +17,15 @@ use bevy_render::{
     prelude::{Mesh, Mesh3d, Msaa},
     render_asset::RenderAssets,
     render_phase::{
-        AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand, RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases
+        AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
+        RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
     },
     render_resource::{
-        binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, FragmentState, MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor, Shader, ShaderStages, SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat, VertexState
+        binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry,
+        ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, DynamicBindGroupEntries,
+        DynamicBindGroupLayoutEntries, Face, FragmentState, MultisampleState, PipelineCache,
+        PrimitiveState, RenderPipelineDescriptor, Shader, ShaderStages, SpecializedRenderPipeline,
+        SpecializedRenderPipelines, TextureFormat, VertexState,
     },
     renderer::RenderDevice,
     sync_world::MainEntity,
@@ -301,10 +306,9 @@ fn extract_meshes(
     mut mesh_instances: ResMut<MeshInstances>,
     meshes: Extract<Query<(Entity, &Mesh3d)>>,
 ) {
-    mesh_instances.0 = 
-        meshes
+    mesh_instances.0 = meshes
         .iter()
-        .map(|(entity, m)| (entity.into(), MeshInstance {id: m.0.id()}))
+        .map(|(entity, m)| (entity.into(), MeshInstance { id: m.0.id() }))
         .collect();
 }
 
@@ -328,7 +332,7 @@ impl CustomMeshPipeline {
 
         CustomMeshPipeline {
             view_layout,
-            shader
+            shader,
         }
     }
 }

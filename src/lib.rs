@@ -1,42 +1,30 @@
-use bevy::prelude::Resource;
 use bevy_gizmos::gizmos::Gizmos;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Default, Debug, Resource)]
-pub struct DebugFlags {
-    pub triangles: bool,
-    pub strands: bool,
-    pub skeleton: bool,
-    pub other: bool,
-    pub contours: bool,
-}
-
-impl DebugFlags {
-    pub fn need_render_mesh(&self) -> bool {
-        self.contours || self.triangles || self.other
-    }
-}
-
 pub trait VisualDebug {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags);
+    type Flags: Copy + std::fmt::Debug + Default;
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags);
 }
 
 impl VisualDebug for () {
-    fn debug(&self, _: &mut Gizmos, _: DebugFlags) {}
+    type Flags = ();
+    fn debug(&self, _: &mut Gizmos, (): ()) {}
 }
 
 impl<T> VisualDebug for Option<&T>
 where
     T: VisualDebug,
 {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: DebugFlags) {
+    type Flags = T::Flags;
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags) {
         self.as_ref().map(|x| x.debug(gizmos, debug_flags));
     }
 }
 
 impl VisualDebug for StdRng {
-    fn debug(&self, _: &mut Gizmos, _: DebugFlags) {}
+    type Flags = ();
+    fn debug(&self, _: &mut Gizmos, (): ()) {}
 }
 
 pub trait TreePipelinePhase {
@@ -76,6 +64,6 @@ mod tools;
 
 pub use growing::{GrowConfig, PlantNode, Seed, TreeSkeleton, TreeSkeletonDebugData};
 pub use meshing::{
-    particles::spread_points, GeometryData, MeshConfig, StrandsConfig, TrajectoryBuilder,
-    VolumetricTree,
+    particles::spread_points, GeometryData, MeshConfig, MeshDebugFlags, StrandsConfig,
+    TrajectoryBuilder, VolumetricTree,
 };

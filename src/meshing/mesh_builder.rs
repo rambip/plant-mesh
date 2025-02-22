@@ -106,8 +106,16 @@ impl From<StdRng> for GeometryData {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct MeshDebugFlags {
+    pub triangles: bool,
+    pub contours: bool,
+    pub other: bool,
+}
+
 impl VisualDebug for GeometryData {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
+    type Flags = MeshDebugFlags;
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags) {
         if debug_flags.triangles {
             for i in 0..self.triangles.len() / 3 {
                 let (ia, ib, ic) = (

@@ -343,8 +343,9 @@ impl From<StdRng> for TrajectoryBuilder {
 }
 
 impl VisualDebug for TrajectoryBuilder {
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: crate::DebugFlags) {
-        if debug_flags.strands {
+    type Flags = bool;
+    fn debug(&self, gizmos: &mut Gizmos, debug_flags: bool) {
+        if debug_flags {
             let mut rng = self.rng.clone();
             for (i_t, traj) in self.trajectories.iter().enumerate() {
                 let a: f32 = i_t as f32 / self.trajectories.len() as f32;

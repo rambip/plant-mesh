@@ -15,9 +15,17 @@ use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
 use plant_mesh::{
-    DebugFlags, GeometryData, Grow, GrowConfig, MeshConfig, PlantNode, Seed, StrandsConfig,
+    GeometryData, Grow, GrowConfig, MeshConfig, MeshDebugFlags, PlantNode, Seed, StrandsConfig,
     TrajectoryBuilder, TreeSkeleton, TreeSkeletonDebugData, VisualDebug, VolumetricTree,
 };
+
+#[derive(Copy, Clone, Default, Debug, Resource)]
+pub struct DebugFlags {
+    pub strands: bool,
+    pub skeleton: bool,
+    pub other: bool,
+    pub mesh: MeshDebugFlags,
+}
 
 #[derive(Serialize, Deserialize)]
 struct AnimationConfig {
@@ -90,7 +98,9 @@ fn main() {
     .init_asset::<TreeConfig>()
     .register_asset_loader(TreeConfigLoader)
     .add_plugins(bevy_gizmos::GizmoPlugin)
-    .add_plugins(SimpleMeshPipelinePlugin { shader_path: "shader.wgsl" })
+    .add_plugins(SimpleMeshPipelinePlugin {
+        shader_path: "shader.wgsl",
+    })
     .insert_resource(ClearColor(Color::srgb(0.2, 0.25, 0.2)))
     .init_resource::<CameraSettings>()
     .init_resource::<DebugFlags>()
@@ -246,7 +256,7 @@ fn handle_input(
         camera_settings.show_mesh ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyW) {
-        flags.triangles ^= true;
+        flags.mesh.triangles ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
         flags.strands ^= true;
@@ -255,7 +265,7 @@ fn handle_input(
         flags.skeleton ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyC) {
-        flags.contours ^= true;
+        flags.mesh.contours ^= true;
     }
     if keyboard.just_pressed(KeyCode::KeyD) {
         flags.other ^= true;
@@ -337,8 +347,8 @@ fn visual_debug(
     mut gizmos: Gizmos,
 ) {
     for (a, b, c) in &query {
-        a.debug(&mut gizmos, *flags);
-        b.debug(&mut gizmos, *flags);
-        c.debug(&mut gizmos, *flags);
+        a.debug(&mut gizmos, flags.skeleton);
+        b.debug(&mut gizmos, flags.strands);
+        c.debug(&mut gizmos, flags.mesh);
     }
 }
