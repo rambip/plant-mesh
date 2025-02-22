@@ -7,45 +7,46 @@
 //! into Bevy—render nodes are another, lower-level method—but it does allow
 //! for better reuse of parts of Bevy's built-in mesh rendering logic.
 
-use bevy::ecs::system::lifetimeless::Read;
-use bevy::{
-    core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT},
-    ecs::{
-        query::ROQueryItem,
-        system::{lifetimeless::SRes, SystemParamItem},
-    },
+use bevy_app::{App, Plugin};
+use bevy_asset::{AssetId, Handle};
+use bevy_core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT};
+use bevy_ecs::{
     prelude::*,
-    render::{
-        render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
-            SetItemPipeline, TrackedRenderPass,
-        },
-        render_resource::{
-            ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, FragmentState,
-            MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor,
-            SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat, VertexState,
-        },
-        renderer::RenderDevice,
-        view::{ExtractedView, RenderVisibleEntities},
-        Render, RenderApp, RenderSet,
+    query::ROQueryItem,
+    system::{
+        lifetimeless::{Read, SRes},
+        SystemParamItem,
     },
-    utils::HashMap,
 };
 use bevy_render::{
     mesh::{
         allocator::MeshAllocator, MeshVertexBufferLayouts, PrimitiveTopology, RenderMesh,
         RenderMeshBufferInfo,
     },
+    prelude::{Mesh, Mesh3d, Msaa},
     render_asset::RenderAssets,
+    render_phase::{
+        AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
+        SetItemPipeline, TrackedRenderPass,
+    },
     render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases},
     render_resource::{
         binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry,
         DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, ShaderStages,
     },
+    render_resource::{
+        ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, FragmentState,
+        MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor, Shader,
+        SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat, VertexState,
+    },
+    renderer::RenderDevice,
     sync_world::MainEntity,
+    view::{ExtractedView, RenderVisibleEntities},
     view::{ViewUniform, ViewUniforms},
-    Extract,
+    Extract, ExtractSchedule, Render, RenderApp, RenderSet,
 };
+
+use std::collections::HashMap;
 
 #[derive(Component)]
 pub struct CustomEntity;
@@ -55,21 +56,17 @@ pub struct MeshInstance {
     id: AssetId<Mesh>,
 }
 
-#[derive(Clone, Default, Resource, Deref, DerefMut)]
+#[derive(Clone, Default, Resource)]
 pub struct MeshInstances(pub HashMap<MainEntity, MeshInstance>);
-
-//#[derive(Clone, Resource, ExtractResource)]
-//struct MyMeshes(Vec<Handle<Mesh>>);
 
 /// Holds a reference to our shader.
 ///
 /// This is loaded at app creation time.
 #[derive(Resource)]
 struct CustomMeshPipeline {
+    shader: Handle<Shader>,
     view_layout: BindGroupLayout,
 }
-
-pub const SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(13828845428412094821);
 
 /// A [`RenderCommand`] that binds the vertex and index buffers and issues the
 /// draw command for our custom phase item.
@@ -99,7 +96,7 @@ where
         (meshes, mesh_instances, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let Some(MeshInstance { id, .. }) = mesh_instances.get(&item.main_entity()) else {
+        let Some(MeshInstance { id, .. }) = mesh_instances.0.get(&item.main_entity()) else {
             return RenderCommandResult::Skip;
         };
 
@@ -143,24 +140,21 @@ where
 /// the render phase.
 type DrawCustomMeshCommands = (SetItemPipeline, DrawCustomMesh);
 
-pub struct CustomMeshPipelinePlugin;
+pub struct CustomMeshPipelinePlugin {
+    pub shader: Handle<Shader>,
+}
+
+#[derive(Resource)]
+struct CustomMeshPipelineShader(Handle<Shader>);
 
 impl Plugin for CustomMeshPipelinePlugin {
     fn build(&self, app: &mut App) {
-        let mut shaders = app.world_mut().resource_mut::<Assets<Shader>>();
-        shaders.insert(
-            &SHADER_HANDLE,
-            Shader::from_wgsl(include_str!("shader.wgsl"), file!()),
-        );
-    }
-    fn finish(&self, app: &mut App) {
-        // We make sure to add these to the render app, not the main app.
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
-
+        // We make sure to add these to the render app, not the main app.
         render_app
-            .init_resource::<CustomMeshPipeline>()
+            .insert_resource(CustomMeshPipelineShader(self.shader.clone()))
             .init_resource::<SpecializedRenderPipelines<CustomMeshPipeline>>()
             .init_resource::<MeshInstances>()
             .add_render_command::<Transparent3d, DrawCustomMeshCommands>()
@@ -172,6 +166,14 @@ impl Plugin for CustomMeshPipelinePlugin {
                     queue_meshes.in_set(RenderSet::Queue),
                 ),
             );
+    }
+    fn finish(&self, app: &mut App) {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
+            return;
+        };
+        // Creating this pipeline needs the RenderDevice and RenderQueue
+        // which are only available once rendering plugins are initialized.
+        render_app.init_resource::<CustomMeshPipeline>();
     }
 }
 
@@ -251,20 +253,20 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
             layout: vec![self.view_layout.clone()],
             push_constant_ranges: vec![],
             vertex: VertexState {
-                shader: SHADER_HANDLE,
+                shader: self.shader.clone(),
                 shader_defs: vec![],
                 entry_point: "vertex".into(),
                 buffers: vec![vertex_layout],
             },
             fragment: Some(FragmentState {
-                shader: SHADER_HANDLE,
+                shader: self.shader.clone(),
                 shader_defs: vec![],
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     // Ordinarily, you'd want to check whether the view has the
                     // HDR format and substitute the appropriate texture format
                     // here, but we omit that for simplicity.
-                    format: TextureFormat::bevy_default(),
+                    format: TextureFormat::Rgba8UnormSrgb,
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
@@ -279,8 +281,8 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
                 format: CORE_3D_DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::Greater,
-                stencil: default(),
-                bias: default(),
+                stencil: Default::default(),
+                bias: Default::default(),
             }),
             multisample: MultisampleState {
                 count: msaa.samples(),
@@ -323,9 +325,11 @@ fn extract_meshes(
     mut mesh_instances: ResMut<MeshInstances>,
     meshes: Extract<Query<(Entity, &Mesh3d), With<CustomEntity>>>,
 ) {
-    mesh_instances.clear();
+    mesh_instances.0.clear();
     for (entity, m) in &meshes {
-        mesh_instances.insert(entity.into(), MeshInstance { id: m.0.id() });
+        mesh_instances
+            .0
+            .insert(entity.into(), MeshInstance { id: m.0.id() });
     }
 }
 
@@ -333,6 +337,7 @@ impl FromWorld for CustomMeshPipeline {
     fn from_world(world: &mut World) -> Self {
         // Load and compile the shader in the background.
         let render_device = world.resource::<RenderDevice>();
+        let shader = world.resource::<CustomMeshPipelineShader>();
 
         let view_layout_entries: Vec<BindGroupLayoutEntry> =
             DynamicBindGroupLayoutEntries::new_with_indices(
@@ -347,6 +352,9 @@ impl FromWorld for CustomMeshPipeline {
         let view_layout =
             render_device.create_bind_group_layout("mesh_view_layout", &view_layout_entries);
 
-        CustomMeshPipeline { view_layout }
+        CustomMeshPipeline {
+            view_layout,
+            shader: shader.0.clone(),
+        }
     }
 }

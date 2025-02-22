@@ -2,37 +2,23 @@
 
 pub(crate) use bevy::prelude::*;
 use bevy::{
-    asset::{AsyncReadExt, LoadContext, AssetMetaCheck},
+    asset::{AssetMetaCheck, AsyncReadExt, LoadContext},
     input::{
         gestures::PinchGesture,
         mouse::{MouseMotion, MouseWheel},
     },
 };
+use bevy_simple_graphics::{CustomEntity, CustomMeshPipelinePlugin};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-use shader::CustomEntity;
 use std::f32::consts::PI;
 
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
-
-mod shader;
-
 use plant_mesh::{
-    GrowConfig,
-    StrandsConfig,
-    MeshConfig,
-    DebugFlags,
-    Seed,
-    GeometryData,
-    TreeSkeleton,
-    Grow,
-    PlantNode,
-    TreeSkeletonDebugData,
-    VisualDebug,
-    VolumetricTree,
-    TrajectoryBuilder
+    DebugFlags, GeometryData, Grow, GrowConfig, MeshConfig, PlantNode, Seed, StrandsConfig,
+    TrajectoryBuilder, TreeSkeleton, TreeSkeletonDebugData, VisualDebug, VolumetricTree,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -50,11 +36,11 @@ struct TreeConfig {
 
 // TODO: easiest way to do it ?
 #[derive(Component)]
-struct Tree{
+struct Tree {
     config: Handle<TreeConfig>,
     last_render_time: f32,
     need_render: bool,
-    seed: u64
+    seed: u64,
 }
 
 struct TreeConfigLoader;
@@ -88,49 +74,46 @@ impl AssetLoader for TreeConfigLoader {
 }
 
 fn main() {
-    App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        canvas: Some("#bevy".into()),
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(AssetPlugin {
-                    meta_check: AssetMetaCheck::Never,
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    canvas: Some("#bevy".into()),
                     ..default()
                 }),
-        )
-        .init_asset::<TreeConfig>()
-        .register_asset_loader(TreeConfigLoader)
-        .add_plugins(bevy_sprite::SpritePlugin {})
-        .add_plugins(bevy_gizmos::GizmoPlugin)
-        .add_plugins(shader::CustomMeshPipelinePlugin)
+                ..default()
+            })
+            .set(AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            }),
+    )
+    .init_asset::<TreeConfig>()
+    .register_asset_loader(TreeConfigLoader)
+    .add_plugins(bevy_gizmos::GizmoPlugin);
+    let shader: Handle<Shader> = app.world_mut().load_asset("shader.wgsl");
+    app.add_plugins(CustomMeshPipelinePlugin { shader })
         .insert_resource(ClearColor(Color::srgb(0.2, 0.25, 0.2)))
         .init_resource::<CameraSettings>()
         .init_resource::<DebugFlags>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (handle_input, update_view, automatic_mode, draw_tree,visual_debug))
+        .add_systems(
+            Update,
+            (
+                handle_input,
+                update_view,
+                automatic_mode,
+                draw_tree,
+                visual_debug,
+            ),
+        )
         .run();
 }
 
 /// set up a simple 3D scene
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    //mut materials: ResMut<Assets<StandardMaterial>>,
-    camera_settings: Res<CameraSettings>,
-    server: Res<AssetServer>,
-) {
+fn setup(mut commands: Commands, camera_settings: Res<CameraSettings>, server: Res<AssetServer>) {
     let config_handle: Handle<TreeConfig> = server.load("tree_config.toml");
-    // draw a floor
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(100., 100., 0.1))),
-        Transform::from_translation(-Vec3::Z * 0.1),
-    ));
-    commands.spawn((Mesh3d(meshes.add(Circle::new(4.0))),));
     commands.spawn((
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
@@ -143,7 +126,7 @@ fn setup(
             need_render: true,
             seed: 0,
         },
-        shader::CustomEntity,
+        CustomEntity,
     ));
 }
 
@@ -174,7 +157,11 @@ impl Default for CameraSettings {
 impl CameraSettings {
     fn transform(&self, time: f32) -> Transform {
         let mut camera = Transform::default();
-        let angle = if self.automatic_mode { 0.5 * time } else { self.orbit_angle };
+        let angle = if self.automatic_mode {
+            0.5 * time
+        } else {
+            self.orbit_angle
+        };
         camera.rotation =
               Quat::from_rotation_z(angle)
             * Quat::from_rotation_x(0.5*PI + self.tilt) // swap y and z
@@ -283,12 +270,13 @@ fn automatic_mode(
     camera_settings: Res<CameraSettings>,
     mut trees: Query<&mut Tree>,
     configs: Res<Assets<TreeConfig>>,
-){
+) {
     if camera_settings.automatic_mode {
         for mut t in &mut trees {
-            let Some(config) = configs.get(&t.config) else {return};
-            if time.elapsed_secs() - t.last_render_time > 
-                config.animation.update_time {
+            let Some(config) = configs.get(&t.config) else {
+                return;
+            };
+            if time.elapsed_secs() - t.last_render_time > config.animation.update_time {
                 t.seed += 1;
                 t.need_render = true;
             }
@@ -332,7 +320,7 @@ fn draw_tree(
             .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
             .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
             .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
-        //let tree_mesh = 
+        //let tree_mesh =
         //    PlantNode::demo()
         //    .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
         //    .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
@@ -341,9 +329,9 @@ fn draw_tree(
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
 
-        commands.entity(e).insert((
-                mesh_builder, skeleton_builder, particle_builder
-        ));
+        commands
+            .entity(e)
+            .insert((mesh_builder, skeleton_builder, particle_builder));
     }
 }
 

@@ -1,0 +1,11 @@
+[package]
+name = "bevy_simple_graphics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy_render = "0.15.1"
+bevy_ecs = "0.15.1"
+bevy_core_pipeline = "0.15.1"
+bevy_app = "0.15.1"
+bevy_asset = "0.15.1"

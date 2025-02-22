@@ -70,20 +70,12 @@ impl<T> Grow for T {
     }
 }
 
-mod tools;
 pub mod growing;
 pub mod meshing;
-pub mod shader;
+mod tools;
 
-pub use growing::{
-    GrowConfig,
-    Seed,
-    TreeSkeleton,
-    PlantNode,
-    TreeSkeletonDebugData
-};
+pub use growing::{GrowConfig, PlantNode, Seed, TreeSkeleton, TreeSkeletonDebugData};
 pub use meshing::{
-    StrandsConfig, MeshConfig, GeometryData,  VolumetricTree, TrajectoryBuilder,
-    particles::spread_points
+    particles::spread_points, GeometryData, MeshConfig, StrandsConfig, TrajectoryBuilder,
+    VolumetricTree,
 };
-pub use shader::{CustomEntity, CustomMeshPipelinePlugin};

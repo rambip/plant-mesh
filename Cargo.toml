@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.15.1", default-features = false, features = ["bevy_render", "bevy_window", "x11", "webgl2", "bevy_core_pipeline", "bevy_asset", "dynamic_linking"] }
 bevy_render = "0.15.1"
-bevy_sprite = "0.15.1"
 bevy_gizmos = {path="./bevy_gizmos", features=["bevy_render", "webgl"]}
+bevy_simple_graphics = {path="./bevy_simple_graphics"}
 rand = "0.8.5"
 smallvec = "1.13.2"
 toml = "0.8.20"
@@ -21,3 +21,9 @@ opt-level = 1
 # Enable a large amount of optimization in the dev profile for dependencies.
 [profile.dev.package."*"]
 opt-level = 3
+
+[workspace]
+members = [
+    "bevy_gizmos",
+    "bevy_simple_graphics"
+]

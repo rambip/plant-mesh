@@ -1,3 +1,4 @@
+//! Utilities to manipulate very simple layouts for shaders
 use bevy_ecs::{component::Component, entity::Entity, system::{lifetimeless::Read, Commands, Query, Res, Resource}, world::FromWorld};
 use bevy_render::{render_phase::{PhaseItem, RenderCommand, RenderCommandResult}, render_resource::{binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, ShaderStages}, renderer::RenderDevice, view::{ViewUniform, ViewUniforms}};
 
