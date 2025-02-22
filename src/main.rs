@@ -6,7 +6,7 @@ use bevy::{
         mouse::{MouseMotion, MouseWheel},
     },
 };
-use bevy_simple_graphics::{CustomEntity, CustomMeshPipelinePlugin};
+use bevy_simple_graphics::SimpleMeshPipelinePlugin;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
@@ -90,7 +90,7 @@ fn main() {
     .init_asset::<TreeConfig>()
     .register_asset_loader(TreeConfigLoader)
     .add_plugins(bevy_gizmos::GizmoPlugin)
-    .add_plugins(CustomMeshPipelinePlugin { shader_path: "shader.wgsl" })
+    .add_plugins(SimpleMeshPipelinePlugin { shader_path: "shader.wgsl" })
     .insert_resource(ClearColor(Color::srgb(0.2, 0.25, 0.2)))
     .init_resource::<CameraSettings>()
     .init_resource::<DebugFlags>()
@@ -123,7 +123,7 @@ fn setup(mut commands: Commands, camera_settings: Res<CameraSettings>, server: R
             need_render: true,
             seed: 0,
         },
-        CustomEntity,
+        Visibility::Visible,
     ));
 }
 
@@ -291,9 +291,9 @@ fn draw_tree(
 ) {
     for (e, mut tree) in trees.iter_mut() {
         if camera_settings.show_mesh {
-            commands.entity(e).insert(CustomEntity);
+            commands.entity(e).insert(Visibility::Visible);
         } else {
-            commands.entity(e).remove::<CustomEntity>();
+            commands.entity(e).remove::<Visibility>();
         }
 
         if !tree.need_render {
@@ -317,11 +317,6 @@ fn draw_tree(
             .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
             .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
             .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
-        //let tree_mesh =
-        //    PlantNode::demo()
-        //    .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
-        //    .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
-        //    .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
 
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));

@@ -1,12 +1,3 @@
-//! Demonstrates how to enqueue custom draw commands in a render phase.
-//!
-//! This example shows how to use the built-in
-//! [`bevy_render::render_phase::BinnedRenderPhase`] functionality with a
-//! custom [`RenderCommand`] to allow inserting arbitrary GPU drawing logic
-//! into Bevy's pipeline. This is not the only way to add custom rendering code
-//! into Bevy—render nodes are another, lower-level method—but it does allow
-//! for better reuse of parts of Bevy's built-in mesh rendering logic.
-
 use bevy_app::{App, Plugin};
 use bevy_asset::{AssetId, DirectAssetAccessExt, Handle};
 use bevy_core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT};
@@ -26,30 +17,18 @@ use bevy_render::{
     prelude::{Mesh, Mesh3d, Msaa},
     render_asset::RenderAssets,
     render_phase::{
-        AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
-        SetItemPipeline, TrackedRenderPass,
-    },
-    render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases},
-    render_resource::{
-        binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry,
-        DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, ShaderStages,
+        AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand, RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases
     },
     render_resource::{
-        ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, FragmentState,
-        MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor, Shader,
-        SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat, VertexState,
+        binding_types::uniform_buffer, BindGroup, BindGroupLayout, BindGroupLayoutEntry, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, Face, FragmentState, MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor, Shader, ShaderStages, SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat, VertexState
     },
     renderer::RenderDevice,
     sync_world::MainEntity,
-    view::{ExtractedView, RenderVisibleEntities},
-    view::{ViewUniform, ViewUniforms},
+    view::{ExtractedView, RenderVisibleEntities, ViewUniform, ViewUniforms},
     Extract, ExtractSchedule, Render, RenderApp, RenderSet,
 };
 
 use std::collections::HashMap;
-
-#[derive(Component)]
-pub struct CustomEntity;
 
 #[derive(Clone)]
 pub struct MeshInstance {
@@ -140,11 +119,11 @@ where
 /// the render phase.
 type DrawCustomMeshCommands = (SetItemPipeline, DrawCustomMesh);
 
-pub struct CustomMeshPipelinePlugin {
+pub struct SimpleMeshPipelinePlugin {
     pub shader_path: &'static str,
 }
 
-impl Plugin for CustomMeshPipelinePlugin {
+impl Plugin for SimpleMeshPipelinePlugin {
     fn build(&self, app: &mut App) {
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
@@ -295,7 +274,6 @@ impl SpecializedRenderPipeline for CustomMeshPipeline {
 #[derive(Component)]
 struct ViewBindGroup(BindGroup);
 
-// FIXME: init view uniforms
 fn prepare_view_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
@@ -321,14 +299,13 @@ fn prepare_view_bind_groups(
 
 fn extract_meshes(
     mut mesh_instances: ResMut<MeshInstances>,
-    meshes: Extract<Query<(Entity, &Mesh3d), With<CustomEntity>>>,
+    meshes: Extract<Query<(Entity, &Mesh3d)>>,
 ) {
-    mesh_instances.0.clear();
-    for (entity, m) in &meshes {
-        mesh_instances
-            .0
-            .insert(entity.into(), MeshInstance { id: m.0.id() });
-    }
+    mesh_instances.0 = 
+        meshes
+        .iter()
+        .map(|(entity, m)| (entity.into(), MeshInstance {id: m.0.id()}))
+        .collect();
 }
 
 impl CustomMeshPipeline {
