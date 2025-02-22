@@ -180,7 +180,6 @@ impl PlantNode {
     }
 }
 
-
 #[derive(Clone)]
 pub struct TreeSkeleton {
     pub node_props: Vec<PlantNodeProps>,
@@ -263,7 +262,8 @@ impl TreeSkeleton {
     }
 
     pub fn average_branch_length_to_children(&self, node: usize) -> f32 {
-        let sum: f32 = self.children(node)
+        let sum: f32 = self
+            .children(node)
             .iter()
             .map(|&child| (self.position(node) - self.position(child)).length())
             .sum();

@@ -8,7 +8,7 @@ struct ChildrenBranches {
     max_turn_angle: f32,
     length: f32,
     variability: f32,
-    min_distance: f32
+    min_distance: f32,
 }
 
 impl Distribution<((Quat, f32), (Quat, f32))> for ChildrenBranches {
@@ -17,15 +17,17 @@ impl Distribution<((Quat, f32), (Quat, f32))> for ChildrenBranches {
             let a: f32 = rng.gen_range(0f32..self.max_turn_angle);
             let b: f32 = rng.gen_range(0f32..self.max_turn_angle);
             let c: f32 = rng.gen_range(0f32..2. * std::f32::consts::PI);
-            let rot1 = Quat::from_rotation_z(c) * Quat::from_rotation_x(a) * Quat::from_rotation_z(-c);
-            let rot2 = Quat::from_rotation_z(c) * Quat::from_rotation_x(-b) * Quat::from_rotation_z(-c);
-            let branch_range = (self.length - self.variability) ..(self.length + self.variability);
+            let rot1 =
+                Quat::from_rotation_z(c) * Quat::from_rotation_x(a) * Quat::from_rotation_z(-c);
+            let rot2 =
+                Quat::from_rotation_z(c) * Quat::from_rotation_x(-b) * Quat::from_rotation_z(-c);
+            let branch_range = (self.length - self.variability)..(self.length + self.variability);
             let l1 = rng.gen_range(branch_range.clone());
             let l2 = rng.gen_range(branch_range.clone());
             let pos1 = rot1 * l1;
             let pos2 = rot2 * l2;
             if (pos1 - pos2).length() > self.min_distance {
-                return ((rot1, l1), (rot2, l2))
+                return ((rot1, l1), (rot2, l2));
             }
         }
         panic!("not able to generate branch children with these parameters: {self:?}");
@@ -43,7 +45,7 @@ impl Distribution<(Quat, f32)> for ChildBranch {
         let a: f32 = rng.gen_range(0f32..self.max_angle);
         let c: f32 = rng.gen_range(0f32..2. * std::f32::consts::PI);
         let rot = Quat::from_rotation_z(c) * Quat::from_rotation_x(a) * Quat::from_rotation_z(-c);
-        let branch_range = (self.length - self.variability) ..(self.length + self.variability);
+        let branch_range = (self.length - self.variability)..(self.length + self.variability);
         let l = rng.gen_range(branch_range.clone());
         (rot, l)
     }
@@ -93,17 +95,17 @@ impl GrowConfig {
     fn branch_rotation_2_child(&self, radius: f32) -> ChildrenBranches {
         ChildrenBranches {
             max_turn_angle: self.max_turn_angle,
-            length: radius*self.radius_to_branch_ratio,
-            variability: radius*self.branch_variance,
+            length: radius * self.radius_to_branch_ratio,
+            variability: radius * self.branch_variance,
             // FIXME: use radius
-            min_distance: 0.5*radius
+            min_distance: 0.5 * radius,
         }
     }
     fn branch_rotation_1_child(&self, radius: f32) -> ChildBranch {
         ChildBranch {
             max_angle: self.max_zigzag_angle,
-            length: radius*self.radius_to_branch_ratio,
-            variability: radius*self.branch_variance,
+            length: radius * self.radius_to_branch_ratio,
+            variability: radius * self.branch_variance,
         }
     }
     fn branch_radius(&self, radius: f32) -> ChildrenBranchRadiuses {
@@ -124,13 +126,18 @@ pub fn grow_tree_basic(
 ) -> PlantNode {
     let location = |rotation, radius, size| PlantNodeProps {
         position: root.position + root.orientation * rotation * (size * Vec3::Z),
-        orientation: root.orientation.lerp(Quat::IDENTITY, config.up_attraction_factor) * rotation,
+        orientation: root
+            .orientation
+            .lerp(Quat::IDENTITY, config.up_attraction_factor)
+            * rotation,
         radius,
     };
 
     let children = if root.radius < config.min_radius {
         vec![]
-    } else if rng.gen_range(0f32..1f32) > 1. / config.birth_coefficient / (depth as f32).powf(config.birth_power) {
+    } else if rng.gen_range(0f32..1f32)
+        > 1. / config.birth_coefficient / (depth as f32).powf(config.birth_power)
+    {
         let ((rot1, s1), (rot2, s2)) = rng.sample(config.branch_rotation_2_child(root.radius));
         let (r1, r2) = rng.sample(config.branch_radius(root.radius));
         vec![

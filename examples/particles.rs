@@ -1,11 +1,11 @@
-use rand::Rng;
-use rand::{rngs::StdRng, SeedableRng};
 use bevy::prelude::*;
 use bevy_gizmos::gizmos::Gizmos;
 use plant_mesh::meshing::{
+    particles::{spread_points, UniformDisk},
     StrandsConfig,
-    particles::{UniformDisk, spread_points}
 };
+use rand::Rng;
+use rand::{rngs::StdRng, SeedableRng};
 
 fn main() {
     App::new()
@@ -31,34 +31,26 @@ struct SimulationResult {
     points: Vec<Vec2>,
 }
 
-fn setup(
-    mut commands: Commands
-) {
+fn setup(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         bevy::core_pipeline::tonemapping::Tonemapping::None,
-        Transform::from_xyz(0., 0., 3.)
+        Transform::from_xyz(0., 0., 3.),
     ));
-    commands.spawn(
-        SimulationResult {
-            points: vec![]
-        }
-    );
+    commands.spawn(SimulationResult { points: vec![] });
 
-    commands.insert_resource(SimulationSetup (
-        StrandsConfig {
-            alpha: 1.0,
-            contour_attraction: 0.,
-            jump: 1,
-            particles_per_leaf : 1000,
-            wall_repulsion : 0.01,
-            repulsion : 0.1,
-            dt : 0.03,
-            n_steps : 1,
-            max_velocity_factor: 0.05,
-            interaction_radius: 0.1,
-        }
-    ));
+    commands.insert_resource(SimulationSetup(StrandsConfig {
+        alpha: 1.0,
+        contour_attraction: 0.,
+        jump: 1,
+        particles_per_leaf: 1000,
+        wall_repulsion: 0.01,
+        repulsion: 0.1,
+        dt: 0.03,
+        n_steps: 1,
+        max_velocity_factor: 0.05,
+        interaction_radius: 0.1,
+    }));
     commands.insert_resource(NeedCompute(true));
     commands.insert_resource(StartRng(StdRng::seed_from_u64(42)));
 }
@@ -86,44 +78,39 @@ fn simulate(
     config: Res<SimulationSetup>,
     rng: Res<StartRng>,
     mut result: Query<&mut SimulationResult>,
-    mut need_compute: ResMut<NeedCompute>
+    mut need_compute: ResMut<NeedCompute>,
 ) {
     for mut r in &mut result {
         if !need_compute.0 {
-            return
+            return;
         }
         need_compute.0 = false;
 
-        let cloud1 = rng.0
+        let cloud1 = rng
+            .0
             .clone()
             .sample_iter(UniformDisk::new(Vec2::ZERO, 0.5))
             .take(config.0.particles_per_leaf);
 
-        let cloud2 = rng.0
+        let cloud2 = rng
+            .0
             .clone()
             .sample_iter(UniformDisk::new(Vec2::X, 0.5))
             .take(config.0.particles_per_leaf);
 
         let mut cloud = cloud1.chain(cloud2).collect();
 
-        spread_points(
-            &mut cloud,
-            1.0,
-            &config.0,
-        );
+        spread_points(&mut cloud, 1.0, &config.0);
 
         r.points = cloud;
     }
 }
 
-fn draw(
-    mut gizmos: Gizmos,
-    result: Query<&SimulationResult>,
-) {
+fn draw(mut gizmos: Gizmos, result: Query<&SimulationResult>) {
     for r in &result {
         let color = Color::srgb(1.0, 0.0, 1.0);
         gizmos.circle(Isometry3d::default(), 1.0, color);
-        let n = r.points.len()/2;
+        let n = r.points.len() / 2;
         for &p in &r.points[0..n] {
             let color = Color::srgb(0.0, 1.0, 0.0);
             gizmos.cross(p.extend(0.), 0.05, color);

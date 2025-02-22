@@ -14,7 +14,6 @@ use super::{
     StrandsConfig,
 };
 
-
 #[derive(Debug)]
 struct HGrid {
     corner_a: Vec2,
@@ -26,7 +25,7 @@ struct HGrid {
 
 impl std::ops::IndexMut<(usize, usize)> for HGrid {
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
-        &mut self.cells[index.1*self.n_x + index.0]
+        &mut self.cells[index.1 * self.n_x + index.0]
     }
 }
 
@@ -34,7 +33,7 @@ impl std::ops::Index<(usize, usize)> for HGrid {
     type Output = SmallVec<[usize; SIZE_CELL]>;
 
     fn index(&self, index: (usize, usize)) -> &Self::Output {
-        &self.cells[index.1*self.n_x + index.0]
+        &self.cells[index.1 * self.n_x + index.0]
     }
 }
 
@@ -42,13 +41,13 @@ const SIZE_CELL: usize = 1000;
 
 impl HGrid {
     fn new_in_region(corner_a: Vec2, corner_b: Vec2, n_x: usize, n_y: usize) -> Self {
-        let cells = vec![SmallVec::new(); n_x*n_y];
+        let cells = vec![SmallVec::new(); n_x * n_y];
         Self {
             corner_a,
             corner_b,
             cells,
             n_x,
-            n_y
+            n_y,
         }
     }
     fn clear(&mut self) {
@@ -67,11 +66,11 @@ impl HGrid {
     fn point_to_cell(&self, point: Vec2) -> (usize, usize) {
         let x = f32::min(
             (point.x - self.corner_a.x) / self.width() * self.n_x as f32,
-            self.n_x as f32 - 1.
+            self.n_x as f32 - 1.,
         );
         let y = f32::min(
             (point.y - self.corner_a.y) / self.height() * self.n_y as f32,
-            self.n_y as f32 - 1.
+            self.n_y as f32 - 1.,
         );
         (x as usize, y as usize)
     }
@@ -79,7 +78,12 @@ impl HGrid {
         let i_grid = self.point_to_cell(point);
         self[i_grid].push(id)
     }
-    fn query_rect(&self, mut corner_a: Vec2, mut corner_b: Vec2, condition: impl Fn(usize) -> bool) -> SmallVec<[usize; SIZE_CELL]> {
+    fn query_rect(
+        &self,
+        mut corner_a: Vec2,
+        mut corner_b: Vec2,
+        condition: impl Fn(usize) -> bool,
+    ) -> SmallVec<[usize; SIZE_CELL]> {
         let mut result = SmallVec::new();
         corner_a.x = f32::max(corner_a.x, self.corner_a.x);
         corner_a.y = f32::max(corner_a.y, self.corner_a.y);
@@ -101,28 +105,26 @@ impl HGrid {
 }
 
 struct CubicKernel {
-    h: f32
+    h: f32,
 }
 
 impl CubicKernel {
     fn f(&self, q: f32) -> f32 {
-        if q<1e0 {
-            1e0 - q.squared()*1.5 + q.cubed()*0.75
-        }
-        else if q<2e0 {
-            0.25*(2e0-q).cubed()
-        }
-        else {
+        if q < 1e0 {
+            1e0 - q.squared() * 1.5 + q.cubed() * 0.75
+        } else if q < 2e0 {
+            0.25 * (2e0 - q).cubed()
+        } else {
             0.
         }
     }
 
     fn c(&self) -> f32 {
-        10e0/(7e0*std::f32::consts::PI*self.h.squared())
+        10e0 / (7e0 * std::f32::consts::PI * self.h.squared())
     }
 
     fn w(&self, l: f32) -> f32 {
-        self.c() * self.f(2.*l/self.h) 
+        self.c() * self.f(2. * l / self.h)
     }
 }
 
@@ -132,21 +134,21 @@ pub struct UniformDisk {
 }
 
 impl UniformDisk {
-    pub fn new(center: Vec2,radius: f32) -> Self {
+    pub fn new(center: Vec2, radius: f32) -> Self {
         Self { center, radius }
     }
 }
 
 impl Distribution<Vec2> for UniformDisk {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec2 {
-        self.center +
-            Vec2::from_angle(rng.gen_range(0f32..std::f32::consts::TAU))
-            * self.radius
-            * rng.gen_range(0f32..1f32).sqrt()
+        self.center
+            + Vec2::from_angle(rng.gen_range(0f32..std::f32::consts::TAU))
+                * self.radius
+                * rng.gen_range(0f32..1f32).sqrt()
     }
 }
 
-fn average<I: IntoIterator<Item=Vec2>>(i: I) -> Option<Vec2> {
+fn average<I: IntoIterator<Item = Vec2>>(i: I) -> Option<Vec2> {
     let mut result = Vec2::ZERO;
     let mut n = 0.;
     for x in i.into_iter() {
@@ -155,8 +157,7 @@ fn average<I: IntoIterator<Item=Vec2>>(i: I) -> Option<Vec2> {
     }
     if n == 0. {
         None
-    }
-    else {
+    } else {
         Some(result / n)
     }
 }
@@ -166,26 +167,23 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
     let mut pressures = vec![Vec2::ZERO; n];
     let repulsion = config.repulsion * radius / config.interaction_radius / (n as f32).sqrt();
 
-    let d = radius*config.interaction_radius;
-    let n_cells = (1./config.interaction_radius) as usize + 1;
+    let d = radius * config.interaction_radius;
+    let n_cells = (1. / config.interaction_radius) as usize + 1;
     let diag = Vec2::new(d, d);
 
     let mut grid = HGrid::new_in_region(
         Vec2::new(-radius, -radius),
         Vec2::new(radius, radius),
-        n_cells, n_cells,
+        n_cells,
+        n_cells,
     );
     let mut neighbourghs = vec![SmallVec::new(); n];
 
-    let kernel = CubicKernel {
-        h: d,
-    };
+    let kernel = CubicKernel { h: d };
 
-
-    let max_radius = points.iter().map(|x| x.length()).reduce(f32::max)
-        .unwrap();
+    let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
     for i in 0..n {
-        points[i] *= 0.9*radius / max_radius
+        points[i] *= 0.9 * radius / max_radius
     }
 
     for _ in 0..config.n_steps {
@@ -194,25 +192,29 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
             grid.insert(points[i], i)
         }
         for i in 0..n {
-            neighbourghs[i] = grid.query_rect(points[i]-diag, points[i]+diag, |j| (points[i] - points[j]).length() < d);
+            neighbourghs[i] = grid.query_rect(points[i] - diag, points[i] + diag, |j| {
+                (points[i] - points[j]).length() < d
+            });
         }
         for i in 0..n {
-            pressures[i] = repulsion*
-                average(neighbourghs[i]
-                .iter()
-                .filter(|&&j| points[i] != points[j])
-                .map(|&j| (points[i] - points[j]).normalize())
-            ).unwrap_or(Vec2::ZERO);
+            pressures[i] = repulsion
+                * average(
+                    neighbourghs[i]
+                        .iter()
+                        .filter(|&&j| points[i] != points[j])
+                        .map(|&j| (points[i] - points[j]).normalize()),
+                )
+                .unwrap_or(Vec2::ZERO);
         }
         for i in 0..n {
             let mut velocity = Vec2::ZERO;
             for &j in &neighbourghs[i] {
                 let l = (points[i] - points[j]).length();
                 velocity += kernel.w(l) * pressures[j];
-            };
-            points[i] += config.dt*velocity;
+            }
+            points[i] += config.dt * velocity;
             if points[i].length() > radius {
-                points[i] = 0.99*radius*points[i].normalize()
+                points[i] = 0.99 * radius * points[i].normalize()
             }
         }
     }
@@ -260,15 +262,10 @@ impl TrajectoryBuilder {
         }
     }
 
-    fn project_particles(
-        &mut self,
-        tree: &TreeSkeleton,
-        child: usize,
-        offset: Vec3,
-    ) -> Vec<Vec2> {
+    fn project_particles(&mut self, tree: &TreeSkeleton, child: usize, offset: Vec3) -> Vec<Vec2> {
         let projected = |particle_id: &usize| {
             let pos_particle = self.trajectories[*particle_id][tree.depth(child)];
-            tree.space_to_plane(child, offset+pos_particle)
+            tree.space_to_plane(child, offset + pos_particle)
         };
 
         self.particles_per_node[child]
@@ -315,16 +312,10 @@ impl TrajectoryBuilder {
                     let u = tree.position(m_child) - tree.position(s_child);
                     (u - u.dot(normal) * normal).normalize()
                 };
-                let m_cloud = self.project_particles(
-                    tree,
-                    m_child,
-                    offset_direction * tree.radius(m_child),
-                );
-                let s_cloud = self.project_particles(
-                    tree,
-                    s_child,
-                    -offset_direction * tree.radius(s_child),
-                );
+                let m_cloud =
+                    self.project_particles(tree, m_child, offset_direction * tree.radius(m_child));
+                let s_cloud =
+                    self.project_particles(tree, s_child, -offset_direction * tree.radius(s_child));
 
                 let mut cloud = m_cloud;
                 cloud.extend(s_cloud);
@@ -359,8 +350,9 @@ impl VisualDebug for TrajectoryBuilder {
                 let a: f32 = i_t as f32 / self.trajectories.len() as f32;
                 let b: f32 = rng.gen();
                 let color = Color::srgb(1., 0.3 + 0.5 * a, 0.3 + 0.5 * b);
-                let positions = (0..50)
-                    .map(|i| extended_catmull_spline(traj, SplineIndex::Global((i as f32 / 49.).powf(2.))));
+                let positions = (0..50).map(|i| {
+                    extended_catmull_spline(traj, SplineIndex::Global((i as f32 / 49.).powf(2.)))
+                });
                 gizmos.linestrip(positions, color);
             }
         }

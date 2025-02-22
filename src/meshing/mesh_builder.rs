@@ -42,7 +42,7 @@ impl GeometryData {
         result
     }
 
-    pub fn register_points_trunk(&mut self, points: impl IntoIterator<Item=Vec3>) -> Vec<usize> {
+    pub fn register_points_trunk(&mut self, points: impl IntoIterator<Item = Vec3>) -> Vec<usize> {
         let mut result = Vec::new();
 
         for p in points {
@@ -55,7 +55,7 @@ impl GeometryData {
 
         result
     }
-    pub fn register_points_leaf(&mut self, points: impl IntoIterator<Item=Vec3>) -> Vec<usize> {
+    pub fn register_points_leaf(&mut self, points: impl IntoIterator<Item = Vec3>) -> Vec<usize> {
         let mut result = Vec::new();
 
         for p in points {

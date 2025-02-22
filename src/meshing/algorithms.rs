@@ -77,15 +77,12 @@ fn angle_to(a: Vec2, b: Vec2) -> f32 {
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
 /// we suppose that the barycenter is in the convex hull
-pub fn convex_hull_graham(
-    points: &[Vec2],
-    min_angle: Option<f32>,
-) -> Vec<usize> {
+pub fn convex_hull_graham(points: &[Vec2], min_angle: Option<f32>) -> Vec<usize> {
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
     assert!(!points.is_empty());
     let n = points.len();
-    let pivot = points.iter().sum::<Vec2>()  / n as f32;
+    let pivot = points.iter().sum::<Vec2>() / n as f32;
 
     let i0 = points
         .iter()
@@ -97,10 +94,10 @@ pub fn convex_hull_graham(
 
     let compare_angle = |&a: &usize, &b: &usize| {
         if a == i0 {
-            return Ordering::Greater
+            return Ordering::Greater;
         }
         if b == i0 {
-            return Ordering::Less
+            return Ordering::Less;
         }
         let angle_a = angle_to(u, points[a] - pivot);
         let angle_b = angle_to(u, points[b] - pivot);
@@ -113,18 +110,17 @@ pub fn convex_hull_graham(
         result.sort_by(compare_angle);
         result
     };
-    assert_eq!(sorted_points[n-1], i0);
-
+    assert_eq!(sorted_points[n - 1], i0);
 
     let is_sharp_angle = |result: &Vec<usize>, i| {
         let n_hull = result.len();
         let p_1 = result[n_hull - 2];
         let p_2 = result[n_hull - 1];
         let angle = angle_to(points[p_1] - points[p_2], points[i] - points[p_2]);
-        if angle > 0.99*std::f32::consts::TAU {
+        if angle > 0.99 * std::f32::consts::TAU {
             // very strange: the convex hull is very pointy.
             // it is probably a numerical instability.
-            return true
+            return true;
         }
         angle < min_angle
     };
