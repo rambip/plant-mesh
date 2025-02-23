@@ -26,11 +26,11 @@ pub struct VolumetricTree {
 
 #[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StrandsConfig {
-    particles_per_leaf: usize,
-    repulsion: f32,
-    dt: f32,
-    n_steps: usize,
-    interaction_radius: f32,
+    pub particles_per_leaf: usize,
+    pub repulsion: f32,
+    pub dt: f32,
+    pub n_steps: usize,
+    pub interaction_radius: f32,
     // if alpha is near 0, the particles will initially be placed
     // with a smaller density at the center
     // and with a greater density at the edges.

@@ -10,7 +10,6 @@ use rand::{rngs::StdRng, SeedableRng};
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(bevy_sprite::SpritePlugin {})
         .add_plugins(bevy_gizmos::GizmoPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, (handle_input, simulate, draw))
@@ -40,15 +39,10 @@ fn setup(mut commands: Commands) {
     commands.spawn(SimulationResult { points: vec![] });
 
     commands.insert_resource(SimulationSetup(StrandsConfig {
-        alpha: 1.0,
-        contour_attraction: 0.,
-        jump: 1,
         particles_per_leaf: 1000,
-        wall_repulsion: 0.01,
         repulsion: 0.1,
         dt: 0.03,
         n_steps: 1,
-        max_velocity_factor: 0.05,
         interaction_radius: 0.1,
     }));
     commands.insert_resource(NeedCompute(true));

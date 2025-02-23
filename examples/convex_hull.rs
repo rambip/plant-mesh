@@ -7,7 +7,6 @@ use rand::{rngs::StdRng, SeedableRng};
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(bevy_sprite::SpritePlugin {})
         .add_plugins(bevy_gizmos::GizmoPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, (handle_input, simulate, draw))
