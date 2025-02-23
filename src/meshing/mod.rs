@@ -364,6 +364,7 @@ impl VolumetricTree {
 
                 let l_split = self
                     .find_branch_split(root, m_child, s_child, dz)
+                    .map(|x| x-3.*dz)
                     .unwrap_or(min_branch_length);
 
                 while l < l_split {

@@ -84,7 +84,7 @@ fn simulate(
         let result = convex_hull_graham(&cloud, Some(config.min_angle));
 
         r.points = cloud.to_vec();
-        r.border = result;
+        r.border = result.into();
     }
 }
 
