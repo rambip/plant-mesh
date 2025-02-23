@@ -300,11 +300,10 @@ fn draw_tree(
     time: Res<Time>,
 ) {
     for (e, mut tree) in trees.iter_mut() {
-        if camera_settings.show_mesh {
-            commands.entity(e).insert(Visibility::Visible);
-        } else {
-            commands.entity(e).remove::<Visibility>();
-        }
+        commands.entity(e).insert(
+            if camera_settings.show_mesh {Visibility::Visible}
+            else {Visibility::Hidden}
+        );
 
         if !tree.need_render {
             return;
