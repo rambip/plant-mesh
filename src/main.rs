@@ -16,8 +16,9 @@ use bevy_gizmos::prelude::Gizmos;
 
 use plant_mesh::{
     GeometryData, Grow, GrowConfig, MeshConfig, MeshDebugFlags, PlantNode, Seed, StrandsConfig,
-    TrajectoryBuilder, TreeSkeleton, TreeSkeletonDebugData, VisualDebug, VolumetricTree,
+    TrajectoryBuilder, TreeSkeleton, VisualDebug, VolumetricTree,
 };
+use plant_mesh::meshing::BevyMesh;
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 pub struct DebugFlags {
@@ -40,7 +41,6 @@ struct TreeConfig {
     animation: AnimationConfig,
 }
 
-// TODO: easiest way to do it ?
 #[derive(Component)]
 struct Tree {
     config: Handle<TreeConfig>,
@@ -313,41 +313,41 @@ fn draw_tree(
 
         let rng = StdRng::seed_from_u64(tree.seed);
 
-        let mut plant_builder: StdRng = rng.clone().into();
-        let mut skeleton_builder = rng.clone().into();
-        let mut particle_builder = rng.clone().into();
-        let mut mesh_builder = rng.clone().into();
+        let mut plant_builder = rng.clone();
+        let mut skeleton_builder = ();
+        let mut particle_builder = TrajectoryBuilder::new(rng.clone());
+        let mut mesh_builder = GeometryData::new(rng.clone());
 
         let Some(tree_config) = configs.get(&tree.config) else {
             return;
         };
-        let tree_mesh = Seed
+        let BevyMesh(tree_mesh) = Seed
             .grow::<PlantNode>(&tree_config.grow, &mut plant_builder)
             .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
             .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
-            .grow::<Mesh>(&tree_config.mesh, &mut mesh_builder);
+            .grow::<BevyMesh>(&tree_config.mesh, &mut mesh_builder);
 
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
 
         commands
             .entity(e)
-            .insert((mesh_builder, skeleton_builder, particle_builder));
+            .insert((mesh_builder, particle_builder));
     }
 }
 
 fn visual_debug(
     query: Query<(
-        Option<&TreeSkeletonDebugData>,
+        Option<&TreeSkeleton>,
         Option<&TrajectoryBuilder>,
         Option<&GeometryData>,
     )>,
     flags: Res<DebugFlags>,
     mut gizmos: Gizmos,
 ) {
-    for (a, b, c) in &query {
-        a.debug(&mut gizmos, flags.skeleton);
-        b.debug(&mut gizmos, flags.strands);
-        c.debug(&mut gizmos, flags.mesh);
+    for (a, b, c) in query.iter() {
+        if let Some(a) = a { a.debug(&mut gizmos, flags.skeleton); }
+        if let Some(b) = b { b.debug(&mut gizmos, flags.strands); }
+        if let Some(c) = c { c.debug(&mut gizmos, flags.mesh); }
     }
 }

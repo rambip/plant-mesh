@@ -4,24 +4,34 @@ use serde::{Serialize, Deserialize};
 use bevy_gizmos::prelude::Gizmos;
 #[cfg(feature = "bevy")]
 use bevy_color::Color;
+#[cfg(feature = "bevy")]
+use bevy::prelude::Component;
 
 #[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "bevy", derive(Component))]
 pub struct GeometryData {
     pub points: Vec<Vec3>,
     pub colors: Vec<[f32; 4]>,
     pub triangles: Vec<u32>,
     pub contours: Vec<Vec<usize>>,
     pub debug_points: Vec<(Vec3, [f32; 4])>,
+    #[serde(skip, default = "default_rng")]
+    pub rng: rand::rngs::StdRng,
+}
+
+fn default_rng() -> rand::rngs::StdRng {
+    rand::SeedableRng::seed_from_u64(0)
 }
 
 impl GeometryData {
-    pub fn new() -> Self {
+    pub fn new(rng: rand::rngs::StdRng) -> Self {
         Self {
             points: Vec::new(),
             colors: Vec::new(),
             triangles: Vec::new(),
             contours: Vec::new(),
             debug_points: Vec::new(),
+            rng,
         }
     }
 
@@ -68,6 +78,12 @@ impl GeometryData {
 
     pub fn add_debug(&mut self, pos: Vec3, color: [f32; 4]) {
         self.debug_points.push((pos, color));
+    }
+}
+
+impl Default for GeometryData {
+    fn default() -> Self {
+        Self::new(default_rng())
     }
 }
 
@@ -126,6 +142,10 @@ pub struct MeshConfig {
     pub n_steps: usize,
     pub dt: f32,
     pub particles_per_leaf: usize,
+    pub leaf_size: f32,
+    pub leaf_angle: f32,
+    pub interior_angle: f32,
+    pub spacing: f32,
 }
 
 impl From<super::particles::StrandsConfig> for MeshConfig {
@@ -136,6 +156,10 @@ impl From<super::particles::StrandsConfig> for MeshConfig {
             n_steps: s.n_steps,
             dt: s.dt,
             particles_per_leaf: s.particles_per_leaf,
+            leaf_size: 0.5,
+            leaf_angle: 0.5,
+            interior_angle: 0.1,
+            spacing: 0.2,
         }
     }
 }

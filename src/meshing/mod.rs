@@ -1,39 +1,30 @@
-pub mod algorithms;
-mod mesh_builder;
-pub mod particles;
-pub use mesh_builder::GeometryData;
-
-use bevy::color::Color;
+use bevy::prelude::Mesh;
 use bevy::math::{FloatExt, Mat3, Quat, Vec2, Vec3};
-use bevy::prelude::{Component, Mesh};
-use rand::prelude::Distribution;
+use bevy::prelude::Component;
 use rand::Rng;
+use rand::prelude::Distribution;
 
-use crate::growing::TreeSkeleton;
+use plant_core::growing::TreeSkeleton;
+use plant_core::meshing::algorithms::{convex_hull_graham, extended_catmull_spline, mesh_between_contours, SplineIndex};
+use plant_core::meshing::particles::TrajectoryBuilder;
+use plant_core::meshing::mesh_builder::GeometryData;
+use plant_core::TreePipelinePhase;
+pub use plant_core::StrandsConfig;
+
 use crate::tools::{split_slice_circular, FloatProducer};
-use crate::TreePipelinePhase;
 
-use algorithms::{convex_hull_graham, extended_catmull_spline, mesh_between_contours, SplineIndex};
-pub use mesh_builder::MeshDebugFlags;
-pub use particles::TrajectoryBuilder;
+pub mod algorithms {
+    pub use plant_core::meshing::algorithms::*;
+}
+pub mod particles {
+    pub use plant_core::meshing::particles::*;
+}
 
 #[derive(Component)]
 pub struct VolumetricTree {
     pub particles_per_node: Vec<Vec<usize>>,
     pub trajectories: Vec<Vec<Vec3>>,
     pub tree: TreeSkeleton,
-}
-
-#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
-pub struct StrandsConfig {
-    pub particles_per_leaf: usize,
-    pub repulsion: f32,
-    pub dt: f32,
-    pub n_steps: usize,
-    pub interaction_radius: f32,
-    // if alpha is near 0, the particles will initially be placed
-    // with a smaller density at the center
-    // and with a greater density at the edges.
 }
 
 impl TreePipelinePhase for VolumetricTree {
@@ -46,7 +37,7 @@ impl TreePipelinePhase for VolumetricTree {
         builder: &mut Self::Builder,
     ) -> Self {
         builder.clear_for_tree(&prev);
-        builder.compute_trajectories(&prev, 0, config);
+        builder.compute_trajectories(&prev, prev.root(), config);
         Self {
             trajectories: builder.trajectories.clone(),
             particles_per_node: builder.particles_per_node.clone(),
@@ -55,15 +46,11 @@ impl TreePipelinePhase for VolumetricTree {
     }
 }
 
-#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MeshConfig {
-    leaf_size: f32,
-    leaf_angle: f32,
-    interior_angle: f32,
-    spacing: f32,
-}
+pub use plant_core::meshing::mesh_builder::MeshConfig;
 
-impl TreePipelinePhase for Mesh {
+pub struct BevyMesh(pub Mesh);
+
+impl TreePipelinePhase for BevyMesh {
     type Previous = VolumetricTree;
     type Config = MeshConfig;
     type Builder = GeometryData;
@@ -76,28 +63,39 @@ impl TreePipelinePhase for Mesh {
         let points_base = prev.particles_per_node[0]
             .iter()
             .map(|&particle| extended_catmull_spline(&prev.trajectories[particle], spline_index));
-        let contour = builder.register_points_trunk(points_base);
+        
+        let mut rng = builder.rng.clone();
+        let contour = builder.register_points_trunk(points_base, &mut rng);
+        builder.rng = rng;
+        
+        builder.add_contour(&contour);
         prev.compute_each_branch_recursive(0, 0., contour, builder, config);
-        println!("number of strands: {}", prev.trajectories.len());
-        println!(
-            "number of particles: {}",
-            prev.particles_per_node
-                .iter()
-                .map(|x| x.len())
-                .sum::<usize>()
-        );
-
-        builder.to_mesh()
+        
+        // Convert GeometryData to Bevy Mesh
+        let mut mesh = Mesh::new(
+            bevy::render::mesh::PrimitiveTopology::TriangleList,
+            bevy::asset::RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, builder.points.clone())
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_COLOR,
+            builder.colors.clone()
+        )
+        .with_inserted_indices(bevy::render::mesh::Indices::U32(
+            builder.triangles.clone(),
+        ));
+        mesh.compute_smooth_normals();
+        BevyMesh(mesh)
     }
 }
 
 impl VolumetricTree {
     fn branch_is_spliting(&self, parent: usize, m_child: usize, s_child: usize, l: f32) -> bool {
         let depth = self.tree.depth(parent);
-        let m_t = l / self.tree.branch_length_to_parent(m_child);
+        let m_t = l / (self.tree.position(m_child) - self.tree.position(parent)).length();
         let m_spline_index = SplineIndex::Local(depth, m_t);
 
-        let s_t = l / self.tree.branch_length_to_parent(s_child);
+        let s_t = l / (self.tree.position(s_child) - self.tree.position(parent)).length();
         let s_spline_index = SplineIndex::Local(depth, s_t);
 
         let radius = self.tree.radius(parent);
@@ -129,10 +127,10 @@ impl VolumetricTree {
         s_child: usize,
         dz: f32,
     ) -> Option<f32> {
-        let min_branch_length = f32::min(
-            self.tree.branch_length_to_parent(m_child),
-            self.tree.branch_length_to_parent(s_child),
-        );
+        let m_len = (self.tree.position(m_child) - self.tree.position(root)).length();
+        let s_len = (self.tree.position(s_child) - self.tree.position(root)).length();
+        let min_branch_length = f32::min(m_len, s_len);
+        
         if !self.branch_is_spliting(root, m_child, s_child, min_branch_length) {
             return None;
         }
@@ -162,7 +160,7 @@ impl VolumetricTree {
         let depth = self.tree.depth(parent);
 
         let mut compute_properties = |child: usize| {
-            let branch_len = self.tree.branch_length_to_parent(child);
+            let branch_len = (self.tree.position(child) - self.tree.position(parent)).length();
             let t = l / branch_len;
             let center = self
                 .tree
@@ -185,7 +183,11 @@ impl VolumetricTree {
                     .into_iter()
                     .map(|i| points[i])
                     .collect();
-            let contour = mesh.register_points_trunk(result);
+            
+            let mut rng = mesh.rng.clone();
+            let contour = mesh.register_points_trunk(result, &mut rng);
+            mesh.rng = rng;
+            
             mesh.add_contour(&contour);
             (center, contour)
         };
@@ -198,17 +200,17 @@ impl VolumetricTree {
             "not enough particles in the branch to compute join"
         );
 
-        let m_dist_center = |i: &usize| (mesh.point(i) - m_c).length();
-        let s_dist_center = |i: &usize| (mesh.point(i) - s_c).length();
+        let m_dist_center = |i: &usize| (mesh.point(*i) - m_c).length();
+        let s_dist_center = |i: &usize| (mesh.point(*i) - s_c).length();
 
         let i_m_furthest = m_cont.iter().map(s_dist_center).arg_min().unwrap();
         let i_s_furthest = s_cont.iter().map(m_dist_center).arg_min().unwrap();
 
-        let center = 0.5 * (mesh.point(&m_cont[i_m_furthest]) + mesh.point(&s_cont[i_s_furthest]));
-        let dist_center = |i: &usize| (mesh.point(i) - center).length();
+        let center = 0.5 * (mesh.point(m_cont[i_m_furthest]) + mesh.point(s_cont[i_s_furthest]));
+        let dist_center = |i: &usize| (mesh.point(*i) - center).length();
 
         let side =
-            |i: &usize| Mat3::from_cols(m_c - s_c, normal, mesh.point(i) - center).determinant();
+            |i: &usize| Mat3::from_cols(m_c - s_c, normal, mesh.point(*i) - center).determinant();
 
         let i_a = previous_contour
             .iter()
@@ -229,20 +231,20 @@ impl VolumetricTree {
         let (m_under, s_under) = split_slice_circular(&previous_contour, i_b, i_a);
 
         mesh.register_triangles(&mesh_between_contours(
-            &mesh.points(),
+            &mesh.points,
             &m_under,
             &m_above,
             false,
         ));
         mesh.register_triangles(&mesh_between_contours(
-            &mesh.points(),
+            &mesh.points,
             &s_under,
             &s_above,
             false,
         ));
 
         mesh.register_triangles(&mesh_between_contours(
-            &mesh.points(),
+            &mesh.points,
             &s_junction,
             &m_junction,
             false,
@@ -270,7 +272,7 @@ impl VolumetricTree {
         config: &MeshConfig,
     ) {
         let points: Vec<Vec3> = point_cloud.into_iter().collect();
-        mesh.add_debug(center, Color::srgb(1.0, 1.0, 1.0));
+        mesh.debug_points.push((center, [1.0, 1.0, 1.0, 1.0]));
 
         let projected_points: Vec<Vec2> = points
             .iter()
@@ -282,10 +284,13 @@ impl VolumetricTree {
             .map(|i| points[i])
             .collect();
 
-        let current_contour = mesh.register_points_trunk(result);
+        let mut rng = mesh.rng.clone();
+        let current_contour = mesh.register_points_trunk(result, &mut rng);
+        mesh.rng = rng;
+        
         mesh.add_contour(&current_contour);
         let triangles =
-            mesh_between_contours(&mesh.points(), &previous_contour, &current_contour, true);
+            mesh_between_contours(&mesh.points, &previous_contour, &current_contour, true);
         mesh.register_triangles(&triangles);
         *previous_contour = current_contour;
     }
@@ -301,10 +306,14 @@ impl VolumetricTree {
         let depth = self.tree.depth(root);
         let parent_radius = self.tree.radius(root);
 
-        match self.tree.children(root) {
-            [] => {
+        let children = self.tree.children(root);
+        match children.len() {
+            0 => {
                 let leaf = self.tree.position(root) + parent_radius * self.tree.normal(root);
-                let i_end = mesh.register_points_trunk([leaf])[0];
+                let mut rng = mesh.rng.clone();
+                let i_end = mesh.register_points_trunk([leaf], &mut rng)[0];
+                mesh.rng = rng;
+                
                 let n = previous_contour.len();
                 for i in 0..n {
                     mesh.register_triangles(&[
@@ -331,9 +340,10 @@ impl VolumetricTree {
                     i_leaf + 1,
                 ]);
             }
-            &[child] => {
+            1 => {
+                let child = children[0];
+                let branch_length = (self.tree.position(child) - self.tree.position(root)).length();
                 let child_radius = self.tree.radius(child);
-                let branch_length = self.tree.branch_length_to_parent(child);
                 while l < branch_length {
                     let t = l / branch_length;
                     let dz =
@@ -354,9 +364,11 @@ impl VolumetricTree {
                     config,
                 )
             }
-            &[m_child, s_child] => {
-                let m_branch_length = self.tree.branch_length_to_parent(m_child);
-                let s_branch_length = self.tree.branch_length_to_parent(s_child);
+            2 => {
+                let m_child = children[0];
+                let s_child = children[1];
+                let m_branch_length = (self.tree.position(m_child) - self.tree.position(root)).length();
+                let s_branch_length = (self.tree.position(s_child) - self.tree.position(root)).length();
                 let min_branch_length = f32::min(m_branch_length, s_branch_length);
                 let dz = config.spacing * parent_radius;
                 let m_radius = self.tree.radius(m_child);

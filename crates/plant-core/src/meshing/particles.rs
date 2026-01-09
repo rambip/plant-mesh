@@ -6,6 +6,8 @@ use serde::{Serialize, Deserialize};
 use bevy_gizmos::prelude::Gizmos;
 #[cfg(feature = "bevy")]
 use bevy_color::Color;
+#[cfg(feature = "bevy")]
+use bevy::prelude::Component;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrandsConfig {
@@ -222,6 +224,7 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
     assert!(points.iter().all(|x| !x.is_nan()));
 }
 
+#[cfg_attr(feature = "bevy", derive(Component))]
 pub struct TrajectoryBuilder {
     pub particles_per_node: Vec<Vec<usize>>,
     pub trajectories: Vec<Vec<Vec3>>,

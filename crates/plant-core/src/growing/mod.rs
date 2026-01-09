@@ -7,8 +7,11 @@ use bevy_gizmos::prelude::Gizmos;
 use bevy_color::Color;
 #[cfg(feature = "bevy")]
 use bevy_math::Isometry3d;
+#[cfg(feature = "bevy")]
+use bevy::prelude::Component;
 
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "bevy", derive(Component))]
 pub struct PlantNodeProps {
     pub position: Vec3,
     pub radius: f32,
@@ -34,6 +37,7 @@ pub struct NodeInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "bevy", derive(Component))]
 pub struct PlantNode {
     pub children: Vec<PlantNode>,
     pub props: PlantNodeProps,
@@ -116,6 +120,7 @@ impl PlantNode {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "bevy", derive(Component))]
 pub struct TreeSkeleton {
     pub node_props: Vec<PlantNodeProps>,
     pub node_info: Vec<NodeInfo>,
