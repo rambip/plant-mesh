@@ -7,4 +7,4 @@ https://rambip.github.io/plant-mesh
 
 
 This work was done as part of my computer geometry course. 
-For more details, see [my report](./rapport.pdf)
+For more details, see [my report](./docs/report.pdf)
