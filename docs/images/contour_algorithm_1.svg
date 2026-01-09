@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="174.14798mm"
+   height="70.437019mm"
+   viewBox="0 0 174.14798 70.437019"
+   version="1.1"
+   id="svg1"
+   inkscape:export-filename="contour_algorithm_1.svg"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="0.71268238"
+     inkscape:cx="397.09134"
+     inkscape:cy="561.25984"
+     inkscape:window-width="1920"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1">
+    <inkscape:page
+       x="5.6027704e-23"
+       y="0"
+       width="174.14798"
+       height="70.437019"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <defs
+     id="defs1">
+    <style
+       class="style-fonts"
+       id="style1">
+      @font-face { font-family: Excalifont; src: url(data:font/woff2;base64,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); }</style>
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-11.585207,-19.104325)">
+    <!-- svg-source:excalidraw -->
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,25.110643,21.016448)"
+       id="g1">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text1">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,30.149183,17.123357)"
+       id="g2">
+      <text
+         x="25.316668"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text2">P1</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,82.573288,22.243972)"
+       id="g3">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text3">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,86.415938,17.97963)"
+       id="g4">
+      <text
+         x="31.458334"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text4">P2</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,120.58702,34.84635)"
+       id="g5">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text5">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,128.05374,31.698876)"
+       id="g6">
+      <text
+         x="29.391666"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text6">P3</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,173.06249,26.995688)"
+       id="g7">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text7">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,180.00692,26.072596)"
+       id="g8">
+      <text
+         x="28.875"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text8">P4</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,11.299572,73.2793)"
+       id="g9">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text9">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,17.516433,80.15246)"
+       id="g10">
+      <text
+         x="26.891666"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text10">Q1</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,57.606013,63.35062)"
+       id="g11">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text11">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,61.141987,70.59503)"
+       id="g12">
+      <text
+         x="33.033333"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text12">Q2</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,110.28808,64.3836)"
+       id="g13">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text13">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,118.07104,70.93057)"
+       id="g14">
+      <text
+         x="30.966667"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text14">Q3</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,173.2022,64.5902)"
+       id="g15">
+      <text
+         x="13.343429"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text15">x</text>
+    </g>
+    <g
+       transform="matrix(0.19471707,0,0,0.19471707,182.43869,73.31961)"
+       id="g16">
+      <text
+         x="30.450001"
+         y="39.793152"
+         font-family="Excalifont, Xiaolai, 'Segoe UI Emoji'"
+         font-size="45.1682px"
+         fill="#1e1e1e"
+         text-anchor="middle"
+         style="white-space:pre"
+         direction="ltr"
+         dominant-baseline="alphabetic"
+         id="text16">Q4</text>
+    </g>
+    <g
+       stroke-linecap="round"
+       id="g18"
+       transform="matrix(0.19471707,0,0,0.19471707,9.352401,19.069278)">
+      <g
+         transform="translate(26.07089,299.45032)"
+         id="g17">
+        <path
+           d="M 0,0 C 17.7,-69.89 35.39,-139.78 62.6,-247.21"
+           stroke="#2f9e44"
+           stroke-width="2.5"
+           fill="none"
+           stroke-dasharray="8, 10"
+           id="path16" />
+      </g>
+    </g>
+    <mask
+       id="mask18" />
+    <g
+       stroke-linecap="round"
+       id="g20"
+       transform="matrix(0.19471707,0,0,0.19471707,9.352401,19.069278)">
+      <g
+         transform="translate(248.35206,257.54051)"
+         id="g19">
+        <path
+           d="M 0,0 C -49.3,-67.97 -98.61,-135.94 -148.54,-204.77"
+           stroke="#2f9e44"
+           stroke-width="2.5"
+           fill="none"
+           stroke-dasharray="8, 10"
+           id="path18" />
+      </g>
+    </g>
+    <mask
+       id="mask20" />
+    <g
+       stroke-linecap="round"
+       id="g22"
+       transform="matrix(0.19471707,0,0,0.19471707,9.352401,19.069278)">
+      <g
+         transform="translate(27.662402,306.34688)"
+         id="g21">
+        <path
+           d="M 0,0 C 66.41,-14.72 132.82,-29.45 224.93,-49.87"
+           stroke="#2f9e44"
+           stroke-width="2.5"
+           fill="none"
+           stroke-dasharray="8, 10"
+           id="path20" />
+      </g>
+    </g>
+    <mask
+       id="mask22" />
+    <g
+       stroke-linecap="round"
+       id="g24"
+       transform="matrix(0.19471707,0,0,0.19471707,9.352401,19.069278)">
+      <g
+         transform="translate(26.085914,306.20208)"
+         id="g23">
+        <path
+           d="M 0,0 C 14.66,-64.09 29.33,-128.17 57.29,-250.4"
+           stroke="#e03131"
+           stroke-width="2.5"
+           fill="none"
+           stroke-dasharray="8, 10"
+           id="path22" />
+      </g>
+    </g>
+    <mask
+       id="mask24" />
+    <g
+       stroke-linecap="round"
+       id="g26"
+       transform="matrix(0.19471707,0,0,0.19471707,9.352401,19.069278)">
+      <g
+         transform="translate(102.47849,47.316134)"
+         id="g25">
+        <path
+           d="M 0,0 C 83.87,-0.33 167.75,-0.65 273.74,-1.06"
+           stroke="#e03131"
+           stroke-width="2.5"
+           fill="none"
+           stroke-dasharray="8, 10"
+           id="path24" />
+      </g>
+    </g>
+    <mask
+       id="mask26" />
+    <g
+       stroke-linecap="round"
+       id="g28"
+       transform="matrix(0.19471707,0,0,0.19471707,9.352401,19.069278)">
+      <g
+         transform="translate(33.51297,305.14107)"
+         id="g27">
+        <path
+           d="M 0,0 C 112.91,-83.99 225.83,-167.97 343.77,-255.7"
+           stroke="#e03131"
+           stroke-width="2.5"
+           fill="none"
+           stroke-dasharray="8, 10"
+           id="path26" />
+      </g>
+    </g>
+    <mask
+       id="mask28" />
+  </g>
+</svg>

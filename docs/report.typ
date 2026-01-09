@@ -1,5 +1,5 @@
-#import "@preview/fletcher:0.5.4" as fletcher: diagram, node, edge
-#import "@preview/note-me:0.3.0": *
+#import "@preview/fletcher:0.5.8" as fletcher: diagram, node, edge
+#import "@preview/note-me:0.5.0": *
 
 #show link: underline
 #show image: it => {
@@ -165,18 +165,18 @@ diagram(
   node-stroke: 1pt,
   edge-stroke: 1pt+blue,
   mark-scale: 60%,
-  
+
   // Root node and its properties
   node((0,0), $A$, shape:circle, name: <a>),
   node((-1,0), $v_a$, shape:rect, name: <va>),
   edge((0,0), (-1,0), "..|>"),
-  
+
   // Left child (B)
   node((-1,1), $B$, shape:circle, name: <b>),
   edge(<a>, <b>, "-|>"),
   node((-2,1), $v_b$, shape:rect, name: <vb>),
   edge(<b>, <vb>, "..|>"),
-  
+
   // Right child (C)
   node((1,1), $C$, shape:circle, name: <c>),
   edge(<a>, <c>, "-|>"),
@@ -290,7 +290,7 @@ In order to give the realistic result of trunks, we need to make the particles i
 
 Again, the paper was not very precise regarding the type of particle simulation they used.
 
-I tried to use an electrostatic-like repulsion force with an euler integratino scheme, with collisions on the border. 
+I tried to use an electrostatic-like repulsion force with an euler integratino scheme, with collisions on the border.
 
 The force is defined as:
 
@@ -303,7 +303,7 @@ My simulation has normalized parameters like:
 - the repulsion force with the wall
 - the time step
 
-For numeric stability, I had to update the parameters depending on the radius and the number of particles. For example, the repulsion is proportionnal to the radius squared. 
+For numeric stability, I had to update the parameters depending on the radius and the number of particles. For example, the repulsion is proportionnal to the radius squared.
 
 Here is the result on an example:
 
@@ -384,7 +384,7 @@ compute_contours(node):
             compute the positions of the point cloud
             select the boundary of the point cloud
         compute_contours(children)
-            
+
     else if 2 children:
         compute the position when the branch splits
         for each position before the split:
@@ -455,7 +455,7 @@ $
 
 #v(20pt)
 
-To illustrate: 
+To illustrate:
 #grid(columns: (1fr, 1fr),
 figure(image("images/convex_hull_1.svg", height: 150pt), caption: "First, sort the points around the center"),
 figure(image("images/convex_hull_2.svg", height: 150pt), caption: [Each time one point is added, \ remove the previous one depending on angle])
@@ -476,7 +476,7 @@ But setting the right treshold for the convex hull is not trivial.
 - very high treshold: the contour does not follow the shape of the strands, it is especially problematic for meshing (see @meshing)
 - very low treshold: too much noise and not enough regularity in the contour that is seleted.
 
-#warning[ 
+#warning[
 When computing the mesh of a large number of points, I noticed some strange behaviours:
 
 #image("images/branch_join_convex_bug.png", height: 100pt)
@@ -488,7 +488,7 @@ I was able to reproduce it and to understand where the issue was coming from:
 After checking my code again and again, I discovered that the issue comes from the way the angle is calculated in the math library:
 ```rust
 pub fn angle_to(self, rhs: Self) -> f32 {
-    let angle = math::acos_approx( 
+    let angle = math::acos_approx(
         self.dot(rhs) / math::sqrt(self.length_squared() * rhs.length_squared())
     );
     angle * math::signum(self.perp_dot(rhs))
@@ -498,7 +498,7 @@ pub fn angle_to(self, rhs: Self) -> f32 {
 The floating points error caused the sign to flip when the points are almost colinear, and thus to be treated as almost 360deg.
 ]
 
-#pagebreak() 
+#pagebreak()
 
 === Parametrization
 
@@ -548,8 +548,8 @@ I looked at the problem as a minimazation problem.
 
 Given two lists of points $P_i$ and $Q_i$, you want to interlace them in the way that minimizes the sum of the perimeters of the triangles.
 
-The perimeter of the triangle at one moment of the algotihm is one of 2 possibilities:  
-- $P_i P_(i+1) + P_(i+1) Q_j + Q_j P_i$ 
+The perimeter of the triangle at one moment of the algotihm is one of 2 possibilities:
+- $P_i P_(i+1) + P_(i+1) Q_j + Q_j P_i$
 - $P_i Q_(j) + Q_j Q_(j+1) + Q_(j+1) P_i$
 
 #figure(image("images/contour_algorithm_1.svg", width: 400pt), caption: "the 2 possible choices of triangles")
