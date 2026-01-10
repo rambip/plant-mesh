@@ -13,6 +13,8 @@ rand = "0.8.5"
 smallvec = "1.13.2"
 toml = "0.8.20"
 serde = "1.0"
+mesh-tools = "0.4.0"
+base64 = "0.22.1"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
