@@ -14,12 +14,11 @@ use std::f32::consts::PI;
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
-use plant_core::meshing::VolumetricTree;
-use plant_mesh::bevy_mesh::BevyMesh;
 use plant_mesh::{
-    GeometryData, Grow, GrowConfig, MeshConfig, MeshDebugFlags, PlantNode, Seed, StrandsConfig,
-    TrajectoryBuilder, TreeSkeleton, VisualDebug,
+    BevyMesh, GeometryData, Grow, MeshDebugFlags, PlantNode, Seed, TrajectoryBuilder, TreeConfig,
+    TreeSkeleton, VisualDebug,
 };
+use plant_core::meshing::VolumetricTree;
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 pub struct DebugFlags {
@@ -27,19 +26,6 @@ pub struct DebugFlags {
     pub skeleton: bool,
     pub other: bool,
     pub mesh: MeshDebugFlags,
-}
-
-#[derive(Serialize, Deserialize)]
-struct AnimationConfig {
-    update_time: f32,
-}
-
-#[derive(Component, Serialize, Deserialize, TypePath, Asset)]
-struct TreeConfig {
-    grow: GrowConfig,
-    strands: StrandsConfig,
-    mesh: MeshConfig,
-    animation: AnimationConfig,
 }
 
 #[derive(Component)]
@@ -277,14 +263,11 @@ fn automatic_mode(
     time: Res<Time>,
     camera_settings: Res<CameraSettings>,
     mut trees: Query<&mut Tree>,
-    configs: Res<Assets<TreeConfig>>,
 ) {
+    const UPDATE_TIME: f32 = 5.0;
     if camera_settings.automatic_mode {
         for mut t in &mut trees {
-            let Some(config) = configs.get(&t.config) else {
-                return;
-            };
-            if time.elapsed_secs() - t.last_render_time > config.animation.update_time {
+            if time.elapsed_secs() - t.last_render_time > UPDATE_TIME {
                 t.seed += 1;
                 t.need_render = true;
             }

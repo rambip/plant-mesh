@@ -14,6 +14,56 @@ pub use meshing::GeometryData;
 pub use meshing::SplineIndex;
 pub use meshing::StrandsConfig;
 
+use meshing::VolumetricTree;
+use rand::SeedableRng;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "bevy", derive(bevy::prelude::TypePath, bevy::prelude::Asset))]
+pub struct TreeConfig {
+    pub grow: GrowConfig,
+    pub strands: StrandsConfig,
+    pub mesh: MeshConfig,
+}
+
+impl GeometryData {
+    pub fn build_from_config(config: &TreeConfig, seed: u64) -> Self {
+        let rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        let mut plant_builder = rng.clone();
+        let mut particle_builder = TrajectoryBuilder::new(rng.clone());
+        let mut mesh_builder = GeometryData::new(rng.clone());
+
+        let mut geometry = Seed
+            .grow::<PlantNode>(&config.grow, &mut plant_builder)
+            .grow::<TreeSkeleton>(&(), &mut ())
+            .grow::<VolumetricTree>(&config.strands, &mut particle_builder)
+            .grow::<GeometryData>(&config.mesh, &mut mesh_builder);
+
+        geometry.compute_smooth_normals();
+        geometry
+    }
+}
+
+pub trait Grow {
+    fn grow<Next>(self, config: &Next::Config, builder: &mut Next::Builder) -> Next
+    where
+        Next: TreePipelinePhase<Previous = Self>;
+}
+
+impl<T> Grow for T {
+    fn grow<Next>(
+        self,
+        config: &<Next as TreePipelinePhase>::Config,
+        builder: &mut <Next as TreePipelinePhase>::Builder,
+    ) -> Next
+    where
+        Next: TreePipelinePhase<Previous = T>,
+    {
+        Next::generate_from(self, config, builder)
+    }
+}
+
 pub trait VisualDebug {
     type Flags;
     #[cfg(feature = "bevy")]
