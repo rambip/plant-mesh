@@ -1,11 +1,11 @@
-use glam::Vec3;
-use serde::{Serialize, Deserialize};
 #[cfg(feature = "bevy")]
-use bevy_gizmos::prelude::Gizmos;
+use bevy::prelude::Component;
 #[cfg(feature = "bevy")]
 use bevy_color::Color;
 #[cfg(feature = "bevy")]
-use bevy::prelude::Component;
+use bevy_gizmos::prelude::Gizmos;
+use glam::Vec3;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(Component))]
@@ -39,7 +39,11 @@ impl GeometryData {
         mesh_tools::models::Mesh::default()
     }
 
-    pub fn register_points_trunk(&mut self, points: impl IntoIterator<Item = Vec3>, rng: &mut impl rand::Rng) -> Vec<usize> {
+    pub fn register_points_trunk(
+        &mut self,
+        points: impl IntoIterator<Item = Vec3>,
+        rng: &mut impl rand::Rng,
+    ) -> Vec<usize> {
         let mut result = Vec::new();
         for p in points {
             let blue: f32 = rng.gen_range(0.1f32..0.2);
@@ -137,41 +141,8 @@ impl crate::VisualDebug for GeometryData {
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct MeshConfig {
-    pub interaction_radius: f32,
-    pub repulsion: f32,
-    pub n_steps: usize,
-    pub dt: f32,
-    pub particles_per_leaf: usize,
     pub leaf_size: f32,
     pub leaf_angle: f32,
     pub interior_angle: f32,
     pub spacing: f32,
-}
-
-impl From<super::particles::StrandsConfig> for MeshConfig {
-    fn from(s: super::particles::StrandsConfig) -> Self {
-        Self {
-            interaction_radius: s.interaction_radius,
-            repulsion: s.repulsion,
-            n_steps: s.n_steps,
-            dt: s.dt,
-            particles_per_leaf: s.particles_per_leaf,
-            leaf_size: 0.5,
-            leaf_angle: 0.5,
-            interior_angle: 0.1,
-            spacing: 0.2,
-        }
-    }
-}
-
-impl From<MeshConfig> for super::particles::StrandsConfig {
-    fn from(m: MeshConfig) -> Self {
-        Self {
-            interaction_radius: m.interaction_radius,
-            repulsion: m.repulsion,
-            n_steps: m.n_steps,
-            dt: m.dt,
-            particles_per_leaf: m.particles_per_leaf,
-        }
-    }
 }
