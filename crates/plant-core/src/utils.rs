@@ -1,5 +1,3 @@
-// TODO: rename module
-
 pub trait FloatProducer: ExactSizeIterator<Item = f32> + Sized {
     fn arg_min(self) -> Option<usize> {
         let (mut i_min, mut v_min) = (0, f32::NAN);

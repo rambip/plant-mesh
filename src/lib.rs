@@ -19,7 +19,6 @@ impl<T> Grow for T {
     }
 }
 
-pub mod meshing;
-mod tools;
+pub mod bevy_mesh;
 
-pub use meshing::VolumetricTree;
+pub use bevy_mesh::BevyMesh;

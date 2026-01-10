@@ -1,17 +1,18 @@
-pub mod meshing;
 pub mod growing;
+pub mod meshing;
+pub mod utils;
 
-pub use meshing::StrandsConfig;
-pub use meshing::SplineIndex;
-pub use meshing::GeometryData;
-pub use meshing::mesh_builder::MeshDebugFlags;
-pub use meshing::mesh_builder::MeshConfig;
-pub use meshing::particles::TrajectoryBuilder;
 pub use growing::generation::GrowConfig;
-pub use growing::TreeSkeleton;
+pub use growing::NodeInfo;
 pub use growing::PlantNode;
 pub use growing::PlantNodeProps;
-pub use growing::NodeInfo;
+pub use growing::TreeSkeleton;
+pub use meshing::mesh_builder::MeshConfig;
+pub use meshing::mesh_builder::MeshDebugFlags;
+pub use meshing::particles::TrajectoryBuilder;
+pub use meshing::GeometryData;
+pub use meshing::SplineIndex;
+pub use meshing::StrandsConfig;
 
 pub trait VisualDebug {
     type Flags;
@@ -23,7 +24,11 @@ pub trait TreePipelinePhase {
     type Previous;
     type Config;
     type Builder;
-    fn generate_from(prev: Self::Previous, config: &Self::Config, builder: &mut Self::Builder) -> Self;
+    fn generate_from(
+        prev: Self::Previous,
+        config: &Self::Config,
+        builder: &mut Self::Builder,
+    ) -> Self;
 }
 
 pub struct Seed;

@@ -14,11 +14,12 @@ use std::f32::consts::PI;
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
+use plant_core::meshing::VolumetricTree;
+use plant_mesh::bevy_mesh::BevyMesh;
 use plant_mesh::{
     GeometryData, Grow, GrowConfig, MeshConfig, MeshDebugFlags, PlantNode, Seed, StrandsConfig,
-    TrajectoryBuilder, TreeSkeleton, VisualDebug, VolumetricTree,
+    TrajectoryBuilder, TreeSkeleton, VisualDebug,
 };
-use plant_mesh::meshing::BevyMesh;
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 pub struct DebugFlags {
@@ -300,10 +301,11 @@ fn draw_tree(
     time: Res<Time>,
 ) {
     for (e, mut tree) in trees.iter_mut() {
-        commands.entity(e).insert(
-            if camera_settings.show_mesh {Visibility::Visible}
-            else {Visibility::Hidden}
-        );
+        commands.entity(e).insert(if camera_settings.show_mesh {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        });
 
         if !tree.need_render {
             return;
@@ -330,9 +332,7 @@ fn draw_tree(
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
 
-        commands
-            .entity(e)
-            .insert((mesh_builder, particle_builder));
+        commands.entity(e).insert((mesh_builder, particle_builder));
     }
 }
 
@@ -346,8 +346,14 @@ fn visual_debug(
     mut gizmos: Gizmos,
 ) {
     for (a, b, c) in query.iter() {
-        if let Some(a) = a { a.debug(&mut gizmos, flags.skeleton); }
-        if let Some(b) = b { b.debug(&mut gizmos, flags.strands); }
-        if let Some(c) = c { c.debug(&mut gizmos, flags.mesh); }
+        if let Some(a) = a {
+            a.debug(&mut gizmos, flags.skeleton);
+        }
+        if let Some(b) = b {
+            b.debug(&mut gizmos, flags.strands);
+        }
+        if let Some(c) = c {
+            c.debug(&mut gizmos, flags.mesh);
+        }
     }
 }
