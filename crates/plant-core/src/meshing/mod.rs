@@ -314,14 +314,15 @@ impl VolumetricTree {
 
                 let p1 = leaf + mesh.rng.sample(random_point_distrib);
                 let p2 = leaf + mesh.rng.sample(random_point_distrib);
-                let i_leaf = mesh.register_points_leaf([leaf, p1, p2])[0];
+                let i_leaf_front = mesh.register_points_leaf([leaf, p1, p2])[0];
+                let i_leaf_back = mesh.register_points_leaf([leaf, p1, p2])[0];
                 mesh.register_triangles(&[
-                    i_leaf,
-                    i_leaf + 1,
-                    i_leaf + 2,
-                    i_leaf,
-                    i_leaf + 2,
-                    i_leaf + 1,
+                    i_leaf_front,
+                    i_leaf_front + 1,
+                    i_leaf_front + 2,
+                    i_leaf_back,
+                    i_leaf_back + 2,
+                    i_leaf_back + 1,
                 ]);
             }
             1 => {

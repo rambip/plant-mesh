@@ -70,18 +70,6 @@ impl GeometryData {
         self.normals = normals.into_iter().map(|n| n.normalize_or_zero()).collect();
     }
 
-    pub fn to_mesh_tools(&self) -> mesh_tools::models::Mesh {
-        let positions: Vec<f32> = self.points.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
-        let indices: Vec<u16> = self.triangles.iter().map(|&i| i as u16).collect();
-        let normals: Vec<f32> = self.normals.iter().flat_map(|n| [n.x, n.y, n.z]).collect();
-
-        mesh_tools::mesh::MeshBuilder::new(Some("TreeMesh".to_string()))
-            .with_positions(positions)
-            .with_indices(indices)
-            .with_normals(normals)
-            .build()
-    }
-
     pub fn register_points_trunk(
         &mut self,
         points: impl IntoIterator<Item = Vec3>,
