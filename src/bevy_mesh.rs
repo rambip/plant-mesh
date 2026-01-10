@@ -20,22 +20,23 @@ impl TreePipelinePhase for BevyMesh {
         config: &Self::Config,
         builder: &mut Self::Builder,
     ) -> Self {
-        let builder = GeometryData::generate_from(prev, config, builder);
+        let mut builder_data = GeometryData::generate_from(prev, config, builder);
+        builder_data.compute_smooth_normals();
         
         // Convert GeometryData to Bevy Mesh
-        let mut mesh = Mesh::new(
+        let mesh = Mesh::new(
             bevy::render::mesh::PrimitiveTopology::TriangleList,
             bevy::asset::RenderAssetUsages::default(),
         )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, builder.points.clone())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, builder_data.points.clone())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, builder_data.normals.clone())
         .with_inserted_attribute(
             Mesh::ATTRIBUTE_COLOR,
-            builder.colors.clone()
+            builder_data.colors.clone()
         )
         .with_inserted_indices(bevy::render::mesh::Indices::U32(
-            builder.triangles.clone(),
+            builder_data.triangles.clone(),
         ));
-        mesh.compute_smooth_normals();
         BevyMesh(mesh)
     }
 }

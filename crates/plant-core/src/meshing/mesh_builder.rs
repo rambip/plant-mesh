@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "bevy", derive(Component))]
 pub struct GeometryData {
     pub points: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
     pub colors: Vec<[f32; 4]>,
     pub triangles: Vec<u32>,
     pub contours: Vec<Vec<usize>>,
@@ -27,6 +28,7 @@ impl GeometryData {
     pub fn new(rng: rand::rngs::StdRng) -> Self {
         Self {
             points: Vec::new(),
+            normals: Vec::new(),
             colors: Vec::new(),
             triangles: Vec::new(),
             contours: Vec::new(),
@@ -35,8 +37,49 @@ impl GeometryData {
         }
     }
 
+    /// Computes smooth normals for the mesh using angle-weighted face normals.
+    ///
+    /// This method iterates over all triangles, calculates the face normal,
+    /// and accumulates it into the vertex normals weighted by the angle at each vertex.
+    /// Finally, it normalizes all accumulated vectors.
+    pub fn compute_smooth_normals(&mut self) {
+        let mut normals = vec![Vec3::ZERO; self.points.len()];
+
+        for chunk in self.triangles.chunks_exact(3) {
+            let (ia, ib, ic) = (chunk[0] as usize, chunk[1] as usize, chunk[2] as usize);
+            let (pa, pb, pc) = (self.points[ia], self.points[ib], self.points[ic]);
+
+            let dir_ab = (pb - pa).normalize_or_zero();
+            let dir_ac = (pc - pa).normalize_or_zero();
+            let dir_ba = (pa - pb).normalize_or_zero();
+            let dir_bc = (pc - pb).normalize_or_zero();
+            let dir_ca = (pa - pc).normalize_or_zero();
+            let dir_cb = (pb - pc).normalize_or_zero();
+
+            let weight_a = dir_ab.dot(dir_ac).clamp(-1.0, 1.0).acos();
+            let weight_b = dir_ba.dot(dir_bc).clamp(-1.0, 1.0).acos();
+            let weight_c = dir_ca.dot(dir_cb).clamp(-1.0, 1.0).acos();
+
+            let face_normal = (pb - pa).cross(pc - pa).normalize_or_zero();
+
+            normals[ia] += face_normal * weight_a;
+            normals[ib] += face_normal * weight_b;
+            normals[ic] += face_normal * weight_c;
+        }
+
+        self.normals = normals.into_iter().map(|n| n.normalize_or_zero()).collect();
+    }
+
     pub fn to_mesh_tools(&self) -> mesh_tools::models::Mesh {
-        mesh_tools::models::Mesh::default()
+        let positions: Vec<f32> = self.points.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
+        let indices: Vec<u16> = self.triangles.iter().map(|&i| i as u16).collect();
+        let normals: Vec<f32> = self.normals.iter().flat_map(|n| [n.x, n.y, n.z]).collect();
+
+        mesh_tools::mesh::MeshBuilder::new(Some("TreeMesh".to_string()))
+            .with_positions(positions)
+            .with_indices(indices)
+            .with_normals(normals)
+            .build()
     }
 
     pub fn register_points_trunk(
