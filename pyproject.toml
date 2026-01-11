@@ -1,0 +1,23 @@
+[project]
+name = "plant"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Antonin P", email = "antonin.peronnet@telecom-paris.fr" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "cffi>=2.0.0",
+    "numpy>=2.4.1",
+]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+
+[tool.maturin]
+manifest-path = "crates/plant-core/Cargo.toml"
+editable-profile = "release"
+features = ["python"]

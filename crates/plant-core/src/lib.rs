@@ -19,7 +19,10 @@ use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "bevy", derive(bevy::prelude::TypePath, bevy::prelude::Asset))]
+#[cfg_attr(
+    feature = "bevy",
+    derive(bevy::prelude::TypePath, bevy::prelude::Asset)
+)]
 pub struct TreeConfig {
     pub grow: GrowConfig,
     pub strands: StrandsConfig,
@@ -123,5 +126,17 @@ impl TreePipelinePhase for TrajectoryBuilder {
         builder.clear_for_tree(&prev);
         builder.compute_trajectories(&prev, prev.root(), config);
         builder
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyo3::pymodule]
+mod plant {
+    use crate::GeometryData;
+    #[pyo3::pyfunction]
+    pub fn build_demo_tree() -> GeometryData {
+        let config_str = include_str!("../../../assets/tree_config.toml");
+        let config = toml::from_str(config_str).unwrap();
+        return GeometryData::build_from_config(&config, 4);
     }
 }

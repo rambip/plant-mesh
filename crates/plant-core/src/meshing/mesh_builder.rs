@@ -5,10 +5,13 @@ use bevy_color::Color;
 #[cfg(feature = "bevy")]
 use bevy_gizmos::prelude::Gizmos;
 use glam::Vec3;
+#[cfg(feature = "python")]
+use numpy::{IntoPyArray, PyArrayDyn};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(Component))]
+#[cfg_attr(feature = "python", pyo3::pyclass)]
 pub struct GeometryData {
     pub points: Vec<Vec3>,
     pub normals: Vec<Vec3>,
@@ -113,6 +116,22 @@ impl GeometryData {
 
     pub fn add_debug(&mut self, pos: Vec3, color: [f32; 4]) {
         self.debug_points.push((pos, color));
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyo3::pymethods]
+impl GeometryData {
+    #[getter]
+    fn points<'py>(&self, py: pyo3::Python<'py>) -> pyo3::Bound<'py, PyArrayDyn<f32>> {
+        let array = ndarray::Array::from_shape_fn((self.points.len(), 3), |(i, j)| match j {
+            0 => self.points[i].x,
+            1 => self.points[i].y,
+            _ => self.points[i].z,
+        })
+        .into_dyn();
+
+        array.into_pyarray(py)
     }
 }
 
