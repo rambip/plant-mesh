@@ -1,0 +1,6 @@
+[tools]
+"rust" = {
+  version = "1.83.0",
+  targets = "wasm32-unknown-unknown,x86_64-unknown-linux-gnu",
+}
+uv = "latest"
