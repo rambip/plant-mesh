@@ -8,7 +8,7 @@ Mesh generation for trees and plants using volumetric invigoration. A WIP with a
 
 The `js/` folder contains a JavaScript decoder that consumes mesh data from the Rust core and renders it in the browser using Three.js.
 
-See [js/DEVELOP.md](js/DEVELOP.md) for detailed development documentation.
+> **IMPORTANT for agents:** Read [js/DEVELOP.md](js/DEVELOP.md) before making any changes to the JS decoder, renderer, or geometry generation. It documents the encoding format, common failure modes, and their root causes — skipping it will likely result in subtle bugs that are hard to diagnose.
 
 ### Stack
 - JavaScript (ES modules)
@@ -16,8 +16,8 @@ See [js/DEVELOP.md](js/DEVELOP.md) for detailed development documentation.
 - [Three.js](https://threejs.org/) for rendering
 
 ### Development Commands
-- **Bundle:** `bun build ./js/src/render.js --outdir=./js/dist`
-- **Serve:** Any static file server (e.g., `cd js && python3 -m http.server 8081`) from the project root, then open `js/index.html`
+- **Bundle:** `.bun/bin/bun build ./js/src/render.js --outdir=./js/dist`
+- **Serve:** Any static file server (e.g., `python -m http.server`) from the project root, then open `js/index.html`
 
 # Agent Guidelines
 
