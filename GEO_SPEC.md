@@ -95,12 +95,9 @@ An expression is either:
 - A **string** — a reference to a named buffer from `buffers`, evaluating to `Buffer<Int>`
 - An **object** with an `"op"` field — an operator application
 
-Arguments to operators are written as either:
+Arguments to operators are always written as:
 
-- `"arg_0"`, `"arg_1"`, ... — for positional named arguments
-- `"args": [...]` — for a variable-length list of arguments
-
-Both forms are valid for all operators. When both are present, `"args"` provides the argument list and `"arg_0"`, `"arg_1"` are not used.
+- `"args": [...]` — a positional list of arguments
 
 ---
 
@@ -161,31 +158,42 @@ out[i] = (args[0][i], args[1][i], args[2][i])
 
 ---
 
-### `spline` — Evaluate B-Spline
+### `spline` — Evaluate Centripetal Catmull-Rom Spline
 
 ```json
-{ "op": "spline", "arg_0": <Buffer<Vec3>>, "arg_1": <Buffer<Scalar>> }
+{ "op": "spline", "args": [<Buffer<Vec3>>, <Buffer<Scalar>>] }
 ```
 
-Evaluates a clamped uniform cubic B-spline defined by the control points in `arg_0`, at each parameter value in `arg_1`.
+Evaluates a centripetal Catmull-Rom spline defined by the control points in `args[0]`, at each parameter value in `args[1]`.
 
-- `arg_0` is a `Buffer<Vec3>` of `K` control points defining a single spline with `K-1` segments
-- `arg_1` is a `Buffer<Scalar>` of query parameter values, each in `[0, K-1]`
-- `floor(t)` identifies the segment; the fractional part is the local parameter
+- `args[0]` is a `Buffer<Vec3>` of `K` control points (`K >= 2`)
+- `args[1]` is a `Buffer<Scalar>` of query parameter values, each in `[0, K-1]`
+- `floor(t)` identifies the segment index `i0`; the fractional part `r = t - i0` is the local parameter in `[0, 1]`
 
-The border convention is given by the top-level `spline_convention` field. Under `"reflect"`, a virtual control point is added at each end by reflecting the nearest interior point across the endpoint:
-
-```
-p[-1]  = 2*p[0] - p[1]
-p[K]   = 2*p[K-1] - p[K-2]
-```
-
-This ensures the spline is well-defined for `t` at or near `0` and `K-1`.
-
-The cubic basis used is the **standard clamped uniform B-spline** (de Boor recursion, degree 3).
+For each query `t`, evaluation uses the 4-point window `[p[i0-1], p[i0], p[i0+1], p[i0+2]]`. The border convention `"reflect"` synthesizes out-of-range points:
 
 ```
-out[i] = B(arg_0, arg_1[i])
+p[-1] = 2*p[0]   - p[1]
+p[K]  = 2*p[K-1] - p[K-2]
+```
+
+The knot sequence for the 4-point window is **centripetal** (knot spacing = sqrt of chord length):
+
+```
+knot[0] = 0
+knot[i] = knot[i-1] + sqrt(length(p[i] - p[i-1]))   for i in 1..3
+```
+
+The local parameter is mapped into the knot interval `[knot[1], knot[2]]`:
+
+```
+t_knot = knot[1] + (knot[2] - knot[1]) * r
+```
+
+Evaluation uses de Boor's algorithm with the centripetal knots (3 levels of lerp). See `crates/plant-core/src/meshing/algorithms.rs:extended_catmull_spline` for the reference implementation.
+
+```
+out[i] = spline(args[0], args[1][i])
 ```
 
 **Input:** `Buffer<Vec3>` (length K), `Buffer<Scalar>` (length N)  
@@ -268,30 +276,24 @@ Triangle index buffers reference vertices by their position in the output of the
       "args": [
         {
           "op": "spline",
-          "arg_0": {
-            "op": "divp2",
-            "arg_0": { "op": "vec3", "args": ["spline_0_x", "spline_0_y", "spline_0_z"] },
-            "arg_1": 4096
-          },
-          "arg_1": { "op": "divp2", "arg_0": "spline_0_t", "arg_1": 1024 }
+          "args": [
+            { "op": "divp2", "args": [{ "op": "vec3", "args": ["spline_0_x", "spline_0_y", "spline_0_z"] }, 4096] },
+            { "op": "divp2", "args": ["spline_0_t", 1024] }
+          ]
         },
         {
           "op": "spline",
-          "arg_0": {
-            "op": "divp2",
-            "arg_0": { "op": "vec3", "args": ["spline_1_x", "spline_1_y", "spline_1_z"] },
-            "arg_1": 4096
-          },
-          "arg_1": { "op": "divp2", "arg_0": "spline_1_t", "arg_1": 1024 }
+          "args": [
+            { "op": "divp2", "args": [{ "op": "vec3", "args": ["spline_1_x", "spline_1_y", "spline_1_z"] }, 4096] },
+            { "op": "divp2", "args": ["spline_1_t", 1024] }
+          ]
         },
         {
           "op": "spline",
-          "arg_0": {
-            "op": "divp2",
-            "arg_0": { "op": "vec3", "args": ["spline_2_x", "spline_2_y", "spline_2_z"] },
-            "arg_1": 4096
-          },
-          "arg_1": { "op": "divp2", "arg_0": "spline_2_t", "arg_1": 1024 }
+          "args": [
+            { "op": "divp2", "args": [{ "op": "vec3", "args": ["spline_2_x", "spline_2_y", "spline_2_z"] }, 4096] },
+            { "op": "divp2", "args": ["spline_2_t", 1024] }
+          ]
         }
       ]
     },
@@ -299,9 +301,9 @@ Triangle index buffers reference vertices by their position in the output of the
     "triangles": {
       "op": "triangle",
       "args": [
-        { "op": "cumsum", "arg_0": "triangle_i" },
-        { "op": "cumsum", "arg_0": "triangle_j" },
-        { "op": "cumsum", "arg_0": "triangle_k" }
+        { "op": "cumsum", "args": ["triangle_i"] },
+        { "op": "cumsum", "args": ["triangle_j"] },
+        { "op": "cumsum", "args": ["triangle_k"] }
       ]
     }
   }
@@ -340,21 +342,16 @@ function eval(expr, scope):
       return zip(x, y, z)
 
     case "spline":
-      points = eval(arg(expr, 0), scope)          // Buffer<Vec3>
-      times  = eval(arg(expr, 1), scope)          // Buffer<Scalar>
+      points = eval(expr.args[0], scope)          // Buffer<Vec3>
+      times  = eval(expr.args[1], scope)          // Buffer<Scalar>
       return times.map(t => eval_spline(points, t))
 
     case "interleave":
       return concat(expr.args.map(a => eval(a, scope)))
 
     case "triangle":
-      i, j, k = eval(arg(expr, 0)), eval(arg(expr, 1)), eval(arg(expr, 2))
+      i, j, k = eval(expr.args[0]), eval(expr.args[1]), eval(expr.args[2])
       return interleave3(i, j, k)
-
-// arg(expr, n) returns args[n] if "args" present, else arg_0 / arg_1 / ...
-function arg(expr, n):
-  if "args" in expr: return expr.args[n]
-  return expr["arg_" + n]
 ```
 
 ---

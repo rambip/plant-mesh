@@ -202,6 +202,8 @@ class TreeMeshDecoder {
           return this._triangle(args[0], args[1], args[2]);
         case 'interleave':
           return this._interleave(args);
+        case 'spline':
+          return this._spline(args[0], args[1]);
         default:
           throw new Error(`Unknown operator: ${op}`);
       }
@@ -262,6 +264,73 @@ class TreeMeshDecoder {
       result[n * 3 + 2] = k[n];
     }
     return result;
+  }
+
+  // Centripetal Catmull-Rom spline. Matches extended_catmull_spline() in
+  // crates/plant-core/src/meshing/algorithms.rs.
+  // points: Array of {x,y,z}, length K >= 2
+  // times:  Float32Array, values in [0, K-1]
+  _spline(points, times) {
+    const K = points.length;
+    if (K < 2) throw new Error(`spline: need at least 2 control points, got ${K}`);
+
+    // Reflect border: virtual points at index -1 and K
+    const p = (i) => {
+      if (i === -1)  return { x: 2*points[0].x - points[1].x,
+                              y: 2*points[0].y - points[1].y,
+                              z: 2*points[0].z - points[1].z };
+      if (i === K)   return { x: 2*points[K-1].x - points[K-2].x,
+                              y: 2*points[K-1].y - points[K-2].y,
+                              z: 2*points[K-1].z - points[K-2].z };
+      return points[i];
+    };
+
+    const dist = (a, b) => {
+      const dx = b.x-a.x, dy = b.y-a.y, dz = b.z-a.z;
+      return Math.sqrt(Math.sqrt(dx*dx + dy*dy + dz*dz)); // sqrt of length = centripetal
+    };
+
+    const lerp3 = (a, b, t) => ({
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      z: a.z + (b.z - a.z) * t,
+    });
+
+    const evalAt = (t) => {
+      // Clamp t=K-1 to last segment
+      let i0, r;
+      if (t >= K - 1) { i0 = K - 2; r = 1.0; }
+      else            { i0 = Math.floor(t); r = t - i0; }
+
+      const pts = [p(i0 - 1), p(i0), p(i0 + 1), p(i0 + 2)];
+
+      // Centripetal knot sequence
+      const knots = [0, 0, 0, 0];
+      for (let i = 1; i < 4; i++) {
+        knots[i] = knots[i-1] + dist(pts[i-1], pts[i]);
+      }
+
+      const tk = knots[1] + (knots[2] - knots[1]) * r;
+
+      const ratio = (i, j) => {
+        const d = knots[j] - knots[i];
+        return d === 0 ? 0 : (tk - knots[i]) / d;
+      };
+
+      // Level 1: 3 points
+      const a = [
+        lerp3(pts[0], pts[1], ratio(0, 1)),
+        lerp3(pts[1], pts[2], ratio(1, 2)),
+        lerp3(pts[2], pts[3], ratio(2, 3)),
+      ];
+      // Level 2: 2 points
+      const b1 = lerp3(a[0], a[1], ratio(0, 2));
+      const b2 = lerp3(a[1], a[2], ratio(1, 3));
+      // Level 3: result
+      return lerp3(b1, b2, ratio(1, 2));
+    };
+
+    return Array.from(times).map(evalAt);
   }
 
   _interleave(buffers) {
