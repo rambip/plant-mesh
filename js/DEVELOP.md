@@ -39,8 +39,9 @@ See `GEO_SPEC.md` in project root. Key points:
 - `divp2` - Divide by power of 2 (dequantization)
 - `vec3` - Zip 3 int buffers to Vec3
 - `cumsum` - Prefix sum (undo delta encoding)
-- `triangle` - Interleave 3 index buffers
-- `interleave` - Concatenate Vec3 buffers
+- `triangle` - Zip 3 index buffers into flat [i,j,k,...] array
+- `concat` - Append buffers sequentially (any type)
+- `interleave` - Zip buffers elementwise (any type, equal length)
 
 ### Outputs
 

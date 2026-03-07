@@ -201,22 +201,39 @@ out[i] = spline(args[0], args[1][i])
 
 ---
 
-### `interleave` — Concatenate Vec3 Buffers
+### `concat` — Concatenate Buffers
 
 ```json
-{ "op": "interleave", "args": [<Buffer<Vec3>>, <Buffer<Vec3>>, ...] }
+{ "op": "concat", "args": [<Buffer<T>>, <Buffer<T>>, ...] }
 ```
 
-Concatenates any number of `Buffer<Vec3>` into a single flat `Buffer<Vec3>`. The output contains all elements of `args[0]`, followed by all elements of `args[1]`, and so on.
+Appends any number of buffers of the same type sequentially. The output contains all elements of `args[0]`, followed by all elements of `args[1]`, and so on. Works for any buffer type (`Int`, `Scalar`, `Vec3`).
 
-This is the final step for `vertices`: it collects the evaluated positions from all splines into one contiguous vertex buffer.
+Used as the final step for `vertices`: collects per-spline position buffers into one contiguous vertex buffer.
 
 ```
-out = concat(args[0], args[1], ...)
+out = [args[0][0], ..., args[0][N0-1], args[1][0], ..., args[1][N1-1], ...]
 ```
 
-**Input:** one or more `Buffer<Vec3>`  
-**Output:** `Buffer<Vec3>`
+**Input:** one or more `Buffer<T>` of the same type  
+**Output:** `Buffer<T>`
+
+---
+
+### `interleave` — Zip Buffers Elementwise
+
+```json
+{ "op": "interleave", "args": [<Buffer<T>>, <Buffer<T>>, ...] }
+```
+
+Interleaves elements from all input buffers elementwise. All inputs must have the same length N. The output has length `N * len(args)`, with elements from each buffer alternating.
+
+```
+out = [args[0][0], args[1][0], ..., args[0][1], args[1][1], ...]
+```
+
+**Input:** one or more `Buffer<T>` of equal length  
+**Output:** `Buffer<T>` of length `N * len(args)`
 
 ---
 
@@ -346,8 +363,12 @@ function eval(expr, scope):
       times  = eval(expr.args[1], scope)          // Buffer<Scalar>
       return times.map(t => eval_spline(points, t))
 
+    case "concat":
+      return append(expr.args.map(a => eval(a, scope)))
+
     case "interleave":
-      return concat(expr.args.map(a => eval(a, scope)))
+      buffers = expr.args.map(a => eval(a, scope))
+      return zip_elementwise(buffers)
 
     case "triangle":
       i, j, k = eval(expr.args[0]), eval(expr.args[1]), eval(expr.args[2])

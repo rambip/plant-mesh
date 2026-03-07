@@ -137,20 +137,73 @@ function createCylinderData() {
     });
   }
 
-  // --- Triangle indices ---
-  // Perimeter order: vertex index = j * segments + i, wrapping in i.
-  const indices = [];
-  for (let j = 0; j < rings - 1; j++) {
-    for (let i = 0; i < segments; i++) {
-      const a = j * segments + i;
-      const b = j * segments + (i + 1) % segments;
-      const c = (j + 1) * segments + i;
-      const d = (j + 1) * segments + (i + 1) % segments;
-      indices.push(a, c, b);
-      indices.push(b, c, d);
+  // Helper: build triangle indices for one cylinder, with a global vertex offset.
+  const cylinderIndices = (vertexOffset) => {
+    const idx = [];
+    for (let j = 0; j < rings - 1; j++) {
+      for (let i = 0; i < segments; i++) {
+        const a = vertexOffset + j * segments + i;
+        const b = vertexOffset + j * segments + (i + 1) % segments;
+        const c = vertexOffset + (j + 1) * segments + i;
+        const d = vertexOffset + (j + 1) * segments + (i + 1) % segments;
+        idx.push(a, c, b);
+        idx.push(b, c, d);
+      }
     }
+    return idx;
+  };
+
+  // Two cylinders: first at x=[-0.5, 0.5], second at x=[0.6, 1.6]
+  const vertsPerCylinder = rings * segments;
+  const indices = [
+    ...cylinderIndices(0),
+    ...cylinderIndices(vertsPerCylinder),
+  ];
+
+  // Second cylinder: same ring structure, shifted +1.1 along x axis
+  const ring2SplineExprs = [];
+  const ring2NSplineExprs = [];
+  for (let j = 0; j < rings; j++) {
+    const y = 0.6 + height * j / (rings - 1);  // x in [0.6, 1.6]
+    const radius = radii[j];
+
+    const cpx = [], cpy = [], cpz = [];
+    const cnx = [], cny = [], cnz = [];
+    for (let i = 0; i < ncp; i++) {
+      const angle = (i / 4) * Math.PI * 2;
+      cpx.push(Math.round(y                        * posScale));
+      cpy.push(Math.round(Math.cos(angle) * radius * posScale));
+      cpz.push(Math.round(Math.sin(angle) * radius * posScale));
+      cnx.push(0);
+      cny.push(Math.round(Math.cos(angle) * posScale));
+      cnz.push(Math.round(Math.sin(angle) * posScale));
+    }
+
+    const delta = (arr) => arr.map((v, i) => v - (i === 0 ? 0 : arr[i - 1]));
+
+    buffers[`ring2_${j}_cp_x`] = { k: 2, data: riceEncode(delta(cpx), 2), length: ncp };
+    buffers[`ring2_${j}_cp_y`] = { k: 0, data: encodeInt32(cpy), length: ncp };
+    buffers[`ring2_${j}_cp_z`] = { k: 2, data: riceEncode(delta(cpz), 2), length: ncp };
+    buffers[`ring2_${j}_cn_x`] = { k: 0, data: encodeInt32(cnx), length: ncp };
+    buffers[`ring2_${j}_cn_y`] = { k: 2, data: riceEncode(delta(cny), 2), length: ncp };
+    buffers[`ring2_${j}_cn_z`] = { k: 2, data: riceEncode(delta(cnz), 2), length: ncp };
+
+    const cpVec3_2 = (xbuf, ybuf, zbuf) => ({
+      op: 'divp2',
+      args: [{ op: 'vec3', args: [
+        { op: 'cumsum', args: [xbuf] },
+        ybuf,
+        { op: 'cumsum', args: [zbuf] },
+      ]}, 8],
+    });
+
+    const tExpr = { op: 'divp2', args: ['ring_t', 10] };
+
+    ring2SplineExprs.push({ op: 'spline', args: [cpVec3_2(`ring2_${j}_cp_x`, `ring2_${j}_cp_y`, `ring2_${j}_cp_z`), tExpr] });
+    ring2NSplineExprs.push({ op: 'spline', args: [cpVec3_2(`ring2_${j}_cn_x`, `ring2_${j}_cn_y`, `ring2_${j}_cn_z`), tExpr] });
   }
 
+  // Delta-encode all triangle indices together
   const indicesI = [], indicesJ = [], indicesK = [];
   let prevI = 0, prevJ = 0, prevK = 0;
   for (let t = 0; t < indices.length; t += 3) {
@@ -171,13 +224,20 @@ function createCylinderData() {
     spline_convention: "reflect",
     buffers,
     outputs: {
+      // concat appends both cylinders' vertex lists sequentially
       vertices: {
-        op: 'interleave',
-        args: ringSplineExprs,
+        op: 'concat',
+        args: [
+          { op: 'concat', args: ringSplineExprs },
+          { op: 'concat', args: ring2SplineExprs },
+        ],
       },
       normals: {
-        op: 'interleave',
-        args: ringNSplineExprs,
+        op: 'concat',
+        args: [
+          { op: 'concat', args: ringNSplineExprs },
+          { op: 'concat', args: ring2NSplineExprs },
+        ],
       },
       triangles: {
         op: 'triangle',

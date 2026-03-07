@@ -200,6 +200,8 @@ class TreeMeshDecoder {
           return this._vec3(args[0], args[1], args[2]);
         case 'triangle':
           return this._triangle(args[0], args[1], args[2]);
+        case 'concat':
+          return this._concat(args);
         case 'interleave':
           return this._interleave(args);
         case 'spline':
@@ -333,21 +335,41 @@ class TreeMeshDecoder {
     return Array.from(times).map(evalAt);
   }
 
-  _interleave(buffers) {
-    // Concatenates an array of Vec3 arrays into one Vec3 array.
-    // Each buffer must be an Array of {x,y,z} objects.
-    for (const buf of buffers) {
-      if (!Array.isArray(buf) || (buf.length > 0 && typeof buf[0] !== 'object')) {
-        throw new Error('interleave: all arguments must be Vec3 arrays (from vec3 operator). ' +
-          'Got a raw scalar buffer — wrap each group in vec3 first.');
-      }
+  _concat(buffers) {
+    // Sequentially appends buffers of the same type (Int32Array, Float32Array, or Vec3 array).
+    if (buffers[0] instanceof Int32Array || buffers[0] instanceof Float32Array) {
+      const total = buffers.reduce((s, b) => s + b.length, 0);
+      const result = new buffers[0].constructor(total);
+      let offset = 0;
+      for (const b of buffers) { result.set(b, offset); offset += b.length; }
+      return result;
     }
+    // Vec3 array
     const result = [];
-    for (const buffer of buffers) {
-      for (const v of buffer) {
-        result.push(v);
+    for (const buf of buffers) for (const v of buf) result.push(v);
+    return result;
+  }
+
+  _interleave(buffers) {
+    // Elementwise zip: all buffers must have equal length N.
+    // Output length = N * len(buffers), elements alternating.
+    const N = buffers[0].length;
+    for (const buf of buffers) {
+      if (buf.length !== N) {
+        throw new Error(`interleave: all buffers must have equal length, got ${N} and ${buf.length}`);
       }
     }
+    if (buffers[0] instanceof Int32Array || buffers[0] instanceof Float32Array) {
+      const result = new buffers[0].constructor(N * buffers.length);
+      for (let i = 0; i < N; i++)
+        for (let b = 0; b < buffers.length; b++)
+          result[i * buffers.length + b] = buffers[b][i];
+      return result;
+    }
+    // Vec3 array
+    const result = [];
+    for (let i = 0; i < N; i++)
+      for (const buf of buffers) result.push(buf[i]);
     return result;
   }
 
