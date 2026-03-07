@@ -133,6 +133,37 @@ impl GeometryData {
 
         array.into_pyarray(py)
     }
+    #[getter]
+    fn normals<'py>(&self, py: pyo3::Python<'py>) -> pyo3::Bound<'py, PyArrayDyn<f32>> {
+        let array = ndarray::Array::from_shape_fn((self.normals.len(), 3), |(i, j)| match j {
+            0 => self.normals[i].x,
+            1 => self.normals[i].y,
+            _ => self.normals[i].z,
+        })
+        .into_dyn();
+
+        array.into_pyarray(py)
+    }
+    #[getter]
+    fn colors<'py>(&self, py: pyo3::Python<'py>) -> pyo3::Bound<'py, PyArrayDyn<f32>> {
+        let array =
+            ndarray::Array::from_shape_fn((self.colors.len(), 4), |(i, j)| self.colors[i][j])
+                .into_dyn();
+
+        array.into_pyarray(py)
+    }
+    #[getter]
+    fn triangles<'py>(&self, py: pyo3::Python<'py>) -> pyo3::Bound<'py, PyArrayDyn<u32>> {
+        let array =
+            ndarray::Array::from_shape_fn((self.triangles.len() / 3, 3), |(i, j)| match j {
+                0 => self.triangles[3 * i],
+                1 => self.triangles[3 * i + 1],
+                _ => self.triangles[3 * i + 2],
+            })
+            .into_dyn();
+
+        array.into_pyarray(py)
+    }
 }
 
 impl Default for GeometryData {

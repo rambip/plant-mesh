@@ -8,17 +8,16 @@ use bevy::{
 };
 use bevy_simple_graphics::SimpleMeshPipelinePlugin;
 use rand::{rngs::StdRng, SeedableRng};
-use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
+use plant_core::{meshing::VolumetricTree, TreeSkeletonDebugData};
 use plant_mesh::{
     BevyMesh, GeometryData, Grow, MeshDebugFlags, PlantNode, Seed, TrajectoryBuilder, TreeConfig,
     TreeSkeleton, VisualDebug,
 };
-use plant_core::meshing::VolumetricTree;
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 pub struct DebugFlags {
@@ -299,7 +298,7 @@ fn draw_tree(
         let rng = StdRng::seed_from_u64(tree.seed);
 
         let mut plant_builder = rng.clone();
-        let mut skeleton_builder = ();
+        let mut skeleton_builder = TreeSkeletonDebugData::new();
         let mut particle_builder = TrajectoryBuilder::new(rng.clone());
         let mut mesh_builder = GeometryData::new(rng.clone());
 
@@ -315,13 +314,15 @@ fn draw_tree(
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
 
-        commands.entity(e).insert((mesh_builder, particle_builder));
+        commands
+            .entity(e)
+            .insert((skeleton_builder, particle_builder, mesh_builder));
     }
 }
 
 fn visual_debug(
     query: Query<(
-        Option<&TreeSkeleton>,
+        Option<&TreeSkeletonDebugData>,
         Option<&TrajectoryBuilder>,
         Option<&GeometryData>,
     )>,

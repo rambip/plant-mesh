@@ -7,6 +7,7 @@ pub use growing::NodeInfo;
 pub use growing::PlantNode;
 pub use growing::PlantNodeProps;
 pub use growing::TreeSkeleton;
+pub use growing::TreeSkeletonDebugData;
 pub use meshing::mesh_builder::MeshConfig;
 pub use meshing::mesh_builder::MeshDebugFlags;
 pub use meshing::particles::TrajectoryBuilder;
@@ -34,12 +35,13 @@ impl GeometryData {
         let rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         let mut plant_builder = rng.clone();
+        let mut skeleton_builder = TreeSkeletonDebugData::new();
         let mut particle_builder = TrajectoryBuilder::new(rng.clone());
         let mut mesh_builder = GeometryData::new(rng.clone());
 
         let mut geometry = Seed
             .grow::<PlantNode>(&config.grow, &mut plant_builder)
-            .grow::<TreeSkeleton>(&(), &mut ())
+            .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
             .grow::<VolumetricTree>(&config.strands, &mut particle_builder)
             .grow::<GeometryData>(&config.mesh, &mut mesh_builder);
 
@@ -103,17 +105,17 @@ impl TreePipelinePhase for PlantNode {
 impl TreePipelinePhase for TreeSkeleton {
     type Previous = PlantNode;
     type Config = ();
-    type Builder = ();
-    fn generate_from(prev: Self::Previous, _: &Self::Config, _: &mut Self::Builder) -> Self {
+    type Builder = TreeSkeletonDebugData;
+    fn generate_from(prev: Self::Previous, _: &Self::Config, cache: &mut Self::Builder) -> Self {
         let mut node_props = Vec::new();
         prev.register_node_properties(&mut node_props);
         let mut node_info = Vec::new();
         prev.register_node_info(&mut node_info, 0);
-
-        TreeSkeleton {
+        cache.copy = TreeSkeleton {
             node_info,
             node_props,
-        }
+        };
+        cache.copy.clone()
     }
 }
 
@@ -131,12 +133,14 @@ impl TreePipelinePhase for TrajectoryBuilder {
 
 #[cfg(feature = "python")]
 #[pyo3::pymodule]
-mod plant {
-    use crate::GeometryData;
+mod plant_core {
+    use crate::{GeometryData, TreeConfig};
     #[pyo3::pyfunction]
-    pub fn build_demo_tree() -> GeometryData {
+    pub fn build_demo_tree(birth_power: f32) -> GeometryData {
         let config_str = include_str!("../../../assets/tree_config.toml");
-        let config = toml::from_str(config_str).unwrap();
-        return GeometryData::build_from_config(&config, 4);
+        let mut config: TreeConfig = toml::from_str(config_str).unwrap();
+        // config.grow.birth_power = birth_power;
+
+        return GeometryData::build_from_config(&config, 42);
     }
 }

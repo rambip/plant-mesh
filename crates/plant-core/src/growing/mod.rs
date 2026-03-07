@@ -1,14 +1,14 @@
-use glam::{Quat, Vec2, Vec3};
-use smallvec::SmallVec;
-use serde::{Serialize, Deserialize};
 #[cfg(feature = "bevy")]
-use bevy_gizmos::prelude::Gizmos;
+use bevy::prelude::Component;
 #[cfg(feature = "bevy")]
 use bevy_color::Color;
 #[cfg(feature = "bevy")]
-use bevy_math::Isometry3d;
+use bevy_gizmos::prelude::Gizmos;
 #[cfg(feature = "bevy")]
-use bevy::prelude::Component;
+use bevy_math::Isometry3d;
+use glam::{Quat, Vec2, Vec3};
+use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(Component))]
@@ -162,27 +162,36 @@ impl TreeSkeleton {
     }
 }
 
-impl crate::VisualDebug for TreeSkeleton {
+#[cfg_attr(feature = "bevy", derive(bevy::prelude::Component))]
+pub struct TreeSkeletonDebugData {
+    pub copy: TreeSkeleton,
+}
+
+impl TreeSkeletonDebugData {
+    pub fn new() -> Self {
+        Self {
+            copy: TreeSkeleton {
+                node_props: Default::default(),
+                node_info: Default::default(),
+            },
+        }
+    }
+}
+
+impl crate::VisualDebug for TreeSkeletonDebugData {
     type Flags = bool;
     #[cfg(feature = "bevy")]
     fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags) {
         if debug_flags {
-            for i in 0..self.node_count() {
+            let sk = &self.copy;
+            for i in 0..sk.node_count() {
                 let isometry = Isometry3d {
-                    translation: self.position(i).into(),
-                    rotation: self.orientation(i),
+                    translation: sk.position(i).into(),
+                    rotation: sk.orientation(i),
                 };
-                gizmos.circle(
-                    isometry,
-                    1.1 * self.radius(i),
-                    Color::srgb(0., 0.8, 0.5),
-                );
-                for &c in self.children(i) {
-                    gizmos.line(
-                        self.position(i),
-                        self.position(c),
-                        Color::srgb(0.1, 0.1, 0.1),
-                    );
+                gizmos.circle(isometry, 1.1 * sk.radius(i), Color::srgb(0., 0.8, 0.5));
+                for &c in sk.children(i) {
+                    gizmos.line(sk.position(i), sk.position(c), Color::srgb(0.1, 0.1, 0.1));
                 }
             }
         }
