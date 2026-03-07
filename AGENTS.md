@@ -1,4 +1,23 @@
-# Agent Guidelines - plant-mesh
+# plant-mesh
+
+Mesh generation for trees and plants using volumetric invigoration. A WIP with a Rust core, and Rust/Python bindings.
+
+> **Note:** This repo is being actively reworked. Documentation for the core Rust pipeline, Python bindings, and other components is coming soon.
+
+## JS Decoder (WIP)
+
+The `js/` folder contains a JavaScript decoder that consumes mesh data from the Rust core and renders it in the browser using Three.js.
+
+### Stack
+- JavaScript (ES modules)
+- [Bun](https://bun.sh/) for bundling
+- [Three.js](https://threejs.org/) for rendering
+
+### Development Commands
+- **Bundle:** `.bun/bin/bun build ./js/src/render.js --outdir=./js/dist`
+- **Serve:** Any static file server (e.g., `python -m http.server`) from the project root, then open `js/index.html`
+
+# Agent Guidelines
 
 ## Project Scope & Goal
 This project is a procedural plant mesh generator developed for a computer geometry course. It uses a pipeline-based approach to grow tree skeletons and generate volumetric meshes using Bevy for rendering and geometric algorithms like convex hulls and particle-based meshing. See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of the pipeline and internal crates.
