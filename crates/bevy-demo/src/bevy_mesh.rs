@@ -1,12 +1,12 @@
 use bevy::prelude::Mesh;
-use plant_core::meshing::{GeometryData, MeshConfig, VolumetricTree};
-use plant_core::TreePipelinePhase;
+use tubulin_core::meshing::{GeometryData, MeshConfig, VolumetricTree};
+use tubulin_core::TreePipelinePhase;
 
 pub mod algorithms {
-    pub use plant_core::meshing::algorithms::*;
+    pub use tubulin_core::meshing::algorithms::*;
 }
 pub mod particles {
-    pub use plant_core::meshing::particles::*;
+    pub use tubulin_core::meshing::particles::*;
 }
 
 pub struct BevyMesh(pub Mesh);

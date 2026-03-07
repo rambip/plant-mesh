@@ -1,8 +1,30 @@
-# plant-mesh
+# tubulin
 
-Mesh generation for trees and plants using volumetric invigoration. A WIP with a Rust core, and Rust/Python bindings.
+Procedural plant mesh generator using volumetric invigoration. A WIP with a Rust core, Python bindings, and a JS viewer.
 
-> **Note:** This repo is being actively reworked. Documentation for the core Rust pipeline, Python bindings, and other components is coming soon.
+## Repository Structure
+
+```
+tubulin/
+├── crates/
+│   ├── tubulin-core/        # Pure geometry library: growing pipeline, meshing, splines
+│   │                        # Feature flags: "bevy" (Bevy types), "python" (pyo3 bindings)
+│   ├── bevy-demo/           # Bevy interactive viewer (binary). Depends on tubulin-core.
+│   ├── bevy-gizmos/         # Vendored Bevy gizmos crate (upstream fork)
+│   └── bevy-simple-graphics/ # Minimal Bevy render pipeline helper
+├── python/
+│   └── tubulin/             # Python package source
+│       └── __init__.py      # Will expose TreeMesh class with _repr_html_()
+├── js/                      # JS decoder + Three.js viewer
+│   ├── src/
+│   │   ├── decoder.js       # TreeMesh format decoder (Rice, spline eval, operators)
+│   │   ├── generate.js      # Geometry generator (dev/test, outputs geometry.json)
+│   │   └── render.js        # Three.js renderer
+│   └── dist/                # Built JS bundle (gitignored, regenerate with bun)
+├── Cargo.toml               # Workspace manifest only (no [package])
+├── pyproject.toml           # Maturin build config — points to crates/tubulin-core
+└── GEO_SPEC.md              # TreeMesh intermediate representation spec
+```
 
 ## JS Decoder (WIP)
 
@@ -15,28 +37,31 @@ See [js/DEVELOP.md](js/DEVELOP.md) for stack, commands, and format details.
 # Agent Guidelines
 
 ## Project Scope & Goal
-This project is a procedural plant mesh generator developed for a computer geometry course. It uses a pipeline-based approach to grow tree skeletons and generate volumetric meshes using Bevy for rendering and geometric algorithms like convex hulls and particle-based meshing. See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of the pipeline and internal crates.
+Procedural plant mesh generator for a computer geometry course. Pipeline: grow tree skeleton → volumetric meshing → export as TreeMesh JSON → decode in JS or Python for rendering. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full pipeline breakdown.
 
 ## Build & Test
-- **Build:** `cargo build`
+- **Build all:** `cargo build`
+- **Build demo:** `cargo build -p bevy-demo`
 - **Lint:** `cargo clippy`
-- **Test All:** `cargo test`
-- **Single Test:** `cargo test -- <test_name_substring>`
-- **Run Example:** `cargo run --example <example_name>` (e.g., `convex_hull`)
-- **Compile Report:** `typst compile docs/report.typ docs/report.pdf` (requires `typst`)
+- **Test:** `cargo test`
+- **Single test:** `cargo test -- <test_name_substring>`
+- **Run demo:** `cargo run -p bevy-demo`
+- **Run example:** `cargo run --example <example_name>`
+- **Compile report:** `typst compile docs/report.typ docs/report.pdf` (requires `typst`)
+- **Python build:** `maturin develop` (from repo root, requires Python venv)
 
 ## Planning & Documentation
-- **Roadmap:** Read and update [ROADMAP.md](ROADMAP.md) regularly to track progress and align with the long-term vision.
-- **Concision:** Prefer concise, actionable updates over verbose descriptions. Keep documentation and comments high-density.
+- **Roadmap:** Read and update [ROADMAP.md](ROADMAP.md) regularly.
+- **Concision:** Prefer concise, actionable updates. Keep documentation high-density.
 
 ## Code Style
-- **Formatting:** Standard `rustfmt`. Use `cargo fmt` before committing.
-- **Naming:** `snake_case` for functions/variables, `PascalCase` for types/traits.
-- **Imports:** Grouped by: `std`, external crates (e.g., `bevy`, `rand`), then local modules (`super`, `self`).
-- **Types:** Use `f32` for geometric calculations. Prefer `bevy::math` types (`Vec3`, `Quat`).
-- **Error Handling:** Use `panic!` for unreachable states in generation logic; otherwise, prefer `Option` or `Result`.
+- **Formatting:** `rustfmt`. Run `cargo fmt` before committing.
+- **Naming:** `snake_case` for functions/variables, `PascalCase` for types/traits, `kebab-case` for crate names.
+- **Imports:** Grouped: `std`, external crates, then local (`super`, `self`).
+- **Types:** `f32` for geometry. Prefer `bevy::math` types (`Vec3`, `Quat`) where available.
+- **Error handling:** `panic!` for unreachable states in generation; otherwise `Option`/`Result`.
 - **Conventions:**
     - Implement `VisualDebug` for types requiring gizmo rendering.
     - Follow the `TreePipelinePhase` pattern for generation steps.
-    - Keep shaders in `assets/` and use `.wgsl`.
-    - Use `serde` for configuration structs (`GrowConfig`, `MeshConfig`).
+    - Keep shaders in `assets/` as `.wgsl`.
+    - Use `serde` for config structs (`GrowConfig`, `MeshConfig`).

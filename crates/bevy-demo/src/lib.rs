@@ -1,4 +1,4 @@
-pub use plant_core::*;
+pub use tubulin_core::*;
 
 pub mod bevy_mesh;
 

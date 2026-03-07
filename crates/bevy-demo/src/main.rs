@@ -13,8 +13,8 @@ use std::f32::consts::PI;
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
-use plant_core::{meshing::VolumetricTree, TreeSkeletonDebugData};
-use plant_mesh::{
+use tubulin_core::{meshing::VolumetricTree, TreeSkeletonDebugData};
+use bevy_demo::{
     BevyMesh, GeometryData, Grow, MeshDebugFlags, PlantNode, Seed, TrajectoryBuilder, TreeConfig,
     TreeSkeleton, VisualDebug,
 };

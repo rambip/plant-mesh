@@ -1,14 +1,13 @@
 [project]
-name = "plant"
+name = "tubulin"
 version = "0.1.0"
-description = "Add your description here"
+description = "Procedural plant mesh generator"
 readme = "README.md"
 authors = [
     { name = "Antonin P", email = "antonin.peronnet@telecom-paris.fr" }
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "cffi>=2.0.0",
     "numpy>=2.4.1",
 ]
 
@@ -16,8 +15,9 @@ dependencies = [
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
-
 [tool.maturin]
-manifest-path = "crates/plant-core/Cargo.toml"
+manifest-path = "crates/tubulin-core/Cargo.toml"
+python-source = "python"
+module-name = "tubulin._tubulin"
 editable-profile = "release"
 features = ["python"]
