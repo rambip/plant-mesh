@@ -1,5 +1,5 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { GeoVM3d } from './decoder.js';
+import { TreeMeshDecoder } from './decoder.js';
 
 /**
  * @typedef {Object} CubeData
@@ -10,77 +10,7 @@ import { GeoVM3d } from './decoder.js';
  * @property {string} indices
  */
 
-/**
- * Encodes a number array to base64 little-endian
- * @param {number[]} arr
- * @returns {string}
- */
-function encodeFloat32(arr) {
-  const float32 = new Float32Array(arr);
-  const bytes = new Uint8Array(float32.buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-/**
- * Encodes a number array to base64 little-endian
- * @param {number[]} arr
- * @returns {string}
- */
-function encodeUint16(arr) {
-  const uint16 = new Uint16Array(arr);
-  const bytes = new Uint8Array(uint16.buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function createCubeJson() {
-  const s = 0.5;
-
-  const vertices = [
-    -s, -s, -s,  s, -s, -s,  s,  s, -s, -s,  s, -s,
-    -s, -s,  s,  s, -s,  s,  s,  s,  s, -s,  s,  s,
-    -s, -s, -s, -s,  s, -s, -s,  s,  s, -s, -s,  s,
-     s, -s, -s,  s,  s, -s,  s,  s,  s,  s, -s,  s,
-    -s, -s, -s, -s, -s,  s,  s, -s,  s,  s, -s, -s,
-    -s,  s, -s, -s,  s,  s,  s,  s,  s,  s,  s, -s,
-  ];
-
-  const normals = [
-     0,  0, -1,  0,  0, -1,  0,  0, -1,  0,  0, -1,
-     0,  0,  1,  0,  0,  1,  0,  0,  1,  0,  0,  1,
-    -1,  0,  0, -1,  0,  0, -1,  0,  0, -1,  0,  0,
-     1,  0,  0,  1,  0,  0,  1,  0,  0,  1,  0,  0,
-     0, -1,  0,  0, -1,  0,  0, -1,  0,  0, -1,  0,
-     0,  1,  0,  0,  1,  0,  0,  1,  0,  0,  1,  0,
-  ];
-
-  const indices = [
-    0, 1, 2, 0, 2, 3,
-    4, 5, 6, 4, 6, 7,
-    8, 9, 10, 8, 10, 11,
-    12, 13, 14, 12, 14, 15,
-    16, 17, 18, 16, 18, 19,
-    20, 21, 22, 20, 22, 23,
-  ];
-
-  /** @type {CubeData} */
-  return {
-    n_vertices: 24,
-    n_triangles: 12,
-    vertices: encodeFloat32(vertices),
-    normals: encodeFloat32(normals),
-    indices: encodeUint16(indices),
-  };
-}
-
-function init() {
+function init(geometryData) {
   const container = document.getElementById('main');
   if (!container) {
     console.error('Element with id "main" not found');
@@ -109,9 +39,8 @@ function init() {
   directionalLight.position.set(1, 1, 1);
   scene.add(directionalLight);
 
-  const cubeJson = createCubeJson();
-  const geoVM3d = new GeoVM3d();
-  const geometry = geoVM3d.decode(cubeJson);
+  const treeMeshDecoder = new TreeMeshDecoder();
+  const geometry = treeMeshDecoder.decode(geometryData);
 
   const threeGeometry = new THREE.BufferGeometry();
   threeGeometry.setAttribute(
@@ -134,7 +63,6 @@ function init() {
 
   function animate() {
     requestAnimationFrame(animate);
-    mesh.rotation.x += 0.01;
     mesh.rotation.y += 0.01;
     renderer.render(scene, camera);
   }
@@ -148,4 +76,13 @@ function init() {
   });
 }
 
-init();
+async function main() {
+  const response = await fetch('./dist/geometry.json');
+  const geometryData = await response.json();
+  
+  document.getElementById('json').textContent = JSON.stringify(geometryData, null, 2);
+  
+  init(geometryData);
+}
+
+main();

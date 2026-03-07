@@ -8,6 +8,8 @@ Mesh generation for trees and plants using volumetric invigoration. A WIP with a
 
 The `js/` folder contains a JavaScript decoder that consumes mesh data from the Rust core and renders it in the browser using Three.js.
 
+See [js/DEVELOP.md](js/DEVELOP.md) for detailed development documentation.
+
 ### Stack
 - JavaScript (ES modules)
 - [Bun](https://bun.sh/) for bundling
