@@ -57,55 +57,49 @@ function encodeFloat32(arr) {
 }
 
 function createCylinderData() {
-  const radius = 0.5;
   const height = 1.0;
-  const segments = 16;   // points around circumference (= number of control points for the ring spline)
+  const segments = 16;   // vertices per ring (output resolution)
   const rings = 5;       // height levels
+  const ncp = 5;         // control points per ring: 4 on circle + 1 wrap (cp[4]=cp[0])
   const tScale = 1024;   // quantization scale for spline t parameter
   const posScale = 256;  // quantization scale for positions
 
+  // Radius profile: waist shape — full radius at ends, smaller in the middle.
+  // rings=5, index 0..4: outer, inner, innermost, inner, outer
+  const radii = [0.5, 0.35, 0.25, 0.35, 0.5];
+
   // --- Control points for a ring spline ---
-  // A ring at height y has `segments` control points equally spaced on a circle.
-  // We encode one set of control points per ring (all rings have the same shape,
-  // just different y). The spline is evaluated at t = [0, 1, 2, ..., segments-1]
-  // to recover the ring vertices.
-  //
-  // Control points: index i -> angle = i/segments * 2*PI
-  // Position: (y, cos(angle)*radius, sin(angle)*radius)  [x=axis, y/z=radial]
-  //
-  // For the spline to wrap correctly, the first control point is repeated at
-  // the end, making the ring periodic with `segments+1` control points where
-  // cp[segments] = cp[0].
+  // Each ring uses 4 control points at 0°, 90°, 180°, 270° on a circle of
+  // the ring's radius, plus cp[4]=cp[0] to close the loop.
+  // The spline is queried at t = i/segments * 4  for i in [0, segments).
 
   const buffers = {};
   const ringSplineExprs = [];   // for vertices interleave
   const ringNSplineExprs = [];  // for normals interleave
 
-  // t buffer: uniform query params [0, 1, 2, ..., segments-1], shared across all rings.
-  // Quantized with tScale, stored as raw int32 (k=0).
+  // t buffer: query params mapping segment index to [0, 4), shared across rings.
   const tValues = [];
-  for (let i = 0; i < segments; i++) tValues.push(Math.round(i * tScale));
+  for (let i = 0; i < segments; i++) tValues.push(Math.round((i / segments) * 4 * tScale));
   buffers['ring_t'] = { k: 0, data: encodeInt32(tValues), length: segments };
 
   for (let j = 0; j < rings; j++) {
     const y = -height / 2 + (height * j / (rings - 1));
+    const radius = radii[j];
 
-    // Control points for ring j: segments+1 points (last = first, for wrap)
+    // 4 control points at 0°, 90°, 180°, 270°, then wrap cp[4]=cp[0]
     const cpx = [], cpy = [], cpz = [];
     const cnx = [], cny = [], cnz = [];
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
-      cpx.push(Math.round(y             * posScale));
+    for (let i = 0; i < ncp; i++) {
+      const angle = (i / 4) * Math.PI * 2;  // 4 divisions regardless of ncp
+      cpx.push(Math.round(y                    * posScale));
       cpy.push(Math.round(Math.cos(angle) * radius * posScale));
       cpz.push(Math.round(Math.sin(angle) * radius * posScale));
       cnx.push(0);
       cny.push(Math.round(Math.cos(angle) * posScale));
       cnz.push(Math.round(Math.sin(angle) * posScale));
     }
-    const ncp = segments + 1;
 
-    // Delta-encode x and z within the ring (smooth curve → small deltas).
-    // y is constant per ring, stored absolute.
+    // Delta-encode x and z (smooth curve → small deltas); y constant per ring.
     const delta = (arr) => arr.map((v, i) => v - (i === 0 ? 0 : arr[i - 1]));
 
     buffers[`ring${j}_cp_x`] = { k: 2, data: riceEncode(delta(cpx), 2), length: ncp };
@@ -124,7 +118,8 @@ function createCylinderData() {
       ]}, 8],
     });
 
-    const tExpr = { op: 'divp2', args: ['ring_t', Math.round(Math.log2(tScale))] };
+    // tScale = 1024 = 2^10, so divp2 exponent = 10
+    const tExpr = { op: 'divp2', args: ['ring_t', 10] };
 
     ringSplineExprs.push({
       op: 'spline',
