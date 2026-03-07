@@ -16,8 +16,8 @@ The `js/` folder contains a JavaScript decoder that consumes mesh data from the 
 - [Three.js](https://threejs.org/) for rendering
 
 ### Development Commands
-- **Bundle:** `.bun/bin/bun build ./js/src/render.js --outdir=./js/dist`
-- **Serve:** Any static file server (e.g., `python -m http.server`) from the project root, then open `js/index.html`
+- **Bundle:** `bun build ./js/src/render.js --outdir=./js/dist`
+- **Serve:** Any static file server (e.g., `python -m http.server 8081`) from the project root, then open `js/index.html`
 
 # Agent Guidelines
 
