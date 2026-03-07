@@ -10,14 +10,7 @@ The `js/` folder contains a JavaScript decoder that consumes mesh data from the 
 
 > **IMPORTANT for agents:** Read [js/DEVELOP.md](js/DEVELOP.md) before making any changes to the JS decoder, renderer, or geometry generation. It documents the encoding format, common failure modes, and their root causes — skipping it will likely result in subtle bugs that are hard to diagnose.
 
-### Stack
-- JavaScript (ES modules)
-- [Bun](https://bun.sh/) for bundling
-- [Three.js](https://threejs.org/) for rendering
-
-### Development Commands
-- **Bundle:** `bun build ./js/src/render.js --outdir=./js/dist`
-- **Serve:** Any static file server (e.g., `python -m http.server 8081`) from the project root, then open `js/index.html`
+See [js/DEVELOP.md](js/DEVELOP.md) for stack, commands, and format details.
 
 # Agent Guidelines
 
