@@ -53,9 +53,9 @@ function init(geometryData) {
   );
   threeGeometry.setIndex(new THREE.BufferAttribute(geometry.indexBuffer, 1));
 
-  const material = new THREE.MeshPhongMaterial({
+  const material = new THREE.MeshBasicMaterial({
     color: 0x00ff88,
-    side: THREE.DoubleSide,
+    wireframe: true,
   });
 
   const mesh = new THREE.Mesh(threeGeometry, material);
