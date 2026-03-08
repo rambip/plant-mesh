@@ -2,3 +2,5 @@ target
 */target
 dist
 docs/images_archive/
+__pycache__/
+*.py[cod]
