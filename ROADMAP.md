@@ -15,7 +15,39 @@ the browser.
 Grow  →  Strands  →  Mesh
  ↓           ↓         ↓
 skeleton  strand     surface
-          cloud      mesh
+           cloud      mesh
+```
+
+## Export Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Python Builder                           │
+│  Tubulin().grow().strands().mesh().debug().run()               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ calls Rust pipeline
+┌─────────────────────────────────────────────────────────────────┐
+│                     Rust Pipeline                               │
+│  PlantNode → TreeSkeleton → TrajectoryBuilder → GeometryData   │
+│                                           │                    │
+│                    VisualDebug::fill_debug()                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    TreeMeshExporter                             │
+│  - add_buffer() for encoded data                               │
+│  - add_debug_layer(DebugGeometry) → JSON expressions           │
+│  - to_json() → TreeMesh JSON string                            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ passes JSON
+┌─────────────────────────────────────────────────────────────────┐
+│                   Python Wrapper                                │
+│  GeometryData.to_json() → str                                  │
+│  _repr_html_() renders JS viewer with JSON                     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 Each stage takes the output of the previous one. All stages are lazy: nothing runs
@@ -161,28 +193,34 @@ cached. No Bevy types cross the Python boundary.
 
 ## Milestones
 
-### M1 — `DebugGeometry` infrastructure
-- [ ] Define `DebugGeometry` and `VisualDebug` trait in `tubulin-core` (no Bevy feature flag)
-- [ ] Implement `VisualDebug` for `TreeSkeleton`
-- [ ] Adapt Bevy gizmo rendering to consume `DebugGeometry` (thin adapter, no logic change)
-- [ ] Serialize `DebugGeometry` into the `debug` key of the TreeMesh JSON
+### M1 — `DebugGeometry` infrastructure ✓
+- [x] Define `DebugGeometry` and `VisualDebug` trait in `tubulin-core` (no Bevy feature flag)
+- [x] Implement `VisualDebug` for `TreeSkeleton`
+- [x] Adapt Bevy gizmo rendering to consume `DebugGeometry` (thin adapter, no logic change)
+- [x] Serialize `DebugGeometry` into the `debug` key of the TreeMesh JSON
 
 ### M2 — Python builder API
 - [ ] Implement `Tubulin` builder with `.grow()`, `.strands()`, `.mesh()`, `.debug()`, `.run()`
-- [ ] Wrap `Skeleton`, `StrandCloud`, `TreeMesh` as `#[pyclass]`
-- [ ] Expose `.points`, `.radii`, `.vertices`, `.triangles` as numpy arrays via `rust-numpy`
-- [ ] `_repr_html_()` on each intermediate type (reuse JS viewer)
+- [ ] Wrap `GeometryData` as `#[pyclass]` with `to_json()` method
+- [ ] Expose `.vertices`, `.normals`, `.colors`, `.triangles` as numpy arrays via `rust-numpy`
+- [ ] `_repr_html_()` on `GeometryData` (reuse JS viewer)
 
-### M3 — JS debug layer rendering
-- [ ] Parse `debug` key in JS decoder
-- [ ] Render lines, circles, points as Three.js objects
-- [ ] Checkbox UI per layer (one per key present in `debug`)
+### M3 — JS debug layer rendering ✓
+- [x] Parse `debug` key in JS decoder
+- [x] Render lines, circles, points as Three.js objects
+- [x] Checkbox UI per layer (one per key present in `debug`)
 
-### M4 — `VisualDebug` for remaining stages
-- [ ] `StrandCloud`
-- [ ] `TreeMesh` (wire normals, leaf orientations, etc.)
+### M4 — `VisualDebug` for pipeline stages ✓
+- [x] `TreeSkeletonDebugData` (skeleton layer)
+- [x] `TrajectoryBuilder` (strands layer)
+- [x] `GeometryData` (mesh layer)
 
-### M5 — Polish
+### M5 — Export integration
+- [ ] Add `to_json(include_debug: bool)` method to `GeometryData`
+- [ ] Wire pipeline stages → VisualDebug → TreeMeshExporter JSON output
+- [ ] Test full pipeline export
+
+### M6 — Polish
 - [ ] Consistent color conventions across stages
 - [ ] Notebook example demonstrating full pipeline inspection
 - [ ] Docs / docstrings on all public Python API surface
