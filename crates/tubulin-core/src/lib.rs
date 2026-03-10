@@ -1,3 +1,4 @@
+pub mod export;
 pub mod growing;
 pub mod meshing;
 pub mod utils;
