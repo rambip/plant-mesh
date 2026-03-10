@@ -25,8 +25,11 @@ The format has two parts:
   "buffers": { ... },
   "outputs": {
     "vertices":  <expr>,
+    "normals":   <expr>,
+    "colors":    <expr>,
     "triangles": <expr>
-  }
+  },
+  "debug": { ... }
 }
 ```
 
@@ -38,7 +41,10 @@ The format has two parts:
 | `spline_convention` | string | yes | Border handling for spline evaluation. Must be `"reflect"` in this version |
 | `buffers` | object | yes | Named compressed buffers (see Buffers) |
 | `outputs.vertices` | expr | yes | Expression evaluating to `Buffer<Vec3>` |
+| `outputs.normals` | expr | yes | Expression evaluating to `Buffer<Vec3>` |
+| `outputs.colors` | expr | yes | Expression evaluating to `Buffer<RGBA>`, flat `[r,g,b,a, r,g,b,a, ...]` |
 | `outputs.triangles` | expr | yes | Expression evaluating to `Buffer<Int>`, flat `[i0,j0,k0, i1,j1,k1,...]` |
+| `debug` | object | no | Debug geometry layers (see Debug) |
 
 ---
 
@@ -76,13 +82,14 @@ The `offset` field allows encoding negative values by shifting them into the non
 
 ## Types
 
-The language has three types:
+The language has four types:
 
 | Type | Description |
 |---|---|
 | `Int` | A 32-bit signed integer |
 | `Scalar` | A 32-bit float |
 | `Vec3` | A triple of `Scalar` values `(x, y, z)` |
+| `RGBA` | A quadruple of `Scalar` values `(r, g, b, a)` in `[0, 1]` |
 
 All types exist as **buffers** (fixed-length sequences). All operators are vectorized: they operate elementwise over their buffer arguments. Buffer lengths must match unless otherwise specified.
 
@@ -259,6 +266,35 @@ out[3*n+2] = args[2][n]
 ## Vertex Index Convention
 
 Triangle index buffers reference vertices by their position in the output of the top-level `vertices` expression (after `interleave`). If spline 0 contributes `N0` vertices and spline 1 contributes `N1` vertices, then spline 1's vertices are indexed starting at `N0`. The encoder is responsible for writing delta-encoded triangle indices consistent with this ordering.
+
+---
+
+## Debug Geometry
+
+The optional `debug` top-level key contains debug visualization layers. Each layer is identified by a string key (e.g., `"skeleton"`, `"strands"`, `"mesh"`).
+
+### Structure
+
+```json
+"debug": {
+  "<layer_name>": {
+    "points": { "positions": <expr>, "colors": <expr> },
+    "lines":   { "starts": <expr>, "ends": <expr>, "colors": <expr> }
+  }
+}
+```
+
+### Fields per layer
+
+| Field | Type | Description |
+|---|---|---|
+| `points.positions` | expr | Expression evaluating to `Buffer<Vec3>` |
+| `points.colors` | expr | Expression evaluating to `Buffer<RGBA>`, flat `[r,g,b,a, ...]` |
+| `lines.starts` | expr | Expression evaluating to `Buffer<Vec3>` |
+| `lines.ends` | expr | Expression evaluating to `Buffer<Vec3>` |
+| `lines.colors` | expr | Expression evaluating to `Buffer<RGBA>`, flat `[r,g,b,a, ...]` |
+
+All fields are optional. The decoder iterates over present keys and renders each layer. The JS viewer creates a checkbox per layer to toggle visibility.
 
 ---
 

@@ -63,6 +63,7 @@ function encodeFloat32(arr) {
 function createCylinderData() {
   const posScale = 256;  // quantization scale for positions
   const tScale = 1024;   // quantization scale for spline t parameter
+  const colorScale = 256; // quantization scale for colors
 
   const buffers = {};
 
@@ -97,6 +98,7 @@ function createCylinderData() {
 
   const spineSplineExprs = [];
   const spineNSplineExprs = [];
+  const spineColorsExprs = [];
 
   for (let s = 0; s < nSplines; s++) {
     const angle = (s / nSplines) * Math.PI * 2;
@@ -112,6 +114,12 @@ function createCylinderData() {
     const cny = cpR.map(() => Math.round(sin * posScale));
     const cnz = cpR.map(() => 0);
 
+    // Colors: gradient from bottom (green) to top (cyan)
+    const ccr = cpZ.map(z => Math.round(((z + 0.5) * colorScale)));
+    const ccg = cpZ.map(z => Math.round((0.3 + 0.4 * (z + 0.5)) * colorScale));
+    const ccb = cpZ.map(z => Math.round((0.5 + 0.5 * (z + 0.5)) * colorScale));
+    const cca = cpZ.map(() => Math.round(colorScale));
+
     const delta = (arr) => arr.map((v, i) => v - (i === 0 ? 0 : arr[i - 1]));
 
     buffers[`sp${s}_x`] = { k: 2, data: riceEncode(delta(cpx), 2), length: ncp1 };
@@ -120,6 +128,10 @@ function createCylinderData() {
     buffers[`sp${s}_nx`] = { k: 0, data: encodeInt32(cnx), length: ncp1 };
     buffers[`sp${s}_ny`] = { k: 0, data: encodeInt32(cny), length: ncp1 };
     buffers[`sp${s}_nz`] = { k: 0, data: encodeInt32(cnz), length: ncp1 };
+    buffers[`sp${s}_cr`] = { k: 0, data: encodeInt32(ccr), length: ncp1 };
+    buffers[`sp${s}_cg`] = { k: 0, data: encodeInt32(ccg), length: ncp1 };
+    buffers[`sp${s}_cb`] = { k: 0, data: encodeInt32(ccb), length: ncp1 };
+    buffers[`sp${s}_ca`] = { k: 0, data: encodeInt32(cca), length: ncp1 };
 
     const cpVec3 = (xb, yb, zb) => ({
       op: 'divp2',
@@ -130,10 +142,21 @@ function createCylinderData() {
       ]}, 8],
     });
 
+    const cpVec4 = (rb, gb, bb, ab) => ({
+      op: 'divp2',
+      args: [{ op: 'vec4', args: [
+        { op: 'cumsum', args: [rb] },
+        { op: 'cumsum', args: [gb] },
+        { op: 'cumsum', args: [bb] },
+        { op: 'cumsum', args: [ab] },
+      ]}, 8],
+    });
+
     const tExpr = { op: 'divp2', args: ['spine_t', 10] };
 
     spineSplineExprs.push({ op: 'spline', args: [cpVec3(`sp${s}_x`, `sp${s}_y`, `sp${s}_z`), tExpr] });
     spineNSplineExprs.push({ op: 'spline', args: [cpVec3(`sp${s}_nx`, `sp${s}_ny`, `sp${s}_nz`), tExpr] });
+    spineColorsExprs.push({ op: 'spline', args: [cpVec4(`sp${s}_cr`, `sp${s}_cg`, `sp${s}_cb`, `sp${s}_ca`), tExpr] });
   }
 
   // Triangles for mesh 1.
@@ -173,6 +196,7 @@ function createCylinderData() {
 
   const ring2SplineExprs = [];
   const ring2NSplineExprs = [];
+  const ring2ColorsExprs = [];
 
   for (let j = 0; j < rings; j++) {
     const x = 0.6 + j / (rings - 1);
@@ -180,6 +204,7 @@ function createCylinderData() {
 
     const cpx = [], cpy = [], cpz = [];
     const cnx = [], cny = [], cnz = [];
+    const ccr = [], ccg = [], ccb = [], cca = [];
     for (let i = 0; i < ncp2; i++) {
       const angle = (i / 4) * Math.PI * 2;
       cpx.push(Math.round(x                        * posScale));
@@ -188,6 +213,11 @@ function createCylinderData() {
       cnx.push(0);
       cny.push(Math.round(Math.cos(angle) * posScale));
       cnz.push(Math.round(Math.sin(angle) * posScale));
+      // Colors: blue gradient based on x position
+      ccr.push(Math.round((0.2 + 0.2 * j / rings) * colorScale));
+      ccg.push(Math.round((0.2 + 0.3 * j / rings) * colorScale));
+      ccb.push(Math.round((0.8 - 0.2 * j / rings) * colorScale));
+      cca.push(Math.round(colorScale));
     }
 
     const delta = (arr) => arr.map((v, i) => v - (i === 0 ? 0 : arr[i - 1]));
@@ -198,16 +228,26 @@ function createCylinderData() {
     buffers[`ring${j}_cn_x`] = { k: 0, data: encodeInt32(cnx), length: ncp2 };
     buffers[`ring${j}_cn_y`] = { k: 0, data: encodeInt32(cny), length: ncp2 };
     buffers[`ring${j}_cn_z`] = { k: 2, data: riceEncode(delta(cnz), 2), length: ncp2 };
+    buffers[`ring${j}_cr`] = { k: 0, data: encodeInt32(ccr), length: ncp2 };
+    buffers[`ring${j}_cg`] = { k: 0, data: encodeInt32(ccg), length: ncp2 };
+    buffers[`ring${j}_cb`] = { k: 0, data: encodeInt32(ccb), length: ncp2 };
+    buffers[`ring${j}_ca`] = { k: 0, data: encodeInt32(cca), length: ncp2 };
 
     const cpVec3r = (xbuf, ybuf, zbuf) => ({
       op: 'divp2',
       args: [{ op: 'vec3', args: [xbuf, ybuf, { op: 'cumsum', args: [zbuf] }]}, 8],
     });
 
+    const cpVec4r = (rbuf, gbuf, bbuf, abuf) => ({
+      op: 'divp2',
+      args: [{ op: 'vec4', args: [rbuf, gbuf, bbuf, { op: 'cumsum', args: [abuf] }]}, 8],
+    });
+
     const tExpr2 = { op: 'divp2', args: ['ring_t', 10] };
 
     ring2SplineExprs.push({ op: 'spline', args: [cpVec3r(`ring${j}_cp_x`, `ring${j}_cp_y`, `ring${j}_cp_z`), tExpr2] });
     ring2NSplineExprs.push({ op: 'spline', args: [cpVec3r(`ring${j}_cn_x`, `ring${j}_cn_y`, `ring${j}_cn_z`), tExpr2] });
+    ring2ColorsExprs.push({ op: 'spline', args: [cpVec4r(`ring${j}_cr`, `ring${j}_cg`, `ring${j}_cb`, `ring${j}_ca`), tExpr2] });
   }
 
   const ringIndices = (offset) => {
@@ -248,6 +288,51 @@ function createCylinderData() {
   buffers['indices_j'] = { k: 2, data: riceEncode(indicesJ, 2), length: nTriangles };
   buffers['indices_k'] = { k: 2, data: riceEncode(indicesK, 2), length: nTriangles };
 
+  // -------------------------------------------------------------------------
+  // Debug data: skeleton layer with lines connecting tree structure
+  // -------------------------------------------------------------------------
+  const nSkelLines = 5;
+  const skelStartX = [0, 100, 200, 50, 150];
+  const skelStartY = [0, 50, 50, 100, 100];
+  const skelStartZ = [0, 80, 80, 120, 120];
+  const skelEndX = [100, 200, 150, 150, 200];
+  const skelEndY = [50, 50, 100, 100, 100];
+  const skelEndZ = [80, 80, 120, 120, 120];
+  const skelColorR = [0, 128, 255, 128, 255];
+  const skelColorG = [200, 100, 0, 150, 50];
+  const skelColorB = [100, 200, 100, 50, 200];
+
+  buffers['skel_start_x'] = { k: 0, data: encodeInt32(skelStartX), length: nSkelLines };
+  buffers['skel_start_y'] = { k: 0, data: encodeInt32(skelStartY), length: nSkelLines };
+  buffers['skel_start_z'] = { k: 0, data: encodeInt32(skelStartZ), length: nSkelLines };
+  buffers['skel_end_x'] = { k: 0, data: encodeInt32(skelEndX), length: nSkelLines };
+  buffers['skel_end_y'] = { k: 0, data: encodeInt32(skelEndY), length: nSkelLines };
+  buffers['skel_end_z'] = { k: 0, data: encodeInt32(skelEndZ), length: nSkelLines };
+  buffers['skel_color_r'] = { k: 0, data: encodeInt32(skelColorR), length: nSkelLines };
+  buffers['skel_color_g'] = { k: 0, data: encodeInt32(skelColorG), length: nSkelLines };
+  buffers['skel_color_b'] = { k: 0, data: encodeInt32(skelColorB), length: nSkelLines };
+
+  // -------------------------------------------------------------------------
+  // Debug data: mesh layer showing wireframe (sample a few triangles)
+  // -------------------------------------------------------------------------
+  const nDebugVerts = 30;
+  const debugVx = [], debugVy = [], debugVz = [];
+  const debugCx = [], debugCy = [], debugCz = [];
+  for (let i = 0; i < nDebugVerts; i++) {
+    debugVx.push(Math.round((Math.random() - 0.5) * 200));
+    debugVy.push(Math.round((Math.random() - 0.5) * 200));
+    debugVz.push(Math.round((Math.random() - 0.5) * 200));
+    debugCx.push(Math.round(Math.random() * 255));
+    debugCy.push(Math.round(Math.random() * 255));
+    debugCz.push(Math.round(Math.random() * 255));
+  }
+  buffers['debug_vx'] = { k: 0, data: encodeInt32(debugVx), length: nDebugVerts };
+  buffers['debug_vy'] = { k: 0, data: encodeInt32(debugVy), length: nDebugVerts };
+  buffers['debug_vz'] = { k: 0, data: encodeInt32(debugVz), length: nDebugVerts };
+  buffers['debug_cx'] = { k: 0, data: encodeInt32(debugCx), length: nDebugVerts };
+  buffers['debug_cy'] = { k: 0, data: encodeInt32(debugCy), length: nDebugVerts };
+  buffers['debug_cz'] = { k: 0, data: encodeInt32(debugCz), length: nDebugVerts };
+
   return {
     treemesh: "0.1",
     spline_convention: "reflect",
@@ -269,6 +354,13 @@ function createCylinderData() {
           { op: 'concat', args: ring2NSplineExprs },
         ],
       },
+      colors: {
+        op: 'concat',
+        args: [
+          { op: 'interleave', args: spineColorsExprs },
+          { op: 'concat', args: ring2ColorsExprs },
+        ],
+      },
       triangles: {
         op: 'triangle',
         args: [
@@ -276,6 +368,31 @@ function createCylinderData() {
           { op: 'cumsum', args: ['indices_j'] },
           { op: 'cumsum', args: ['indices_k'] },
         ],
+      },
+    },
+    debug: {
+      skeleton: {
+        lines: {
+          starts: { op: 'divp2', args: [{ op: 'vec3', args: ['skel_start_x', 'skel_start_y', 'skel_start_z'] }, 8] },
+          ends: { op: 'divp2', args: [{ op: 'vec3', args: ['skel_end_x', 'skel_end_y', 'skel_end_z'] }, 8] },
+          colors: { op: 'divp2', args: [{ op: 'vec3', args: ['skel_color_r', 'skel_color_g', 'skel_color_b'] }, 8] },
+        },
+      },
+      mesh: {
+        lines: {
+          // Reuse triangle indices but render as wireframe
+          starts: { op: 'triangle', args: [
+            { op: 'divp2', args: [{ op: 'vec3', args: ['debug_vx', 'debug_vy', 'debug_vz'] }, 8] },
+            { op: 'divp2', args: [{ op: 'vec3', args: ['debug_vx', 'debug_vy', 'debug_vz'] }, 8] },
+            { op: 'divp2', args: [{ op: 'vec3', args: ['debug_vx', 'debug_vy', 'debug_vz'] }, 8] },
+          ]},
+          ends: { op: 'triangle', args: [
+            { op: 'divp2', args: [{ op: 'vec3', args: ['debug_vx', 'debug_vy', 'debug_vz'] }, 8] },
+            { op: 'divp2', args: [{ op: 'vec3', args: ['debug_vx', 'debug_vy', 'debug_vz'] }, 8] },
+            { op: 'divp2', args: [{ op: 'vec3', args: ['debug_vx', 'debug_vy', 'debug_vz'] }, 8] },
+          ]},
+          colors: { op: 'divp2', args: [{ op: 'vec3', args: ['debug_cx', 'debug_cy', 'debug_cz'] }, 8] },
+        },
       },
     },
   };

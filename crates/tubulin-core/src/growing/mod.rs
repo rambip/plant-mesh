@@ -1,11 +1,6 @@
 #[cfg(feature = "bevy")]
 use bevy::prelude::Component;
-#[cfg(feature = "bevy")]
-use bevy_color::Color;
-#[cfg(feature = "bevy")]
-use bevy_gizmos::prelude::Gizmos;
-#[cfg(feature = "bevy")]
-use bevy_math::Isometry3d;
+
 use glam::{Quat, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -179,20 +174,22 @@ impl TreeSkeletonDebugData {
 }
 
 impl crate::VisualDebug for TreeSkeletonDebugData {
-    type Flags = bool;
-    #[cfg(feature = "bevy")]
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags) {
-        if debug_flags {
-            let sk = &self.copy;
-            for i in 0..sk.node_count() {
-                let isometry = Isometry3d {
-                    translation: sk.position(i).into(),
-                    rotation: sk.orientation(i),
-                };
-                gizmos.circle(isometry, 1.1 * sk.radius(i), Color::srgb(0., 0.8, 0.5));
-                for &c in sk.children(i) {
-                    gizmos.line(sk.position(i), sk.position(c), Color::srgb(0.1, 0.1, 0.1));
-                }
+    fn fill_debug(&self, out: &mut crate::DebugGeometry) {
+        let sk = &self.copy;
+        for i in 0..sk.node_count() {
+            let circle = crate::Circle {
+                position: sk.position(i),
+                orientation: sk.orientation(i),
+                radius: 1.1 * sk.radius(i),
+            };
+            out.circles
+                .push((circle, crate::DebugColor::rgb(0., 0.8, 0.5)));
+            for &c in sk.children(i) {
+                out.lines.push((
+                    sk.position(i),
+                    sk.position(c),
+                    crate::DebugColor::rgb(0.1, 0.1, 0.1),
+                ));
             }
         }
     }

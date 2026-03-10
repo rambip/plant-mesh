@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use glam::{Vec2, Vec3};
+use std::collections::VecDeque;
 
 #[derive(Copy, Clone, Debug)]
 pub enum SplineIndex {
@@ -78,7 +78,10 @@ fn a_angle_to(a: Vec2, b: Vec2) -> f32 {
 /// returns the set of points in the convex hull of `points`,
 /// once projected on a 2D plane.
 /// we suppose that the barycenter is in the convex hull
-pub fn convex_hull_graham(points: &[Vec2], min_angle: Option<f32>) -> impl ExactSizeIterator<Item=usize> {
+pub fn convex_hull_graham(
+    points: &[Vec2],
+    min_angle: Option<f32>,
+) -> impl ExactSizeIterator<Item = usize> {
     let min_angle = min_angle.unwrap_or(std::f32::consts::PI);
 
     assert!(!points.is_empty());
@@ -122,8 +125,8 @@ pub fn convex_hull_graham(points: &[Vec2], min_angle: Option<f32>) -> impl Exact
         }
         if result.len() >= 3 && result.get(1) == Some(&i) {
             let previous = result.pop_front().unwrap();
-            if previous == result[result.len()-1] {
-                break
+            if previous == result[result.len() - 1] {
+                break;
             }
         }
         result.push_back(i);

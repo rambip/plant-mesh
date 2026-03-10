@@ -13,10 +13,10 @@ use std::f32::consts::PI;
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
-use tubulin_core::{meshing::VolumetricTree, TreeSkeletonDebugData};
+use tubulin_core::{DebugGeometry, meshing::VolumetricTree, TreeSkeletonDebugData, VisualDebug};
 use bevy_demo::{
     BevyMesh, GeometryData, Grow, MeshDebugFlags, PlantNode, Seed, TrajectoryBuilder, TreeConfig,
-    TreeSkeleton, VisualDebug,
+    TreeSkeleton,
 };
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
@@ -320,6 +320,30 @@ fn draw_tree(
     }
 }
 
+fn render_debug_geometry(geometry: &DebugGeometry, gizmos: &mut Gizmos) {
+    use bevy_math::Isometry3d;
+    use bevy_color::Color;
+
+    for (start, end, color) in &geometry.lines {
+        let c = Color::linear_rgba(color.0[0], color.0[1], color.0[2], color.0[3]);
+        gizmos.line(*start, *end, c);
+    }
+
+    for (circle, color) in &geometry.circles {
+        let c = Color::linear_rgba(color.0[0], color.0[1], color.0[2], color.0[3]);
+        let isometry = Isometry3d {
+            translation: circle.position.into(),
+            rotation: circle.orientation,
+        };
+        gizmos.circle(isometry, circle.radius, c);
+    }
+
+    for (point, color) in &geometry.points {
+        let c = Color::linear_rgba(color.0[0], color.0[1], color.0[2], color.0[3]);
+        gizmos.cross(*point, 0.2, c);
+    }
+}
+
 fn visual_debug(
     query: Query<(
         Option<&TreeSkeletonDebugData>,
@@ -331,13 +355,23 @@ fn visual_debug(
 ) {
     for (a, b, c) in query.iter() {
         if let Some(a) = a {
-            a.debug(&mut gizmos, flags.skeleton);
+            if flags.skeleton {
+                let mut debug_geometry = DebugGeometry::new();
+                a.fill_debug(&mut debug_geometry);
+                render_debug_geometry(&debug_geometry, &mut gizmos);
+            }
         }
         if let Some(b) = b {
-            b.debug(&mut gizmos, flags.strands);
+            if flags.strands {
+                let mut debug_geometry = DebugGeometry::new();
+                b.fill_debug(&mut debug_geometry);
+                render_debug_geometry(&debug_geometry, &mut gizmos);
+            }
         }
         if let Some(c) = c {
-            c.debug(&mut gizmos, flags.mesh);
+            let mut debug_geometry = DebugGeometry::new();
+            c.fill_debug(&mut debug_geometry);
+            render_debug_geometry(&debug_geometry, &mut gizmos);
         }
     }
 }

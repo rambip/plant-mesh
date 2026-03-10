@@ -1,7 +1,7 @@
+use super::{PlantNode, PlantNodeProps};
 use glam::{Quat, Vec3};
 use rand::{prelude::Distribution, Rng};
-use super::{PlantNode, PlantNodeProps};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 struct ChildrenBranches {
@@ -17,8 +17,10 @@ impl Distribution<((Quat, f32), (Quat, f32))> for ChildrenBranches {
             let a: f32 = rng.gen_range(0f32..self.max_turn_angle);
             let b: f32 = rng.gen_range(0f32..self.max_turn_angle);
             let c: f32 = rng.gen_range(0f32..2. * std::f32::consts::PI);
-            let rot1 = Quat::from_rotation_z(c) * Quat::from_rotation_x(a) * Quat::from_rotation_z(-c);
-            let rot2 = Quat::from_rotation_z(c) * Quat::from_rotation_x(-b) * Quat::from_rotation_z(-c);
+            let rot1 =
+                Quat::from_rotation_z(c) * Quat::from_rotation_x(a) * Quat::from_rotation_z(-c);
+            let rot2 =
+                Quat::from_rotation_z(c) * Quat::from_rotation_x(-b) * Quat::from_rotation_z(-c);
             let branch_range = (self.length - self.variability)..(self.length + self.variability);
             let l1 = rng.gen_range(branch_range.clone());
             let l2 = rng.gen_range(branch_range.clone());
@@ -73,13 +75,18 @@ pub fn grow_tree_basic(
 ) -> PlantNode {
     let location = |rotation: Quat, radius, size| PlantNodeProps {
         position: root.position + root.orientation * rotation * (size * Vec3::Z),
-        orientation: root.orientation.slerp(Quat::IDENTITY, config.up_attraction_factor) * rotation,
+        orientation: root
+            .orientation
+            .slerp(Quat::IDENTITY, config.up_attraction_factor)
+            * rotation,
         radius,
     };
 
     let children = if root.radius < config.min_radius {
         vec![]
-    } else if rng.gen_range(0f32..1f32) > 1. / config.birth_coefficient / (depth as f32).powf(config.birth_power) {
+    } else if rng.gen_range(0f32..1f32)
+        > 1. / config.birth_coefficient / (depth as f32).powf(config.birth_power)
+    {
         let length = root.radius * config.radius_to_branch_ratio;
         let variability = root.radius * config.branch_variance;
         let dist = ChildrenBranches {
@@ -89,8 +96,16 @@ pub fn grow_tree_basic(
             min_distance: 0.5 * root.radius,
         };
         let ((rot1, s1), (rot2, s2)) = rng.sample(dist);
-        let r1 = root.radius * rng.gen_range(config.main_children_radius_factor - config.radius_variance..config.main_children_radius_factor + config.radius_variance);
-        let r2 = root.radius * rng.gen_range(config.secondary_children_radius_factor - config.radius_variance..config.secondary_children_radius_factor + config.radius_variance);
+        let r1 = root.radius
+            * rng.gen_range(
+                config.main_children_radius_factor - config.radius_variance
+                    ..config.main_children_radius_factor + config.radius_variance,
+            );
+        let r2 = root.radius
+            * rng.gen_range(
+                config.secondary_children_radius_factor - config.radius_variance
+                    ..config.secondary_children_radius_factor + config.radius_variance,
+            );
         vec![
             grow_tree_basic(config, rng, location(rot1, r1, s1), depth + 1),
             grow_tree_basic(config, rng, location(rot2, r2, s2), depth + 1),
@@ -106,5 +121,8 @@ pub fn grow_tree_basic(
         vec![grow_tree_basic(config, rng, location(rot, r, s), depth + 1)]
     };
 
-    PlantNode { props: root, children }
+    PlantNode {
+        props: root,
+        children,
+    }
 }

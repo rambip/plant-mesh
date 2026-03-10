@@ -15,9 +15,51 @@ pub use meshing::GeometryData;
 pub use meshing::SplineIndex;
 pub use meshing::StrandsConfig;
 
+use glam::Quat;
+use glam::Vec3;
 use meshing::VolumetricTree;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DebugColor(pub [f32; 4]);
+
+impl DebugColor {
+    pub fn rgb(r: f32, g: f32, b: f32) -> Self {
+        Self([r, g, b, 1.0])
+    }
+    pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self([r, g, b, a])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Circle {
+    pub position: Vec3,
+    pub orientation: Quat,
+    pub radius: f32,
+}
+
+#[derive(Debug, Default)]
+pub struct DebugGeometry {
+    pub lines: Vec<(Vec3, Vec3, DebugColor)>,
+    pub circles: Vec<(Circle, DebugColor)>,
+    pub points: Vec<(Vec3, DebugColor)>,
+}
+
+impl DebugGeometry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn layer_name(&self) -> &'static str {
+        "unknown"
+    }
+}
+
+pub trait VisualDebug {
+    fn fill_debug(&self, out: &mut DebugGeometry);
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(
@@ -67,12 +109,6 @@ impl<T> Grow for T {
     {
         Next::generate_from(self, config, builder)
     }
-}
-
-pub trait VisualDebug {
-    type Flags;
-    #[cfg(feature = "bevy")]
-    fn debug(&self, gizmos: &mut bevy_gizmos::prelude::Gizmos, debug_flags: Self::Flags);
 }
 
 pub trait TreePipelinePhase {

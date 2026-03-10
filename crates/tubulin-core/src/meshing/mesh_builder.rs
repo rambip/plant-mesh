@@ -1,9 +1,6 @@
 #[cfg(feature = "bevy")]
 use bevy::prelude::Component;
-#[cfg(feature = "bevy")]
-use bevy_color::Color;
-#[cfg(feature = "bevy")]
-use bevy_gizmos::prelude::Gizmos;
+
 use glam::Vec3;
 #[cfg(feature = "python")]
 use numpy::{IntoPyArray, PyArrayDyn};
@@ -180,42 +177,34 @@ pub struct MeshDebugFlags {
 }
 
 impl crate::VisualDebug for GeometryData {
-    type Flags = MeshDebugFlags;
-    #[cfg(feature = "bevy")]
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: Self::Flags) {
-        if debug_flags.triangles {
-            for i in 0..self.triangles.len() / 3 {
-                let (ia, ib, ic) = (
-                    self.triangles[3 * i] as usize,
-                    self.triangles[3 * i + 1] as usize,
-                    self.triangles[3 * i + 2] as usize,
-                );
-                let (pa, pb, pc) = (self.points[ia], self.points[ib], self.points[ic]);
-                let color = Color::srgb(0., 0.4, 0.);
-                gizmos.line(pa, pb, color);
-                gizmos.line(pb, pc, color);
-                gizmos.line(pc, pa, color);
+    fn fill_debug(&self, out: &mut crate::DebugGeometry) {
+        for i in 0..self.triangles.len() / 3 {
+            let (ia, ib, ic) = (
+                self.triangles[3 * i] as usize,
+                self.triangles[3 * i + 1] as usize,
+                self.triangles[3 * i + 2] as usize,
+            );
+            let (pa, pb, pc) = (self.points[ia], self.points[ib], self.points[ic]);
+            let color = crate::DebugColor::rgb(0., 0.4, 0.);
+            out.lines.push((pa, pb, color));
+            out.lines.push((pb, pc, color));
+            out.lines.push((pc, pa, color));
+        }
+
+        for c in self.contours.iter() {
+            let n = c.len();
+            for i in 0..n {
+                let r = i as f32 / n as f32;
+                let color = crate::DebugColor::rgb(0.5, 0.3 + 0.2 * r, 0.3 + 0.2 * r);
+                let pos1 = self.points[c[i]];
+                let pos2 = self.points[c[(i + 1) % n]];
+                out.lines.push((pos1, pos2, color));
             }
         }
 
-        if debug_flags.contours {
-            for c in self.contours.iter() {
-                let n = c.len();
-                for i in 0..n {
-                    let r = i as f32 / n as f32;
-                    let color = Color::srgb(0.5, 0.3 + 0.2 * r, 0.3 + 0.2 * r);
-                    let pos1 = self.points[c[i]];
-                    let pos2 = self.points[c[(i + 1) % n]];
-                    gizmos.line(pos1, pos2, color);
-                }
-            }
-        }
-
-        if debug_flags.other {
-            for (p, c) in self.debug_points.iter() {
-                let color = Color::linear_rgba(c[0], c[1], c[2], c[3]);
-                gizmos.cross(*p, 0.2, color);
-            }
+        for (p, c) in self.debug_points.iter() {
+            let color = crate::DebugColor(*c);
+            out.points.push((*p, color));
         }
     }
 }

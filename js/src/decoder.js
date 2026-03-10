@@ -6,7 +6,9 @@
  * @typedef {Object} GeometryOptions
  * @property {Float32Array} [vertexBuffer]
  * @property {Float32Array} [normalBuffer]
+ * @property {Float32Array} [colorBuffer]
  * @property {Uint32Array} [indexBuffer]
+ * @property {Object} [debugLayers]
  */
 
 /**
@@ -25,9 +27,19 @@ class Geometry {
   normalBuffer;
 
   /**
+   * @type {Float32Array}
+   */
+  colorBuffer;
+
+  /**
    * @type {Uint32Array}
    */
   indexBuffer;
+
+  /**
+   * @type {Object}
+   */
+  debugLayers;
 
   /**
    * @param {GeometryOptions} [options]
@@ -35,7 +47,9 @@ class Geometry {
   constructor(options = {}) {
     this.vertexBuffer = options.vertexBuffer || new Float32Array(0);
     this.normalBuffer = options.normalBuffer || new Float32Array(0);
+    this.colorBuffer = options.colorBuffer || new Float32Array(0);
     this.indexBuffer = options.indexBuffer || new Uint32Array(0);
+    this.debugLayers = options.debugLayers || {};
   }
 }
 
@@ -56,7 +70,7 @@ class TreeMeshDecoder {
    * @returns {Geometry}
    */
   decode(jsonInput) {
-    const { buffers, outputs } = jsonInput;
+    const { buffers, outputs, debug } = jsonInput;
 
     const scope = {};
     for (const [name, buf] of Object.entries(buffers)) {
@@ -72,6 +86,7 @@ class TreeMeshDecoder {
     try {
       const vertices = this._eval(outputs.vertices, scope);
       const normals = this._eval(outputs.normals, scope);
+      const colors = outputs.colors ? this._eval(outputs.colors, scope) : null;
       const triangles = this._eval(outputs.triangles, scope);
 
       if (vertices.length !== normals.length) {
@@ -99,11 +114,16 @@ class TreeMeshDecoder {
 
       const vertexBuffer = this._vec3ToInterleaved(vertices);
       const normalBuffer = this._vec3ToInterleaved(normals);
+      const colorBuffer = colors ? this._rgbaToInterleaved(colors) : new Float32Array(0);
+
+      const debugLayers = this._decodeDebug(debug, scope);
 
       return new Geometry({
         vertexBuffer,
         normalBuffer,
+        colorBuffer,
         indexBuffer: triangles,
+        debugLayers,
       });
     } catch (e) {
       console.error('Decode error:', e);
@@ -186,18 +206,38 @@ class TreeMeshDecoder {
       return expr;
     }
 
+    if (Array.isArray(expr)) {
+      throw new Error(`Expected expression object, got array: ${JSON.stringify(expr).slice(0, 100)}`);
+    }
+
+    if (typeof expr !== 'object' || expr === null) {
+      throw new Error(`Invalid expression: ${expr}, expected object with 'op' field`);
+    }
+
     const op = expr.op;
-    
-    if (expr.args) {
-      const args = expr.args.map(a => this._eval(a, scope));
-      
-      switch (op) {
+    if (!op) {
+      throw new Error(`Expression missing 'op' field: ${JSON.stringify(expr).slice(0, 200)}`);
+    }
+
+    if (!expr.args) {
+      throw new Error(`Operator '${op}' missing 'args' field`);
+    }
+
+    if (!Array.isArray(expr.args)) {
+      throw new Error(`Operator '${op}' 'args' must be an array, got: ${typeof expr.args}`);
+    }
+
+    const args = expr.args.map(a => this._eval(a, scope));
+
+    switch (op) {
         case 'cumsum':
           return this._cumsum(args[0]);
         case 'divp2':
           return this._divp2(args[0], args[1]);
         case 'vec3':
           return this._vec3(args[0], args[1], args[2]);
+        case 'vec4':
+          return this._vec4(args[0], args[1], args[2], args[3]);
         case 'triangle':
           return this._triangle(args[0], args[1], args[2]);
         case 'concat':
@@ -233,11 +273,12 @@ class TreeMeshDecoder {
       }
       return result;
     } else if (Array.isArray(buffer) && buffer.length > 0 && typeof buffer[0] === 'object' && 'x' in buffer[0]) {
-      return buffer.map(v => ({
-        x: v.x / divisor,
-        y: v.y / divisor,
-        z: v.z / divisor,
-      }));
+	    return buffer.map(v => ({
+		    x: v.x / divisor,
+		    y: v.y / divisor,
+		    z: v.z / divisor,
+		    w: v.w !== undefined ? v.w / divisor : undefined,
+	    }));
     }
     throw new Error('Unsupported buffer type for divp2');
   }
@@ -250,6 +291,18 @@ class TreeMeshDecoder {
     const result = [];
     for (let i = 0; i < x.length; i++) {
       result.push({ x: x[i], y: y[i], z: z[i] });
+    }
+    return result;
+  }
+
+  _vec4(x, y, z, w) {
+    if (x.length !== y.length || x.length !== z.length || x.length !== w.length) {
+      throw new Error(`vec4 component length mismatch: x=${x.length}, y=${y.length}, z=${z.length}, w=${w.length}. ` +
+        `All four component buffers must have the same length.`);
+    }
+    const result = [];
+    for (let i = 0; i < x.length; i++) {
+      result.push({ x: x[i], y: y[i], z: z[i], w: w[i] });
     }
     return result;
   }
@@ -381,6 +434,53 @@ class TreeMeshDecoder {
       result[i * 3 + 2] = vec3Array[i].z;
     }
     return result;
+  }
+_rgbaToInterleaved(rgbaArray) {
+    const result = new Float32Array(rgbaArray.length * 4);
+    for (let i = 0; i < rgbaArray.length; i++) {
+      const c = rgbaArray[i];
+      result[i * 4] = c.x;
+      result[i * 4 + 1] = c.y;
+      result[i * 4 + 2] = c.z;
+      result[i * 4 + 3] = c.w !== undefined ? c.w : 1.0; // default alpha to 1.0 if not present
+    }
+    return result;
+  }
+  _decodeDebug(debug, scope) {
+    const layers = {};
+    if (!debug) return layers;
+    for (const [layerName, layerData] of Object.entries(debug)) {
+      const layer = {};
+      
+      if (layerData.points) {
+        const positions = this._eval(layerData.points.positions, scope);
+        const colors = layerData.points.colors 
+          ? this._eval(layerData.points.colors, scope)
+          : null;
+        layer.points = {
+          positions: this._vec3ToInterleaved(positions),
+          colors: colors ? this._rgbaToInterleaved(colors) : null,
+        };
+      }
+      
+      if (layerData.lines) {
+        const starts = this._eval(layerData.lines.starts, scope);
+        const ends = this._eval(layerData.lines.ends, scope);
+        const colors = layerData.lines.colors
+          ? this._eval(layerData.lines.colors, scope)
+          : null;
+        layer.lines = {
+          starts: this._vec3ToInterleaved(starts),
+          ends: this._vec3ToInterleaved(ends),
+          colors: colors ? this._rgbaToInterleaved(colors) : null,
+        };
+      }
+      
+      if (Object.keys(layer).length > 0) {
+        layers[layerName] = layer;
+      }
+    }
+    return layers;
   }
 }
 

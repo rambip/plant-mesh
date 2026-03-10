@@ -1,13 +1,10 @@
-use glam::{Vec2, Vec3};
-use rand::{prelude::Distribution, Rng};
-use smallvec::SmallVec;
-use serde::{Serialize, Deserialize};
-#[cfg(feature = "bevy")]
-use bevy_gizmos::prelude::Gizmos;
-#[cfg(feature = "bevy")]
-use bevy_color::Color;
 #[cfg(feature = "bevy")]
 use bevy::prelude::Component;
+
+use glam::{Vec2, Vec3};
+use rand::{prelude::Distribution, Rng};
+use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrandsConfig {
@@ -145,9 +142,7 @@ impl Distribution<Vec2> for UniformDisk {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec2 {
         let angle = rng.gen_range(0f32..std::f32::consts::TAU);
         self.center
-            + Vec2::new(angle.cos(), angle.sin())
-                * self.radius
-                * rng.gen_range(0f32..1f32).sqrt()
+            + Vec2::new(angle.cos(), angle.sin()) * self.radius * rng.gen_range(0f32..1f32).sqrt()
     }
 }
 
@@ -246,7 +241,12 @@ impl TrajectoryBuilder {
         self.trajectories = vec![];
     }
 
-    pub fn register_particles_for_leaf(&mut self, tree: &super::super::growing::TreeSkeleton, node: usize, cloud: &[Vec2]) {
+    pub fn register_particles_for_leaf(
+        &mut self,
+        tree: &super::super::growing::TreeSkeleton,
+        node: usize,
+        cloud: &[Vec2],
+    ) {
         for &point in cloud {
             let particle_id = self.trajectories.len();
             self.particles_per_node[node].push(particle_id);
@@ -272,7 +272,12 @@ impl TrajectoryBuilder {
         }
     }
 
-    pub fn project_particles(&mut self, tree: &super::super::growing::TreeSkeleton, child: usize, offset: Vec3) -> Vec<Vec2> {
+    pub fn project_particles(
+        &mut self,
+        tree: &super::super::growing::TreeSkeleton,
+        child: usize,
+        offset: Vec3,
+    ) -> Vec<Vec2> {
         let mut result = Vec::new();
         for &particle_id in &self.particles_per_node[child] {
             let pos_particle = self.trajectories[particle_id][tree.depth(child)];
@@ -320,8 +325,10 @@ impl TrajectoryBuilder {
                     let u = tree.position(m_child) - tree.position(s_child);
                     (u - u.dot(normal) * normal).normalize()
                 };
-                let m_cloud = self.project_particles(tree, m_child, offset_direction * tree.radius(m_child));
-                let s_cloud = self.project_particles(tree, s_child, -offset_direction * tree.radius(s_child));
+                let m_cloud =
+                    self.project_particles(tree, m_child, offset_direction * tree.radius(m_child));
+                let s_cloud =
+                    self.project_particles(tree, s_child, -offset_direction * tree.radius(s_child));
 
                 let mut cloud = m_cloud;
                 cloud.extend(s_cloud);
@@ -338,19 +345,22 @@ impl TrajectoryBuilder {
 }
 
 impl crate::VisualDebug for TrajectoryBuilder {
-    type Flags = bool;
-    #[cfg(feature = "bevy")]
-    fn debug(&self, gizmos: &mut Gizmos, debug_flags: bool) {
-        if debug_flags {
-            let mut rng = self.rng.clone();
-            for (i_t, traj) in self.trajectories.iter().enumerate() {
-                let a: f32 = i_t as f32 / self.trajectories.len() as f32;
-                let b: f32 = rng.gen();
-                let color = Color::srgb(1., 0.3 + 0.5 * a, 0.3 + 0.5 * b);
-                let positions = (0..50).map(|i| {
-                    super::algorithms::extended_catmull_spline(traj, super::algorithms::SplineIndex::Global((i as f32 / 49.).powi(2)))
-                });
-                gizmos.linestrip(positions, color);
+    fn fill_debug(&self, out: &mut crate::DebugGeometry) {
+        let mut rng = self.rng.clone();
+        for (i_t, traj) in self.trajectories.iter().enumerate() {
+            let a: f32 = i_t as f32 / self.trajectories.len() as f32;
+            let b: f32 = rng.gen();
+            let color = crate::DebugColor::rgb(1., 0.3 + 0.5 * a, 0.3 + 0.5 * b);
+            for i in 0..49 {
+                let p1 = super::algorithms::extended_catmull_spline(
+                    traj,
+                    super::algorithms::SplineIndex::Global((i as f32 / 49.).powi(2)),
+                );
+                let p2 = super::algorithms::extended_catmull_spline(
+                    traj,
+                    super::algorithms::SplineIndex::Global(((i + 1) as f32 / 49.).powi(2)),
+                );
+                out.lines.push((p1, p2, color));
             }
         }
     }

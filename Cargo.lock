@@ -281,7 +281,9 @@ name = "bevy-demo"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_color",
  "bevy_gizmos 0.15.1",
+ "bevy_math",
  "bevy_render",
  "bevy_simple_graphics",
  "rand",

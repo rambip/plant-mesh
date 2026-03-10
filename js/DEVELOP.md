@@ -21,8 +21,8 @@ bun run js/src/generate.js
 # Build render.js (run after any change to render.js or decoder.js)
 bun build js/src/render.js --outdir=js/dist
 
-# Serve (from project root)
-python -m http.server 8081
+# Serve (from js directory)
+python3 -m http.server 8081
 ```
 
 ## TreeMesh Format

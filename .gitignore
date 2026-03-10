@@ -2,3 +2,6 @@ target
 */target
 dist
 docs/images_archive/
+python/tubulin/__pycache__/
+python/tubulin/*.so
+python/tubulin/_tubulin*.so

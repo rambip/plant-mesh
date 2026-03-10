@@ -10,6 +10,8 @@ path = "src/main.rs"
 [dependencies]
 bevy = { version = "0.15.1", default-features = false, features = ["bevy_render", "bevy_window", "x11", "webgl2", "bevy_core_pipeline", "bevy_asset", "dynamic_linking"] }
 bevy_render = "0.15.1"
+bevy_math = "0.15.1"
+bevy_color = "0.15.2"
 bevy_gizmos = { path = "../bevy-gizmos", features = ["bevy_render", "webgl"] }
 bevy_simple_graphics = { path = "../bevy-simple-graphics" }
 tubulin-core = { path = "../tubulin-core", features = ["bevy"] }
