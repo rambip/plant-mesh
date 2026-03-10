@@ -58,6 +58,8 @@ impl DebugGeometry {
     }
 }
 
+pub use export::{DebugLayer, DebugLayers, DebugLines, DebugPoints, TreeMeshExporter};
+
 pub trait VisualDebug {
     fn fill_debug(&self, out: &mut DebugGeometry);
 }

@@ -236,6 +236,152 @@ impl TreeMeshExporter {
     pub fn set_debug(&mut self, debug: DebugLayers) {
         self.debug = Some(debug);
     }
+    pub fn add_debug_layer(
+        &mut self,
+        layer_name: &str,
+        geometry: &crate::DebugGeometry,
+    ) -> DebugLayer {
+        let mut layer = DebugLayer {
+            points: None,
+            lines: None,
+        };
+        // Convert lines to debug lines
+        if !geometry.lines.is_empty() {
+            let n = geometry.lines.len();
+
+            let mut starts_x = Vec::with_capacity(n);
+            let mut starts_y = Vec::with_capacity(n);
+            let mut starts_z = Vec::with_capacity(n);
+            let mut ends_x = Vec::with_capacity(n);
+            let mut ends_y = Vec::with_capacity(n);
+            let mut ends_z = Vec::with_capacity(n);
+            let mut colors_r = Vec::with_capacity(n);
+            let mut colors_g = Vec::with_capacity(n);
+            let mut colors_b = Vec::with_capacity(n);
+            let mut colors_a = Vec::with_capacity(n);
+            for (start, end, color) in &geometry.lines {
+                starts_x.push((start.x * 256.0) as i32);
+                starts_y.push((start.y * 256.0) as i32);
+                starts_z.push((start.z * 256.0) as i32);
+                ends_x.push((end.x * 256.0) as i32);
+                ends_y.push((end.y * 256.0) as i32);
+                ends_z.push((end.z * 256.0) as i32);
+                colors_r.push((color.0[0] * 255.0) as i32);
+                colors_g.push((color.0[1] * 255.0) as i32);
+                colors_b.push((color.0[2] * 255.0) as i32);
+                colors_a.push((color.0[3] * 255.0) as i32);
+            }
+            let prefix = format!("debug_{}_", layer_name);
+            let sx = format!("{}start_x", prefix);
+            let sy = format!("{}start_y", prefix);
+            let sz = format!("{}start_z", prefix);
+            let ex = format!("{}end_x", prefix);
+            let ey = format!("{}end_y", prefix);
+            let ez = format!("{}end_z", prefix);
+            let cr = format!("{}color_r", prefix);
+            let cg = format!("{}color_g", prefix);
+            let cb = format!("{}color_b", prefix);
+            let ca = format!("{}color_a", prefix);
+            self.add_immediate_buffer(&sx, &starts_x);
+            self.add_immediate_buffer(&sy, &starts_y);
+            self.add_immediate_buffer(&sz, &starts_z);
+            self.add_immediate_buffer(&ex, &ends_x);
+            self.add_immediate_buffer(&ey, &ends_y);
+            self.add_immediate_buffer(&ez, &ends_z);
+            self.add_immediate_buffer(&cr, &colors_r);
+            self.add_immediate_buffer(&cg, &colors_g);
+            self.add_immediate_buffer(&cb, &colors_b);
+            self.add_immediate_buffer(&ca, &colors_a);
+            let starts = Expr::divp2(
+                Expr::vec3(
+                    Expr::cumsum(Expr::var(&sx)),
+                    Expr::cumsum(Expr::var(&sy)),
+                    Expr::cumsum(Expr::var(&sz)),
+                ),
+                8,
+            );
+            let ends = Expr::divp2(
+                Expr::vec3(
+                    Expr::cumsum(Expr::var(&ex)),
+                    Expr::cumsum(Expr::var(&ey)),
+                    Expr::cumsum(Expr::var(&ez)),
+                ),
+                8,
+            );
+            let colors = Expr::divp2(
+                Expr::vec4(
+                    Expr::cumsum(Expr::var(&cr)),
+                    Expr::cumsum(Expr::var(&cg)),
+                    Expr::cumsum(Expr::var(&cb)),
+                    Expr::cumsum(Expr::var(&ca)),
+                ),
+                8,
+            );
+            layer.lines = Some(DebugLines {
+                starts,
+                ends,
+                colors: Some(colors),
+            });
+        }
+        // Convert points to debug points
+        if !geometry.points.is_empty() {
+            let n = geometry.points.len();
+
+            let mut positions_x = Vec::with_capacity(n);
+            let mut positions_y = Vec::with_capacity(n);
+            let mut positions_z = Vec::with_capacity(n);
+            let mut colors_r = Vec::with_capacity(n);
+            let mut colors_g = Vec::with_capacity(n);
+            let mut colors_b = Vec::with_capacity(n);
+            let mut colors_a = Vec::with_capacity(n);
+            for (pos, color) in &geometry.points {
+                positions_x.push((pos.x * 256.0) as i32);
+                positions_y.push((pos.y * 256.0) as i32);
+                positions_z.push((pos.z * 256.0) as i32);
+                colors_r.push((color.0[0] * 255.0) as i32);
+                colors_g.push((color.0[1] * 255.0) as i32);
+                colors_b.push((color.0[2] * 255.0) as i32);
+                colors_a.push((color.0[3] * 255.0) as i32);
+            }
+            let prefix = format!("debug_{}_pt_", layer_name);
+            let px = format!("{}x", prefix);
+            let py = format!("{}y", prefix);
+            let pz = format!("{}z", prefix);
+            let cr = format!("{}color_r", prefix);
+            let cg = format!("{}color_g", prefix);
+            let cb = format!("{}color_b", prefix);
+            let ca = format!("{}color_a", prefix);
+            self.add_immediate_buffer(&px, &positions_x);
+            self.add_immediate_buffer(&py, &positions_y);
+            self.add_immediate_buffer(&pz, &positions_z);
+            self.add_immediate_buffer(&cr, &colors_r);
+            self.add_immediate_buffer(&cg, &colors_g);
+            self.add_immediate_buffer(&cb, &colors_b);
+            self.add_immediate_buffer(&ca, &colors_a);
+            let positions = Expr::divp2(
+                Expr::vec3(
+                    Expr::cumsum(Expr::var(&px)),
+                    Expr::cumsum(Expr::var(&py)),
+                    Expr::cumsum(Expr::var(&pz)),
+                ),
+                8,
+            );
+            let colors = Expr::divp2(
+                Expr::vec4(
+                    Expr::cumsum(Expr::var(&cr)),
+                    Expr::cumsum(Expr::var(&cg)),
+                    Expr::cumsum(Expr::var(&cb)),
+                    Expr::cumsum(Expr::var(&ca)),
+                ),
+                8,
+            );
+            layer.points = Some(DebugPoints {
+                positions,
+                colors: Some(colors),
+            });
+        }
+        layer
+    }
 }
 
 impl Default for TreeMeshExporter {
@@ -711,4 +857,38 @@ mod tests {
         assert!(parsed["outputs"]["vertices"].is_object());
         assert!(parsed["debug"].is_object());
     }
+    #[test]
+fn test_add_debug_layer() {
+    use crate::{DebugColor, DebugGeometry};
+
+    let mut exporter = TreeMeshExporter::new();
+    let mut geometry = DebugGeometry::new();
+
+    // Add a line
+    geometry.lines.push((
+        glam::Vec3::new(0.0, 0.0, 0.0),
+        glam::Vec3::new(1.0, 1.0, 1.0),
+        DebugColor::rgb(1.0, 0.0, 0.0),
+    ));
+
+    // Add a point
+    geometry.points.push((
+        glam::Vec3::new(0.5, 0.5, 0.5),
+        DebugColor::rgb(0.0, 1.0, 0.0),
+    ));
+
+    let layer = exporter.add_debug_layer("test_layer", &geometry);
+
+    // Need to set debug with the layer
+    let mut debug_layers = DebugLayers { layers: HashMap::new() };
+    debug_layers.layers.insert("test_layer".to_string(), layer);
+    exporter.set_debug(debug_layers);
+
+    let json = exporter.to_json();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+    // Check debug section has the layer
+    assert!(parsed["debug"]["test_layer"]["lines"].is_object());
+    assert!(parsed["debug"]["test_layer"]["points"].is_object());
+}
 }
