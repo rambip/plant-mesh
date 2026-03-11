@@ -226,6 +226,12 @@ cached. No Bevy types cross the Python boundary.
 
 ---
 
+## Known Bugs
+
+- **JS Decode error**: `TypeError: can't access property "length", x is undefined` — occurs when the full tree mesh is rendered in the browser. The JS decoder expects buffers to be present but some path in the evaluation chain returns undefined. Need to add assertions in decoder to catch this early and identify which expression/buffer is missing.
+
+---
+
 ## Open Questions
 
 - Should `Skeleton.points` include only node positions, or also interpolated spline
