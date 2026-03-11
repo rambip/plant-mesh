@@ -523,6 +523,4 @@ function init(geometryData) {
     renderer.setSize(container.clientWidth, container.clientHeight);
   });
 }
-export {
-  init as initTreeViewer
-};
+window.initTreeViewer = init;

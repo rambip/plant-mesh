@@ -165,4 +165,4 @@ function init(geometryData) {
   });
 }
 
-export { init as initTreeViewer };
+window.initTreeViewer = init;
