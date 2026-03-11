@@ -523,10 +523,6 @@ function init(geometryData) {
     renderer.setSize(container.clientWidth, container.clientHeight);
   });
 }
-async function main() {
-  const response = await fetch("./dist/geometry.json");
-  const geometryData = await response.json();
-  document.getElementById("json").textContent = JSON.stringify(geometryData, null, 2);
-  init(geometryData);
-}
-main();
+export {
+  init as initTreeViewer
+};

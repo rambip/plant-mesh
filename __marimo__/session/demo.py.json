@@ -1,0 +1,41 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.20.4",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "a33e4d7612d1fe43ee2debf07e1a603b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Lfho",
+      "code_hash": "14d3d0253f10a45964bed56c9d156c4c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<iframe src='./@file/70000-16645-My3bxJNZ.html' width='100%' height='400px' onload='__resizeIframe(this)' frameborder='0'></iframe>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PMFs",
+      "code_hash": null,
+      "outputs": [],
+      "console": []
+    }
+  ]
+}
