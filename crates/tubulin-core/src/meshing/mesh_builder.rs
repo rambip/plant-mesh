@@ -202,28 +202,38 @@ impl GeometryData {
         let cb: Vec<i32> = self.colors.iter().map(|c| (c[2] * 255.0) as i32).collect();
         let ca: Vec<i32> = self.colors.iter().map(|c| (c[3] * 255.0) as i32).collect();
 
-        let ix: Vec<i32> = self.triangles.iter().map(|&t| t as i32).collect();
-        let iy: Vec<i32> = self.triangles.iter().map(|&t| t as i32).collect();
-        let iz: Vec<i32> = self.triangles.iter().map(|&t| t as i32).collect();
+        let n_triangles = self.triangles.len() / 3;
 
-        encoder.add_immediate_buffer("vx", &vx);
-        encoder.add_immediate_buffer("vy", &vy);
-        encoder.add_immediate_buffer("vz", &vz);
+        let mut ix = Vec::with_capacity(n_triangles);
+        let mut iy = Vec::with_capacity(n_triangles);
+        let mut iz = Vec::with_capacity(n_triangles);
 
-        encoder.add_immediate_buffer("nx", &nx);
-        encoder.add_immediate_buffer("ny", &ny);
-        encoder.add_immediate_buffer("nz", &nz);
-
-        if !self.colors.is_empty() {
-            encoder.add_immediate_buffer("cr", &cr);
-            encoder.add_immediate_buffer("cg", &cg);
-            encoder.add_immediate_buffer("cb", &cb);
-            encoder.add_immediate_buffer("ca", &ca);
+        for i in 0..n_triangles {
+            ix.push(self.triangles[3 * i] as i32);
+            iy.push(self.triangles[3 * i + 1] as i32);
+            iz.push(self.triangles[3 * i + 2] as i32);
         }
 
-        encoder.add_immediate_buffer("ix", &ix);
-        encoder.add_immediate_buffer("iy", &iy);
-        encoder.add_immediate_buffer("iz", &iz);
+        // Delta encode indices
+        let mut delta_ix = Vec::with_capacity(n_triangles);
+        let mut delta_iy = Vec::with_capacity(n_triangles);
+        let mut delta_iz = Vec::with_capacity(n_triangles);
+        let mut prev_ix = 0i32;
+        let mut prev_iy = 0i32;
+        let mut prev_iz = 0i32;
+
+        for i in 0..n_triangles {
+            delta_ix.push(ix[i] - prev_ix);
+            delta_iy.push(iy[i] - prev_iy);
+            delta_iz.push(iz[i] - prev_iz);
+            prev_ix = ix[i];
+            prev_iy = iy[i];
+            prev_iz = iz[i];
+        }
+
+        encoder.add_delta_buffer("ix", &delta_ix, 2);
+        encoder.add_delta_buffer("iy", &delta_iy, 2);
+        encoder.add_delta_buffer("iz", &delta_iz, 2);
 
         let vertices = Expr::divp2(
             Expr::vec3(Expr::var("vx"), Expr::var("vy"), Expr::var("vz")),
@@ -233,7 +243,11 @@ impl GeometryData {
             Expr::vec3(Expr::var("nx"), Expr::var("ny"), Expr::var("nz")),
             7,
         );
-        let triangles = Expr::triangle(Expr::var("ix"), Expr::var("iy"), Expr::var("iz"));
+        let triangles = Expr::triangle(
+            Expr::cumsum(Expr::var("ix")),
+            Expr::cumsum(Expr::var("iy")),
+            Expr::cumsum(Expr::var("iz")),
+        );
 
         encoder.set_vertices(vertices);
         encoder.set_normals(normals);

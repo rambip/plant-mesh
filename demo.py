@@ -6,15 +6,21 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    from tubulin import DemoMesh
+    from tubulin import DemoMesh, grow
 
-    return (DemoMesh,)
+    return DemoMesh, grow
 
 
 @app.cell
 def _(DemoMesh):
     mesh = DemoMesh()
     mesh
+    return
+
+
+@app.cell
+def _(grow):
+    grow()
     return
 
 
