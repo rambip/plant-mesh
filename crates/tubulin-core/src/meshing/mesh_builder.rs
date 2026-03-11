@@ -177,7 +177,8 @@ pub struct MeshDebugFlags {
 }
 
 impl crate::VisualDebug for GeometryData {
-    fn fill_debug(&self, out: &mut crate::DebugGeometry) {
+    fn debug_data(&self) -> crate::DebugGeometry {
+        let mut out = crate::DebugGeometry::new();
         for i in 0..self.triangles.len() / 3 {
             let (ia, ib, ic) = (
                 self.triangles[3 * i] as usize,
@@ -206,6 +207,8 @@ impl crate::VisualDebug for GeometryData {
             let color = crate::DebugColor(*c);
             out.points.push((*p, color));
         }
+
+        out
     }
 }
 

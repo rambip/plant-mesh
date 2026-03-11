@@ -345,7 +345,8 @@ impl TrajectoryBuilder {
 }
 
 impl crate::VisualDebug for TrajectoryBuilder {
-    fn fill_debug(&self, out: &mut crate::DebugGeometry) {
+    fn debug_data(&self) -> crate::DebugGeometry {
+        let mut out = crate::DebugGeometry::new();
         let mut rng = self.rng.clone();
         for (i_t, traj) in self.trajectories.iter().enumerate() {
             let a: f32 = i_t as f32 / self.trajectories.len() as f32;
@@ -363,5 +364,6 @@ impl crate::VisualDebug for TrajectoryBuilder {
                 out.lines.push((p1, p2, color));
             }
         }
+        out
     }
 }

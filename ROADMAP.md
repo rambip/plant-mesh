@@ -31,7 +31,7 @@ skeleton  strand     surface
 │                     Rust Pipeline                               │
 │  PlantNode → TreeSkeleton → TrajectoryBuilder → GeometryData   │
 │                                           │                    │
-│                    VisualDebug::fill_debug()                   │
+│                    VisualDebug::debug_data()                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -164,14 +164,13 @@ pub struct DebugGeometry {
 }
 
 pub trait VisualDebug {
-    const LAYER: &'static str;
-    fn debug(&self, out: &mut DebugGeometry);
+    fn debug_data(&self) -> DebugGeometry;
 }
 ```
 
-The pipeline collects debug output into a `HashMap<&'static str, DebugGeometry>`
-keyed by `LAYER`. The existing Bevy gizmo rendering becomes a thin adapter that
-iterates this map.
+The pipeline collects debug output by calling `debug_data()` on each stage,
+producing a `DebugGeometry` which is then passed to `add_debug_layer()` with
+a layer name string. The existing Bevy gizmo rendering becomes a thin adapter.
 
 ### Intermediate types exposed via pyo3
 

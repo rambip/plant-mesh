@@ -356,21 +356,18 @@ fn visual_debug(
     for (a, b, c) in query.iter() {
         if let Some(a) = a {
             if flags.skeleton {
-                let mut debug_geometry = DebugGeometry::new();
-                a.fill_debug(&mut debug_geometry);
+                let debug_geometry = a.debug_data();
                 render_debug_geometry(&debug_geometry, &mut gizmos);
             }
         }
         if let Some(b) = b {
             if flags.strands {
-                let mut debug_geometry = DebugGeometry::new();
-                b.fill_debug(&mut debug_geometry);
+                let debug_geometry = b.debug_data();
                 render_debug_geometry(&debug_geometry, &mut gizmos);
             }
         }
         if let Some(c) = c {
-            let mut debug_geometry = DebugGeometry::new();
-            c.fill_debug(&mut debug_geometry);
+            let debug_geometry = c.debug_data();
             render_debug_geometry(&debug_geometry, &mut gizmos);
         }
     }

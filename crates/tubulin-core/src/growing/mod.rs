@@ -174,7 +174,8 @@ impl TreeSkeletonDebugData {
 }
 
 impl crate::VisualDebug for TreeSkeletonDebugData {
-    fn fill_debug(&self, out: &mut crate::DebugGeometry) {
+    fn debug_data(&self) -> crate::DebugGeometry {
+        let mut out = crate::DebugGeometry::new();
         let sk = &self.copy;
         for i in 0..sk.node_count() {
             let circle = crate::Circle {
@@ -192,6 +193,7 @@ impl crate::VisualDebug for TreeSkeletonDebugData {
                 ));
             }
         }
+        out
     }
 }
 
