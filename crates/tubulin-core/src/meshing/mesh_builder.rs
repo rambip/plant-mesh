@@ -337,4 +337,17 @@ pub struct MeshConfig {
     pub leaf_angle: f32,
     pub interior_angle: f32,
     pub spacing: f32,
+    pub smoothing_iters: u32,
+}
+
+impl Default for MeshConfig {
+    fn default() -> Self {
+        Self {
+            leaf_size: 0.5,
+            leaf_angle: 0.5,
+            interior_angle: 0.3,
+            spacing: 0.5,
+            smoothing_iters: 2,
+        }
+    }
 }

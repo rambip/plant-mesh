@@ -1,3 +1,4 @@
+use glam::Vec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

@@ -1,110 +1,12 @@
 # tubulin — procedural plant mesh generator
 # Python bindings are provided by the Rust extension _tubulin (built with maturin).
-from ._tubulin import build_demo_tree, demo_mesh, Seed, Skeleton, debug_to_json
-
-import os
-
-
-def _get_viewer_html(json_data: str) -> str:
-    """Generate HTML to display the tree mesh or debug geometry."""
-
-    viewer_dir = os.path.dirname(os.path.abspath(__file__))
-    decoder_path = os.path.join(viewer_dir, "viewer", "decoder.js")
-    render_path = os.path.join(viewer_dir, "viewer", "render.js")
-
-    with open(decoder_path, "r") as f:
-        decoder_js = f.read()
-
-    with open(render_path, "r") as f:
-        render_js = f.read()
-
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {{ margin: 0; padding: 0; font-family: sans-serif; }}
-    #main {{ width: 100%; height: 500px; }}
-  </style>
-</head>
-<body>
-  <div id="main"></div>
-  <script type="module">
-    {decoder_js}
-  </script>
-  <script type="module">
-    {render_js}
-    initTreeViewer({json_data}, 'main');
-  </script>
-</body>
-</html>"""
-
-
-class TreeMesh:
-    """Wrapper around GeometryData with HTML representation."""
-
-    def __init__(self, geometry_data):
-        self._data = geometry_data
-
-    def to_json(self, include_debug: bool = False) -> str:
-        """Export to TreeMesh JSON format."""
-        return self._data.to_json(include_debug)
-
-    def _repr_html_(self) -> str:
-        """Render in Jupyter notebook."""
-        return _get_viewer_html(self._data.to_json(False))
-
-    @property
-    def points(self):
-        """Vertex positions as numpy array."""
-        return self._data.points
-
-    @property
-    def normals(self):
-        """Vertex normals as numpy array."""
-        return self._data.normals
-
-    @property
-    def colors(self):
-        """Vertex colors as numpy array."""
-        return self._data.colors
-
-    @property
-    def triangles(self):
-        """Triangle indices as numpy array."""
-        return self._data.triangles
-
-
-class SkeletonWrapper:
-    """Wrapper around Skeleton with debug geometry for HTML representation."""
-
-    def __init__(self, skeleton, debug):
-        self._skeleton = skeleton
-        self._debug = debug
-
-    def _repr_html_(self) -> str:
-        """Render debug geometry in Jupyter notebook."""
-        debug_json = debug_to_json(self._debug, "skeleton")
-        return _get_viewer_html(debug_json)
-
-
-def grow(**config) -> TreeMesh:
-    """Generate a tree with given config (placeholder - uses demo tree for now)."""
-    birth_power = config.get("birth_power", 0.5)
-    data = build_demo_tree(birth_power)
-    return TreeMesh(data)
-
-
-class DemoMesh:
-    """Small demo mesh for debugging - a simple cylinder with debug layers."""
-
-    def __init__(self):
-        self._json = demo_mesh()
-
-    def to_json(self, include_debug: bool = True) -> str:
-        """Export to TreeMesh JSON format."""
-        return self._json
-
-    def _repr_html_(self) -> str:
-        """Render in Jupyter notebook."""
-        return _get_viewer_html(self._json)
+from ._tubulin import (
+    Seed,
+    PlantNode,
+    Skeleton,
+    VolumetricTree,
+    TreeMesh,
+    DebugData,
+    debug_to_json,
+    demo_mesh,
+)

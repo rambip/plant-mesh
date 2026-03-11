@@ -24,3 +24,4 @@ spacing = 0.15
 leaf_size = 0.5
 leaf_angle = 0.4
 interior_angle = 2.5
+smoothing_iters = 2
