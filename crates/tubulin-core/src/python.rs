@@ -56,8 +56,7 @@ impl PyTreeSkeleton {
     }
 
     fn debug_data(&self) -> PyDebugData {
-        let debug = crate::TreeSkeletonDebugData::default();
-        let debug_geom = crate::VisualDebug::debug_data(&debug);
+        let debug_geom = skeleton_debug_data(&self.0);
         PyDebugData(debug_geom)
     }
 
