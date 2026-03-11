@@ -199,10 +199,18 @@ cached. No Bevy types cross the Python boundary.
 - [x] Serialize `DebugGeometry` into the `debug` key of the TreeMesh JSON
 
 ### M2 — Python builder API
-- [ ] Implement `Tubulin` builder with `.grow()`, `.strands()`, `.mesh()`, `.debug()`, `.run()`
-- [ ] Wrap `GeometryData` as `#[pyclass]` with `to_json()` method
-- [ ] Expose `.vertices`, `.normals`, `.colors`, `.triangles` as numpy arrays via `rust-numpy`
-- [ ] `_repr_html_()` on `GeometryData` (reuse JS viewer)
+- [x] All Python bindings in `python.rs` (single file, no Python module code)
+- [x] Use newtype patterns: `#[pyclass(name = "X")] pub struct PyX(...)`
+- [x] Use `#[pyo3(signature = (*, ...))]` for methods with config parameters
+- [x] Implement `Default` for config structs
+- [x] `Seed` → `PlantNode` → `Skeleton` → `VolumetricTree` → `TreeMesh` pipeline
+- [x] `Skeleton._repr_html_()` shows debug geometry via bundled JS viewer
+
+### M5 — Export integration
+- [x] Add `to_json(include_debug: bool)` method to `GeometryData`
+- [x] Add `to_json(layer_name)` method to `DebugData`
+- [x] Wire pipeline stages → VisualDebug → TreeMeshExporter JSON output
+- [ ] Test full pipeline export
 
 ### M3 — JS debug layer rendering ✓
 - [x] Parse `debug` key in JS decoder
@@ -242,26 +250,11 @@ cached. No Bevy types cross the Python boundary.
 
 ## Technical Pain Points
 
-### P1: Dual-purpose Rust structs for pyo3
+### P1: Dual-purpose Rust structs for pyo3 ✓
+- **Solved**: Use newtype pattern `pub struct PySeed(crate::Seed)` in `python.rs`
 
-Problem: We want `Seed` to be a unit struct for normal Rust usage, but pyo3 requires a struct with fields to generate Python constructors.
-
-Attempted solutions:
-- `#[cfg_attr(feature = "python", pyo3::pyclass)]` on a unit struct - doesn't work, pyo3 needs fields
-- Separate `PySeed` wrapper - adds duplication
-- `cfg_attr` with field - complex attribute syntax, doesn't compile well
-
-**Solution needed**: Find a pattern that avoids duplicating the struct definition while satisfying pyo3's requirements.
-
-### P2: Cross-boundary types
-
-Problem: To return debug data to Python, we need types like `DebugGeometry` and `GrowConfig` to implement pyo3 traits.
-
-Currently:
-- `DebugGeometry` - contains tuples which pyo3 can't serialize directly
-- `GrowConfig` - needs `#[pyclass]` and proper derives
-
-**Solution needed**: Either wrap the return type entirely in Rust (generate JSON in Rust), or implement proper pyo3 serialization for these types.
+### P2: Cross-boundary types ✓
+- **Solved**: Return `DebugData` as pyclass, generate JSON in Rust via `to_json(layer_name)`
 
 ### P3: Format strings with self fields
 
