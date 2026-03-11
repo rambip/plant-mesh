@@ -185,7 +185,9 @@ impl PyTreeSkeleton {
     }
 
     fn _repr_html_(&self) -> String {
-        "TODO: Skeleton viewer".to_string()
+        let debug = skeleton_debug_data(&self.0);
+        let json = debug_to_json_impl(&debug, "skeleton");
+        embed_viewer(&json)
     }
 }
 
@@ -404,6 +406,35 @@ fn html_escape(s: &str) -> String {
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
+}
+
+fn skeleton_debug_data(skeleton: &crate::TreeSkeleton) -> crate::DebugGeometry {
+    let debug = crate::TreeSkeletonDebugData {
+        copy: skeleton.clone(),
+    };
+    crate::VisualDebug::debug_data(&debug)
+}
+
+fn debug_to_json_impl(debug: &crate::DebugGeometry, layer_name: &str) -> String {
+    let mut encoder = crate::TreeEncoder::new();
+    let debug_layer = encoder.add_debug_layer(layer_name, debug);
+    let mut debug_layers = crate::DebugLayers {
+        layers: std::collections::HashMap::new(),
+    };
+    debug_layers
+        .layers
+        .insert(layer_name.to_string(), debug_layer);
+    encoder.set_debug(debug_layers);
+    encoder.to_json()
+}
+
+fn embed_viewer(json_data: &str) -> String {
+    let render_js = include_str!("../../../js/dist/render.js");
+    let escaped = html_escape(json_data);
+    format!(
+        r#"<iframe srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{{margin:0}}#main{{width:100%;height:400px;}}</style></head><body><div id='main'></div><script type='module'>{}</script><script type='module'>initTreeViewer({});</script></body></html>" width="100%" height="450" frameborder="0"></iframe>"#,
+        render_js, escaped
+    )
 }
 
 #[pyfunction]
