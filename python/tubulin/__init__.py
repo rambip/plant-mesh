@@ -1,6 +1,6 @@
 # tubulin — procedural plant mesh generator
 # Python bindings are provided by the Rust extension _tubulin (built with maturin).
-from ._tubulin import build_demo_tree
+from ._tubulin import build_demo_tree, demo_mesh
 
 import os
 
@@ -81,3 +81,18 @@ def grow(**config) -> TreeMesh:
     birth_power = config.get("birth_power", 0.5)
     data = build_demo_tree(birth_power)
     return TreeMesh(data)
+
+
+class DemoMesh:
+    """Small demo mesh for debugging - a simple cylinder with debug layers."""
+
+    def __init__(self):
+        self._json = demo_mesh()
+
+    def to_json(self, include_debug: bool = True) -> str:
+        """Export to TreeMesh JSON format."""
+        return self._json
+
+    def _repr_html_(self) -> str:
+        """Render in Jupyter notebook."""
+        return _get_viewer_html(self._json)

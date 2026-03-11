@@ -21,3 +21,8 @@ python-source = "python"
 module-name = "tubulin._tubulin"
 editable-profile = "release"
 features = ["python"]
+
+[dependency-groups]
+dev = [
+    "marimo>=0.20.4",
+]
