@@ -18,7 +18,7 @@ pub use meshing::StrandsConfig;
 
 use glam::Quat;
 use glam::Vec3;
-use meshing::VolumetricTree;
+pub use meshing::VolumetricTree;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
@@ -80,15 +80,14 @@ impl GeometryData {
         let rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         let mut plant_builder = rng.clone();
-        let mut skeleton_builder = TreeSkeletonDebugData::new();
-        let mut particle_builder = TrajectoryBuilder::new(rng.clone());
-        let mut mesh_builder = GeometryData::new(rng.clone());
+        let rng_for_strands = rng.clone();
+        let rng_for_mesh = rng.clone();
 
         let mut geometry = Seed
             .grow::<PlantNode>(&config.grow, &mut plant_builder)
-            .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
-            .grow::<VolumetricTree>(&config.strands, &mut particle_builder)
-            .grow::<GeometryData>(&config.mesh, &mut mesh_builder);
+            .grow_skeleton()
+            .grow_strands(&config.strands, rng_for_strands)
+            .build_mesh(&config.mesh, rng_for_mesh);
 
         geometry.compute_smooth_normals();
         geometry
@@ -127,17 +126,23 @@ pub trait TreePipelinePhase {
 
 pub struct Seed;
 
-impl TreePipelinePhase for PlantNode {
-    type Previous = Seed;
-    type Config = GrowConfig;
-    type Builder = rand::rngs::StdRng;
-    fn generate_from(_: Self::Previous, config: &Self::Config, rng: &mut Self::Builder) -> Self {
+impl Seed {
+    pub fn grow_plant(config: &GrowConfig, rng: &mut rand::rngs::StdRng) -> PlantNode {
         let root = PlantNodeProps {
             radius: config.base_radius,
             orientation: glam::Quat::IDENTITY,
             position: glam::Vec3::ZERO,
         };
         growing::generation::grow_tree_basic(config, rng, root, 0)
+    }
+}
+
+impl TreePipelinePhase for PlantNode {
+    type Previous = Seed;
+    type Config = GrowConfig;
+    type Builder = rand::rngs::StdRng;
+    fn generate_from(_: Self::Previous, config: &Self::Config, rng: &mut Self::Builder) -> Self {
+        Seed::grow_plant(config, rng)
     }
 }
 

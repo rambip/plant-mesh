@@ -237,3 +237,49 @@ cached. No Bevy types cross the Python boundary.
 - Should `Skeleton.points` include only node positions, or also interpolated spline
   points? (Affects usefulness for manual numpy analysis.)
 - Default colors per stage, or user-configurable in `.debug(color=...)`?
+
+---
+
+## Technical Pain Points
+
+### P1: Dual-purpose Rust structs for pyo3
+
+Problem: We want `Seed` to be a unit struct for normal Rust usage, but pyo3 requires a struct with fields to generate Python constructors.
+
+Attempted solutions:
+- `#[cfg_attr(feature = "python", pyo3::pyclass)]` on a unit struct - doesn't work, pyo3 needs fields
+- Separate `PySeed` wrapper - adds duplication
+- `cfg_attr` with field - complex attribute syntax, doesn't compile well
+
+**Solution needed**: Find a pattern that avoids duplicating the struct definition while satisfying pyo3's requirements.
+
+### P2: Cross-boundary types
+
+Problem: To return debug data to Python, we need types like `DebugGeometry` and `GrowConfig` to implement pyo3 traits.
+
+Currently:
+- `DebugGeometry` - contains tuples which pyo3 can't serialize directly
+- `GrowConfig` - needs `#[pyclass]` and proper derives
+
+**Solution needed**: Either wrap the return type entirely in Rust (generate JSON in Rust), or implement proper pyo3 serialization for these types.
+
+### P3: Format strings with self fields
+
+Problem: In `format!()` macros, you can't use `self.field` - need to use positional args or intermediate variables.
+
+```rust
+// Doesn't work:
+format!("{}", self.field)
+
+// Works:
+format!("{}", &self.field)
+format!("{}", self.some_method())
+```
+
+**Solution needed**: Be aware of this limitation when writing pymethods.
+
+### P4: Method resolution with cfg features
+
+Problem: When both `#[cfg(feature = "python")]` impl blocks and regular impl blocks define methods with the same name, Rust gets confused about which to use.
+
+**Solution needed**: Use distinct method names for Python vs Rust (e.g., `grow_plant_py`).

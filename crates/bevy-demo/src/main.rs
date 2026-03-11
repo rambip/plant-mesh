@@ -13,10 +13,9 @@ use std::f32::consts::PI;
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
-use tubulin_core::{DebugGeometry, meshing::VolumetricTree, TreeSkeletonDebugData, VisualDebug};
+use tubulin_core::DebugGeometry;
 use bevy_demo::{
-    BevyMesh, GeometryData, Grow, MeshDebugFlags, PlantNode, Seed, TrajectoryBuilder, TreeConfig,
-    TreeSkeleton,
+    BevyMesh, MeshDebugFlags, Seed, TreeConfig,
 };
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
@@ -25,6 +24,12 @@ pub struct DebugFlags {
     pub skeleton: bool,
     pub other: bool,
     pub mesh: MeshDebugFlags,
+}
+
+#[derive(Component, Default)]
+struct DebugCollector {
+    skeleton: Option<DebugGeometry>,
+    strands: Option<DebugGeometry>,
 }
 
 #[derive(Component)]
@@ -297,26 +302,28 @@ fn draw_tree(
 
         let rng = StdRng::seed_from_u64(tree.seed);
 
-        let mut plant_builder = rng.clone();
-        let mut skeleton_builder = TreeSkeletonDebugData::new();
-        let mut particle_builder = TrajectoryBuilder::new(rng.clone());
-        let mut mesh_builder = GeometryData::new(rng.clone());
-
         let Some(tree_config) = configs.get(&tree.config) else {
             return;
         };
-        let BevyMesh(tree_mesh) = Seed
-            .grow::<PlantNode>(&tree_config.grow, &mut plant_builder)
-            .grow::<TreeSkeleton>(&(), &mut skeleton_builder)
-            .grow::<VolumetricTree>(&tree_config.strands, &mut particle_builder)
-            .grow::<BevyMesh>(&tree_config.mesh, &mut mesh_builder);
+
+        let mut debug_collector = DebugCollector::default();
+        let rng_for_strands = rng.clone();
+        let rng_for_mesh = rng.clone();
+
+        let mut rng_clone = rng.clone();
+        let plant = Seed::grow_plant(&tree_config.grow, &mut rng_clone);
+        let geometry = plant
+            .grow_skeleton_debug(|g| debug_collector.skeleton = Some(g))
+            .grow_strands_debug(&tree_config.strands, rng_for_strands, |g| debug_collector.strands = Some(g))
+            .build_mesh_debug(&tree_config.mesh, rng_for_mesh, |_| {});
+        let BevyMesh(tree_mesh) = BevyMesh::from_geometry_data(geometry);
 
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
 
         commands
             .entity(e)
-            .insert((skeleton_builder, particle_builder, mesh_builder));
+            .insert(debug_collector);
     }
 }
 
@@ -345,30 +352,20 @@ fn render_debug_geometry(geometry: &DebugGeometry, gizmos: &mut Gizmos) {
 }
 
 fn visual_debug(
-    query: Query<(
-        Option<&TreeSkeletonDebugData>,
-        Option<&TrajectoryBuilder>,
-        Option<&GeometryData>,
-    )>,
+    query: Query<&DebugCollector>,
     flags: Res<DebugFlags>,
     mut gizmos: Gizmos,
 ) {
-    for (a, b, c) in query.iter() {
-        if let Some(a) = a {
+    for debug in query.iter() {
+        if let Some(skeleton) = &debug.skeleton {
             if flags.skeleton {
-                let debug_geometry = a.debug_data();
-                render_debug_geometry(&debug_geometry, &mut gizmos);
+                render_debug_geometry(skeleton, &mut gizmos);
             }
         }
-        if let Some(b) = b {
+        if let Some(strands) = &debug.strands {
             if flags.strands {
-                let debug_geometry = b.debug_data();
-                render_debug_geometry(&debug_geometry, &mut gizmos);
+                render_debug_geometry(strands, &mut gizmos);
             }
-        }
-        if let Some(c) = c {
-            let debug_geometry = c.debug_data();
-            render_debug_geometry(&debug_geometry, &mut gizmos);
         }
     }
 }

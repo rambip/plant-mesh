@@ -1,12 +1,12 @@
 # tubulin — procedural plant mesh generator
 # Python bindings are provided by the Rust extension _tubulin (built with maturin).
-from ._tubulin import build_demo_tree, demo_mesh
+from ._tubulin import build_demo_tree, demo_mesh, Seed, Skeleton, debug_to_json
 
 import os
 
 
 def _get_viewer_html(json_data: str) -> str:
-    """Generate HTML to display the tree mesh."""
+    """Generate HTML to display the tree mesh or debug geometry."""
 
     viewer_dir = os.path.dirname(os.path.abspath(__file__))
     decoder_path = os.path.join(viewer_dir, "viewer", "decoder.js")
@@ -52,8 +52,7 @@ class TreeMesh:
 
     def _repr_html_(self) -> str:
         """Render in Jupyter notebook."""
-        json_str = self._data.to_json(False)
-        return _get_viewer_html(json_str)
+        return _get_viewer_html(self._data.to_json(False))
 
     @property
     def points(self):
@@ -74,6 +73,19 @@ class TreeMesh:
     def triangles(self):
         """Triangle indices as numpy array."""
         return self._data.triangles
+
+
+class SkeletonWrapper:
+    """Wrapper around Skeleton with debug geometry for HTML representation."""
+
+    def __init__(self, skeleton, debug):
+        self._skeleton = skeleton
+        self._debug = debug
+
+    def _repr_html_(self) -> str:
+        """Render debug geometry in Jupyter notebook."""
+        debug_json = debug_to_json(self._debug, "skeleton")
+        return _get_viewer_html(debug_json)
 
 
 def grow(**config) -> TreeMesh:

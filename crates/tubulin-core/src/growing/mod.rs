@@ -1,6 +1,7 @@
 #[cfg(feature = "bevy")]
 use bevy::prelude::Component;
 
+use crate::VisualDebug;
 use glam::{Quat, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -112,6 +113,37 @@ impl PlantNode {
             c.register_node_properties(acc)
         }
     }
+
+    pub fn grow_skeleton(&self) -> TreeSkeleton {
+        let mut node_props = Vec::new();
+        self.register_node_properties(&mut node_props);
+        let mut node_info = Vec::new();
+        self.register_node_info(&mut node_info, 0);
+        TreeSkeleton {
+            node_info,
+            node_props,
+        }
+    }
+
+    pub fn grow_skeleton_debug<F>(&self, mut callback: F) -> TreeSkeleton
+    where
+        F: FnMut(crate::DebugGeometry),
+    {
+        let skeleton = self.grow_skeleton();
+        let debug_data = TreeSkeletonDebugData {
+            copy: skeleton.clone(),
+        };
+        callback(debug_data.debug_data());
+        skeleton
+    }
+
+    pub fn grow_skeleton_with_debug(&self) -> (TreeSkeleton, crate::DebugGeometry) {
+        let skeleton = self.grow_skeleton();
+        let debug_data = TreeSkeletonDebugData {
+            copy: skeleton.clone(),
+        };
+        (skeleton, debug_data.debug_data())
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -154,6 +186,41 @@ impl TreeSkeleton {
     }
     pub fn space_to_plane(&self, node_id: usize, v: Vec3) -> Vec2 {
         (self.orientation(node_id).inverse() * (v - self.position(node_id))).truncate()
+    }
+
+    pub fn grow_strands(
+        &self,
+        config: &crate::StrandsConfig,
+        rng: rand::rngs::StdRng,
+    ) -> crate::VolumetricTree {
+        let mut cache = crate::TrajectoryBuilder::new(rng);
+        cache.clear_for_tree(self);
+        cache.compute_trajectories(self, self.root(), config);
+        super::meshing::VolumetricTree {
+            trajectories: cache.trajectories.clone(),
+            particles_per_node: cache.particles_per_node.clone(),
+            tree: self.clone(),
+        }
+    }
+
+    pub fn grow_strands_debug<F>(
+        &self,
+        config: &crate::StrandsConfig,
+        rng: rand::rngs::StdRng,
+        mut callback: F,
+    ) -> crate::VolumetricTree
+    where
+        F: FnMut(crate::DebugGeometry),
+    {
+        let rng_for_debug = rng.clone();
+        let volumetric = self.grow_strands(config, rng);
+        let debug_data = crate::TrajectoryBuilder {
+            particles_per_node: volumetric.particles_per_node.clone(),
+            trajectories: volumetric.trajectories.clone(),
+            rng: rng_for_debug,
+        };
+        callback(debug_data.debug_data());
+        volumetric
     }
 }
 

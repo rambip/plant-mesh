@@ -11,9 +11,8 @@ use crate::meshing::algorithms::{
 pub use crate::meshing::mesh_builder::GeometryData;
 pub use crate::meshing::mesh_builder::MeshConfig;
 pub use crate::meshing::particles::StrandsConfig;
-use crate::meshing::particles::TrajectoryBuilder;
 use crate::utils::{split_slice_circular, FloatProducer};
-use crate::TreePipelinePhase;
+use crate::VisualDebug;
 
 pub mod algorithms;
 pub mod mesh_builder;
@@ -29,51 +28,38 @@ pub struct VolumetricTree {
     pub tree: TreeSkeleton,
 }
 
-impl TreePipelinePhase for VolumetricTree {
-    type Previous = TreeSkeleton;
-    type Config = StrandsConfig;
-    type Builder = TrajectoryBuilder;
-    fn generate_from(
-        prev: Self::Previous,
-        config: &Self::Config,
-        builder: &mut Self::Builder,
-    ) -> Self {
-        builder.clear_for_tree(&prev);
-        builder.compute_trajectories(&prev, prev.root(), config);
-        Self {
-            trajectories: builder.trajectories.clone(),
-            particles_per_node: builder.particles_per_node.clone(),
-            tree: prev,
-        }
-    }
-}
-
-impl TreePipelinePhase for GeometryData {
-    type Previous = VolumetricTree;
-    type Config = MeshConfig;
-    type Builder = GeometryData;
-    fn generate_from(
-        prev: Self::Previous,
-        config: &Self::Config,
-        builder: &mut Self::Builder,
-    ) -> Self {
-        let spline_index = SplineIndex::Local(0, 0.);
-        let points_base = prev.particles_per_node[0]
-            .iter()
-            .map(|&particle| extended_catmull_spline(&prev.trajectories[particle], spline_index));
-
-        let mut rng = builder.rng.clone();
-        let contour = builder.register_points_trunk(points_base, &mut rng);
-        builder.rng = rng;
-
-        builder.add_contour(&contour);
-        prev.compute_each_branch_recursive(0, 0., contour, builder, config);
-
-        std::mem::take(builder)
-    }
-}
-
 impl VolumetricTree {
+    pub fn build_mesh(&self, config: &MeshConfig, rng: rand::rngs::StdRng) -> GeometryData {
+        let mut cache = GeometryData::new(rng);
+        let spline_index = SplineIndex::Local(0, 0.);
+        let points_base = self.particles_per_node[0]
+            .iter()
+            .map(|&particle| extended_catmull_spline(&self.trajectories[particle], spline_index));
+
+        let mut rng = cache.rng.clone();
+        let contour = cache.register_points_trunk(points_base, &mut rng);
+        cache.rng = rng;
+
+        cache.add_contour(&contour);
+        self.compute_each_branch_recursive(0, 0., contour, &mut cache, config);
+
+        cache
+    }
+
+    pub fn build_mesh_debug<F>(
+        &self,
+        config: &MeshConfig,
+        rng: rand::rngs::StdRng,
+        mut callback: F,
+    ) -> GeometryData
+    where
+        F: FnMut(crate::DebugGeometry),
+    {
+        let geometry = self.build_mesh(config, rng.clone());
+        callback(geometry.debug_data());
+        geometry
+    }
+
     fn branch_is_spliting(&self, parent: usize, m_child: usize, s_child: usize, l: f32) -> bool {
         let depth = self.tree.depth(parent);
         let m_t = l / (self.tree.position(m_child) - self.tree.position(parent)).length();
