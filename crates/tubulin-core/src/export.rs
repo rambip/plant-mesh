@@ -136,7 +136,7 @@ fn base64_encode(bytes: &[u8]) -> String {
     result
 }
 
-pub struct TreeMeshExporter {
+pub struct TreeEncoder {
     pub buffers: HashMap<String, Buffer>,
     pub outputs: Outputs,
     pub debug: Option<DebugLayers>,
@@ -180,7 +180,7 @@ pub struct DebugLines {
     pub colors: Option<Expr>,
 }
 
-impl TreeMeshExporter {
+impl TreeEncoder {
     pub fn new() -> Self {
         Self {
             buffers: HashMap::new(),
@@ -384,7 +384,7 @@ impl TreeMeshExporter {
     }
 }
 
-impl Default for TreeMeshExporter {
+impl Default for TreeEncoder {
     fn default() -> Self {
         Self::new()
     }
@@ -428,7 +428,7 @@ fn serialize_expr(expr: &Expr) -> serde_json::Value {
     }
 }
 
-impl TreeMeshExporter {
+impl TreeEncoder {
     pub fn to_json(&self) -> String {
         let mut map = serde_json::Map::new();
         map.insert(
@@ -472,7 +472,7 @@ impl TreeMeshExporter {
 }
 
 pub fn create_cylinder_mesh() -> String {
-    let mut exporter = TreeMeshExporter::new();
+    let mut exporter = TreeEncoder::new();
 
     let pos_scale = 256i32;
     let t_scale = 1024i32;
@@ -790,7 +790,7 @@ mod tests {
     }
     #[test]
     fn test_tree_mesh_exporter() {
-        let mut exporter = TreeMeshExporter::new();
+        let mut exporter = TreeEncoder::new();
         exporter.add_immediate_buffer("test", &[1, 2, 3]);
         exporter.set_vertices(Expr::var("test"));
         exporter.set_normals(Expr::var("test"));
@@ -804,7 +804,7 @@ mod tests {
     }
     #[test]
     fn test_tree_mesh_exporter_with_colors() {
-        let mut exporter = TreeMeshExporter::new();
+        let mut exporter = TreeEncoder::new();
         exporter.add_immediate_buffer("verts", &[1, 2, 3]);
         exporter.add_immediate_buffer("colors", &[255, 0, 0, 255]);
 
@@ -820,7 +820,7 @@ mod tests {
     }
     #[test]
     fn test_debug_layers() {
-        let mut exporter = TreeMeshExporter::new();
+        let mut exporter = TreeEncoder::new();
 
         let mut debug_layers = DebugLayers {
             layers: HashMap::new(),
@@ -861,7 +861,7 @@ mod tests {
     fn test_add_debug_layer() {
         use crate::{DebugColor, DebugGeometry};
 
-        let mut exporter = TreeMeshExporter::new();
+        let mut exporter = TreeEncoder::new();
         let mut geometry = DebugGeometry::new();
 
         // Add a line

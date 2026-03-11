@@ -1,9 +1,16 @@
 #[cfg(feature = "bevy")]
 use bevy::prelude::Component;
 
+#[cfg(feature = "python")]
+use crate::export::Expr;
+#[cfg(feature = "python")]
+use crate::TreeEncoder;
+use crate::VisualDebug;
 use glam::Vec3;
 #[cfg(feature = "python")]
-use numpy::{IntoPyArray, PyArrayDyn};
+use numpy::IntoPyArray;
+#[cfg(feature = "python")]
+use numpy::PyArrayDyn;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -160,6 +167,104 @@ impl GeometryData {
             .into_dyn();
 
         array.into_pyarray(py)
+    }
+
+    fn to_json(&self, include_debug: bool) -> String {
+        use crate::export::Expr;
+        use std::collections::HashMap;
+
+        let mut encoder = TreeEncoder::new();
+
+        let quant_scale = 256i32;
+
+        let vx: Vec<i32> = self
+            .points
+            .iter()
+            .map(|p| (p.x * quant_scale as f32) as i32)
+            .collect();
+        let vy: Vec<i32> = self
+            .points
+            .iter()
+            .map(|p| (p.y * quant_scale as f32) as i32)
+            .collect();
+        let vz: Vec<i32> = self
+            .points
+            .iter()
+            .map(|p| (p.z * quant_scale as f32) as i32)
+            .collect();
+
+        let nx: Vec<i32> = self.normals.iter().map(|n| (n.x * 127.0) as i32).collect();
+        let ny: Vec<i32> = self.normals.iter().map(|n| (n.y * 127.0) as i32).collect();
+        let nz: Vec<i32> = self.normals.iter().map(|n| (n.z * 127.0) as i32).collect();
+
+        let cr: Vec<i32> = self.colors.iter().map(|c| (c[0] * 255.0) as i32).collect();
+        let cg: Vec<i32> = self.colors.iter().map(|c| (c[1] * 255.0) as i32).collect();
+        let cb: Vec<i32> = self.colors.iter().map(|c| (c[2] * 255.0) as i32).collect();
+        let ca: Vec<i32> = self.colors.iter().map(|c| (c[3] * 255.0) as i32).collect();
+
+        let ix: Vec<i32> = self.triangles.iter().map(|&t| t as i32).collect();
+        let iy: Vec<i32> = self.triangles.iter().map(|&t| t as i32).collect();
+        let iz: Vec<i32> = self.triangles.iter().map(|&t| t as i32).collect();
+
+        encoder.add_immediate_buffer("vx", &vx);
+        encoder.add_immediate_buffer("vy", &vy);
+        encoder.add_immediate_buffer("vz", &vz);
+
+        encoder.add_immediate_buffer("nx", &nx);
+        encoder.add_immediate_buffer("ny", &ny);
+        encoder.add_immediate_buffer("nz", &nz);
+
+        if !self.colors.is_empty() {
+            encoder.add_immediate_buffer("cr", &cr);
+            encoder.add_immediate_buffer("cg", &cg);
+            encoder.add_immediate_buffer("cb", &cb);
+            encoder.add_immediate_buffer("ca", &ca);
+        }
+
+        encoder.add_immediate_buffer("ix", &ix);
+        encoder.add_immediate_buffer("iy", &iy);
+        encoder.add_immediate_buffer("iz", &iz);
+
+        let vertices = Expr::divp2(
+            Expr::vec3(Expr::var("vx"), Expr::var("vy"), Expr::var("vz")),
+            8,
+        );
+        let normals = Expr::divp2(
+            Expr::vec3(Expr::var("nx"), Expr::var("ny"), Expr::var("nz")),
+            7,
+        );
+        let triangles = Expr::triangle(Expr::var("ix"), Expr::var("iy"), Expr::var("iz"));
+
+        encoder.set_vertices(vertices);
+        encoder.set_normals(normals);
+        encoder.set_triangles(triangles);
+
+        if !self.colors.is_empty() {
+            let colors = Expr::divp2(
+                Expr::vec4(
+                    Expr::var("cr"),
+                    Expr::var("cg"),
+                    Expr::var("cb"),
+                    Expr::var("ca"),
+                ),
+                8,
+            );
+            encoder.set_colors(colors);
+        }
+
+        if include_debug {
+            let debug_data = self.debug_data();
+            let mut debug_layers = crate::DebugLayers {
+                layers: HashMap::new(),
+            };
+            debug_layers.layers.insert(
+                "mesh".to_string(),
+                encoder.add_debug_layer("mesh", &debug_data),
+            );
+            encoder.set_debug(debug_layers);
+        }
+
+        encoder.to_json()
     }
 }
 

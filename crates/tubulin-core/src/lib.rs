@@ -58,7 +58,7 @@ impl DebugGeometry {
     }
 }
 
-pub use export::{DebugLayer, DebugLayers, DebugLines, DebugPoints, TreeMeshExporter};
+pub use export::{DebugLayer, DebugLayers, DebugLines, DebugPoints, TreeEncoder};
 
 pub trait VisualDebug {
     fn debug_data(&self) -> DebugGeometry;
@@ -172,7 +172,7 @@ impl TreePipelinePhase for TrajectoryBuilder {
 
 #[cfg(feature = "python")]
 #[pyo3::pymodule]
-mod plant_core {
+mod _tubulin {
     use crate::{GeometryData, TreeConfig};
     #[pyo3::pyfunction]
     pub fn build_demo_tree(birth_power: f32) -> GeometryData {
