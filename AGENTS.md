@@ -49,6 +49,38 @@ Procedural plant mesh generator for a computer geometry course. Pipeline: grow t
 - **Run example:** `cargo run --example <example_name>`
 - **Compile report:** `typst compile docs/report.typ docs/report.pdf` (requires `typst`)
 - **Python build:** `maturin develop` (from repo root, requires Python venv)
+- **Bundle JS viewer:** `bun build js/src/render.js --outdir=js/dist`
+
+## Python API
+
+All Python bindings live in `crates/tubulin-core/src/python.rs`. The API follows a pipeline pattern:
+
+```python
+import tubulin
+
+seed = tubulin.Seed()
+node = seed.grow_plant()
+skeleton = node.grow_skeleton()        # returns Skeleton
+volumetric = skeleton.grow_strands()    # returns VolumetricTree  
+mesh = volumetric.build_mesh()          # returns TreeMesh
+
+skeleton._repr_html_()  # renders skeleton debug lines in notebook
+mesh._repr_html_()      # renders mesh in notebook
+```
+
+### Design Patterns for pyo3
+
+- **Newtype wrappers**: `pub struct PyX(crate::X)` — keeps Rust types clean, adds pyclass in python.rs
+- **Class naming**: Use `#[pyclass(name = "X")]` to expose different Rust names to Python
+- **Config via kwargs**: Use `#[pyo3(signature = (*, param=default))]` for methods accepting config
+- **Generate JSON in Rust**: Don't return complex types to Python; use `to_json()` methods that return JSON strings
+- **Bundle JS in Rust**: Use `include_str!("../../../js/dist/render.js")` to embed the viewer
+
+### Adding New Python Classes
+
+1. Create newtype in python.rs: `#[pyclass(name = "X")] pub struct PyX(crate::X)`
+2. Add `#[pymethods]` impl block with methods
+3. Register in `_tubulin` pymodule: `m.add_class::<PyX>()?`
 
 ## Planning & Documentation
 - **Roadmap:** Read and update [ROADMAP.md](ROADMAP.md) regularly.
