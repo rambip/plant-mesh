@@ -78,8 +78,8 @@ pub fn rice_encode(values: &[i32], k: u32) -> Vec<u8> {
         let quotient = value >> k;
         let remainder = value & ((1 << k) - 1);
 
-        for _ in 0..quotient {
-            bits.push(1);
+        if quotient > 0 {
+            bits.extend(std::iter::repeat_n(1, quotient as usize));
         }
         bits.push(0);
         for i in (0..k).rev() {
@@ -87,7 +87,7 @@ pub fn rice_encode(values: &[i32], k: u32) -> Vec<u8> {
         }
     }
 
-    while bits.len() % 8 != 0 {
+    while !bits.len().is_multiple_of(8) {
         bits.push(0);
     }
 
@@ -858,37 +858,39 @@ mod tests {
         assert!(parsed["debug"].is_object());
     }
     #[test]
-fn test_add_debug_layer() {
-    use crate::{DebugColor, DebugGeometry};
+    fn test_add_debug_layer() {
+        use crate::{DebugColor, DebugGeometry};
 
-    let mut exporter = TreeMeshExporter::new();
-    let mut geometry = DebugGeometry::new();
+        let mut exporter = TreeMeshExporter::new();
+        let mut geometry = DebugGeometry::new();
 
-    // Add a line
-    geometry.lines.push((
-        glam::Vec3::new(0.0, 0.0, 0.0),
-        glam::Vec3::new(1.0, 1.0, 1.0),
-        DebugColor::rgb(1.0, 0.0, 0.0),
-    ));
+        // Add a line
+        geometry.lines.push((
+            glam::Vec3::new(0.0, 0.0, 0.0),
+            glam::Vec3::new(1.0, 1.0, 1.0),
+            DebugColor::rgb(1.0, 0.0, 0.0),
+        ));
 
-    // Add a point
-    geometry.points.push((
-        glam::Vec3::new(0.5, 0.5, 0.5),
-        DebugColor::rgb(0.0, 1.0, 0.0),
-    ));
+        // Add a point
+        geometry.points.push((
+            glam::Vec3::new(0.5, 0.5, 0.5),
+            DebugColor::rgb(0.0, 1.0, 0.0),
+        ));
 
-    let layer = exporter.add_debug_layer("test_layer", &geometry);
+        let layer = exporter.add_debug_layer("test_layer", &geometry);
 
-    // Need to set debug with the layer
-    let mut debug_layers = DebugLayers { layers: HashMap::new() };
-    debug_layers.layers.insert("test_layer".to_string(), layer);
-    exporter.set_debug(debug_layers);
+        // Need to set debug with the layer
+        let mut debug_layers = DebugLayers {
+            layers: HashMap::new(),
+        };
+        debug_layers.layers.insert("test_layer".to_string(), layer);
+        exporter.set_debug(debug_layers);
 
-    let json = exporter.to_json();
-    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let json = exporter.to_json();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Check debug section has the layer
-    assert!(parsed["debug"]["test_layer"]["lines"].is_object());
-    assert!(parsed["debug"]["test_layer"]["points"].is_object());
-}
+        // Check debug section has the layer
+        assert!(parsed["debug"]["test_layer"]["lines"].is_object());
+        assert!(parsed["debug"]["test_layer"]["points"].is_object());
+    }
 }

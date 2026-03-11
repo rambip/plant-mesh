@@ -164,7 +164,6 @@ impl VolumetricTree {
 
             let result: Vec<Vec3> =
                 convex_hull_graham(&projected_points, Some(config.interior_angle))
-                    .into_iter()
                     .map(|i| points[i])
                     .collect();
 
@@ -264,7 +263,6 @@ impl VolumetricTree {
             .collect();
 
         let result: Vec<Vec3> = convex_hull_graham(&projected_points, Some(config.interior_angle))
-            .into_iter()
             .map(|i| points[i])
             .collect();
 
@@ -274,7 +272,7 @@ impl VolumetricTree {
 
         mesh.add_contour(&current_contour);
         let triangles =
-            mesh_between_contours(&mesh.points, &previous_contour, &current_contour, true);
+            mesh_between_contours(&mesh.points, previous_contour, &current_contour, true);
         mesh.register_triangles(&triangles);
         *previous_contour = current_contour;
     }

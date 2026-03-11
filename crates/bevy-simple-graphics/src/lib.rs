@@ -89,7 +89,7 @@ where
         let Some(gpu_mesh) = meshes.into_inner().get(*id) else {
             return RenderCommandResult::Skip;
         };
-        let Some(vertex_buffer_slice) = mesh_allocator.mesh_vertex_slice(&id) else {
+        let Some(vertex_buffer_slice) = mesh_allocator.mesh_vertex_slice(id) else {
             return RenderCommandResult::Skip;
         };
 
@@ -101,7 +101,7 @@ where
             return RenderCommandResult::Failure("mesh buffer is not indexed wtf");
         };
 
-        let index_buffer_slice = mesh_allocator.mesh_index_slice(&id).unwrap();
+        let index_buffer_slice = mesh_allocator.mesh_index_slice(id).unwrap();
 
         // Tell the GPU where the vertices are.
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
@@ -149,7 +149,7 @@ impl Plugin for SimpleMeshPipelinePlugin {
     }
     fn finish(&self, app: &mut App) {
         let shader: Handle<Shader> = app.world_mut().load_asset(self.shader_path);
-        let pipeline = CustomMeshPipeline::from_world_and_shader(&mut app.world_mut(), shader);
+        let pipeline = CustomMeshPipeline::from_world_and_shader(app.world_mut(), shader);
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };

@@ -32,7 +32,7 @@ pub fn extended_catmull_spline(points: &[Vec3], pos: SplineIndex) -> Vec3 {
         } else {
             points[i0 - 1]
         },
-        points[i0 + 0],
+        points[i0],
         points[i0 + 1],
         if i0 == n - 2 {
             2. * points[n - 1] - points[n - 2]
@@ -98,7 +98,7 @@ pub fn convex_hull_graham(
 
     assert!(n >= 3, "not enough particles to compute convex hull");
     let mut sorted_points = {
-        let mut result: Vec<usize> = (0..n).into_iter().collect();
+        let mut result: Vec<usize> = (0..n).collect();
         result.sort_by(compare_angle);
         result.into_iter().cycle()
     };
@@ -143,8 +143,8 @@ pub fn mesh_between_contours(
     c2: &[usize],
     close_contour: bool,
 ) -> Vec<usize> {
-    assert!(c1.len() > 0);
-    assert!(c2.len() > 0);
+    assert!(!c1.is_empty());
+    assert!(!c2.is_empty());
     let mut f1_idx = 0;
     let mut f2_idx = 0;
     let mut result: Vec<usize> = Vec::new();

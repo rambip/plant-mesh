@@ -160,7 +160,7 @@ fn average<I: IntoIterator<Item = Vec2>>(i: I) -> Option<Vec2> {
     }
 }
 
-pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig) {
+pub fn spread_points(points: &mut [Vec2], radius: f32, config: &StrandsConfig) {
     let n = points.len();
     let mut pressures = vec![Vec2::ZERO; n];
     let repulsion = config.repulsion * radius / config.interaction_radius / (n as f32).sqrt();
@@ -180,14 +180,14 @@ pub fn spread_points(points: &mut Vec<Vec2>, radius: f32, config: &StrandsConfig
     let kernel = CubicKernel { h: d };
 
     let max_radius = points.iter().map(|x| x.length()).reduce(f32::max).unwrap();
-    for i in 0..n {
-        points[i] *= 0.9 * radius / max_radius
+    for point in points.iter_mut() {
+        *point *= 0.9 * radius / max_radius
     }
 
     for _ in 0..config.n_steps {
         grid.clear();
-        for i in 0..n {
-            grid.insert(points[i], i)
+        for (i, point) in points.iter().enumerate() {
+            grid.insert(*point, i)
         }
         for i in 0..n {
             neighbourghs[i] = grid.query_rect(points[i] - diag, points[i] + diag, |j| {

@@ -162,6 +162,12 @@ pub struct TreeSkeletonDebugData {
     pub copy: TreeSkeleton,
 }
 
+impl Default for TreeSkeletonDebugData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TreeSkeletonDebugData {
     pub fn new() -> Self {
         Self {
