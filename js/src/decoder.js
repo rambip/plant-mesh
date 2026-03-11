@@ -249,9 +249,6 @@ class TreeMeshDecoder {
         default:
           throw new Error(`Unknown operator: ${op}`);
       }
-    }
-
-    throw new Error(`Missing args for operator: ${op}`);
   }
 
   _cumsum(buffer) {
