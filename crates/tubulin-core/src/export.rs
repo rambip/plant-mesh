@@ -1,4 +1,4 @@
-use glam::Vec3;
+use serde::{ser::SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ pub struct Buffer {
     pub length: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Var(String),
     Cumsum(Box<Expr>),
@@ -23,6 +23,51 @@ pub enum Expr {
     Concat(Vec<Expr>),
     Interleave(Vec<Expr>),
     Triangle(Box<Expr>, Box<Expr>, Box<Expr>),
+}
+
+impl Serialize for Expr {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        if let Expr::Var(name) = self {
+            return s.serialize_str(name);
+        }
+        let mut st = s.serialize_struct("Expr", 2)?;
+        match self {
+            Expr::Var(_) => unreachable!(),
+            Expr::Cumsum(e) => {
+                st.serialize_field("op", "cumsum")?;
+                st.serialize_field("args", &[e])?;
+            }
+            Expr::Divp2(e, n) => {
+                st.serialize_field("op", "divp2")?;
+                st.serialize_field("args", &(e, n))?; // tuple → array
+            }
+            Expr::Vec3(a, b, c) => {
+                st.serialize_field("op", "vec3")?;
+                st.serialize_field("args", &[a, b, c])?;
+            }
+            Expr::Vec4(a, b, c, d) => {
+                st.serialize_field("op", "vec4")?;
+                st.serialize_field("args", &[a, b, c, d])?;
+            }
+            Expr::Spline(a, b) => {
+                st.serialize_field("op", "spline")?;
+                st.serialize_field("args", &[a, b])?;
+            }
+            Expr::Concat(v) => {
+                st.serialize_field("op", "concat")?;
+                st.serialize_field("args", v)?;
+            }
+            Expr::Interleave(v) => {
+                st.serialize_field("op", "interleave")?;
+                st.serialize_field("args", v)?;
+            }
+            Expr::Triangle(a, b, c) => {
+                st.serialize_field("op", "triangle")?;
+                st.serialize_field("args", &[a, b, c])?;
+            }
+        }
+        st.end()
+    }
 }
 
 impl Expr {
@@ -143,7 +188,7 @@ pub struct TreeEncoder {
     pub debug: Option<DebugLayers>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Outputs {
     pub vertices: Expr,
     pub normals: Expr,
@@ -152,13 +197,13 @@ pub struct Outputs {
     pub triangles: Expr,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DebugLayers {
     #[serde(flatten)]
     pub layers: HashMap<String, DebugLayer>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DebugLayer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub points: Option<DebugPoints>,
@@ -166,14 +211,14 @@ pub struct DebugLayer {
     pub lines: Option<DebugLines>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DebugPoints {
     pub positions: Expr,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub colors: Option<Expr>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DebugLines {
     pub starts: Expr,
     pub ends: Expr,
@@ -184,12 +229,20 @@ pub struct DebugLines {
 impl TreeEncoder {
     pub fn new() -> Self {
         Self {
-            buffers: HashMap::new(),
+            buffers: HashMap::from([(
+                "empty".to_string(),
+                Buffer {
+                    k: 0,
+                    offset: Some(0),
+                    length: Some(0),
+                    data: String::new(),
+                },
+            )]),
             outputs: Outputs {
-                vertices: Expr::var("_"),
-                normals: Expr::var("_"),
+                vertices: Expr::var("empty"),
+                normals: Expr::var("empty"),
                 colors: None,
-                triangles: Expr::var("_"),
+                triangles: Expr::var("empty"),
             },
             debug: None,
         }
@@ -625,6 +678,8 @@ pub fn create_cylinder_mesh() -> String {
     exporter.add_immediate_buffer("skel_color_g", &skel_color_g);
     exporter.add_immediate_buffer("skel_color_b", &skel_color_b);
 
+    exporter.add_immediate_buffer("empty", &[]);
+
     let vertices = Expr::concat(vec![Expr::interleave(spine_spline_exprs)]);
 
     let normals = Expr::concat(vec![Expr::interleave(spine_nspline_exprs)]);
@@ -634,7 +689,7 @@ pub fn create_cylinder_mesh() -> String {
     exporter.set_vertices(vertices);
     exporter.set_normals(normals);
     exporter.set_colors(colors);
-    exporter.set_triangles(Expr::var("_"));
+    exporter.set_triangles(Expr::var("empty"));
 
     let mut debug_layers = DebugLayers {
         layers: HashMap::new(),

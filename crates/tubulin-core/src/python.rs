@@ -426,187 +426,198 @@ fn embed_viewer(json_data: &str) -> String {
     )
 }
 
-#[pyfunction]
-pub fn demo_mesh() -> String {
-    let mut encoder = crate::TreeEncoder::new();
+#[pyclass(name = "DemoMesh")]
+pub struct PyDemoMesh {}
 
-    let t_scale = 1024i32;
-    let n_splines = 8;
-    let n_samples = 8;
-    let ncp = 4;
-
-    let cp_z = [-0.5f32, -1.0 / 6.0, 1.0 / 6.0, 0.5];
-    let cp_r = [0.5f32, 0.25, 0.25, 0.5];
-
-    let mut spine_t = Vec::with_capacity(n_samples);
-    for i in 0..n_samples {
-        spine_t
-            .push(((i as f32 / (n_samples - 1) as f32) * (ncp - 1) as f32 * t_scale as f32) as i32);
+#[pymethods]
+impl PyDemoMesh {
+    #[new]
+    pub fn new() -> PyDemoMesh {
+        PyDemoMesh {}
     }
-    encoder.add_immediate_buffer("spine_t", &spine_t);
+    pub fn _repr_html_(&self) -> String {
+        let mut encoder = crate::TreeEncoder::new();
 
-    for s in 0..n_splines {
-        let angle = (s as f32 / n_splines as f32) * std::f32::consts::PI * 2.0;
-        let cos_a = angle.cos();
-        let sin_a = angle.sin();
+        let t_scale = 1024i32;
+        let n_splines = 8;
+        let n_samples = 8;
+        let ncp = 4;
 
-        let cpx: Vec<i32> = cp_r.iter().map(|r| (cos_a * r * 256.0) as i32).collect();
-        let cpy: Vec<i32> = cp_r.iter().map(|r| (sin_a * r * 256.0) as i32).collect();
-        let cpz: Vec<i32> = cp_z.iter().map(|z| (z * 256.0) as i32).collect();
+        let cp_z = [-0.5f32, -1.0 / 6.0, 1.0 / 6.0, 0.5];
+        let cp_r = [0.5f32, 0.25, 0.25, 0.5];
 
-        let cnx: Vec<i32> = cp_r.iter().map(|_| (cos_a * 256.0) as i32).collect();
-        let cny: Vec<i32> = cp_r.iter().map(|_| (sin_a * 256.0) as i32).collect();
-        let cnz: Vec<i32> = vec![0; ncp];
-
-        let ccr: Vec<i32> = cp_z.iter().map(|z| (((z + 0.5) * 256.0) as i32)).collect();
-        let ccg: Vec<i32> = cp_z
-            .iter()
-            .map(|z| ((0.3 + 0.4 * (z + 0.5)) * 256.0) as i32)
-            .collect();
-        let ccb: Vec<i32> = cp_z
-            .iter()
-            .map(|z| ((0.5 + 0.5 * (z + 0.5)) * 256.0) as i32)
-            .collect();
-        let cca: Vec<i32> = vec![256; ncp];
-
-        let delta = |arr: &[i32]| -> Vec<i32> {
-            arr.iter()
-                .enumerate()
-                .map(|(i, &v)| if i == 0 { v } else { v - arr[i - 1] })
-                .collect()
-        };
-
-        encoder.add_delta_buffer(&format!("sp{}_x", s), &delta(&cpx), 2);
-        encoder.add_delta_buffer(&format!("sp{}_y", s), &delta(&cpy), 2);
-        encoder.add_delta_buffer(&format!("sp{}_z", s), &delta(&cpz), 2);
-        encoder.add_immediate_buffer(&format!("sp{}_nx", s), &cnx);
-        encoder.add_immediate_buffer(&format!("sp{}_ny", s), &cny);
-        encoder.add_immediate_buffer(&format!("sp{}_nz", s), &cnz);
-        encoder.add_immediate_buffer(&format!("sp{}_cr", s), &ccr);
-        encoder.add_immediate_buffer(&format!("sp{}_cg", s), &ccg);
-        encoder.add_immediate_buffer(&format!("sp{}_cb", s), &ccb);
-        encoder.add_immediate_buffer(&format!("sp{}_ca", s), &cca);
-    }
-
-    let mut vert_exprs = Vec::new();
-    let mut norm_exprs = Vec::new();
-    let mut color_exprs = Vec::new();
-
-    let t_expr = crate::export::Expr::divp2(crate::export::Expr::var("spine_t"), 10);
-
-    for s in 0..n_splines {
-        let bx = format!("sp{}_x", s);
-        let by = format!("sp{}_y", s);
-        let bz = format!("sp{}_z", s);
-        let bnx = format!("sp{}_nx", s);
-        let bny = format!("sp{}_ny", s);
-        let bnz = format!("sp{}_nz", s);
-        let bcr = format!("sp{}_cr", s);
-        let bcg = format!("sp{}_cg", s);
-        let bcb = format!("sp{}_cb", s);
-        let bca = format!("sp{}_ca", s);
-
-        let cp_vec3 = |xb: &str, yb: &str, zb: &str| -> crate::export::Expr {
-            crate::export::Expr::divp2(
-                crate::export::Expr::vec3(
-                    crate::export::Expr::cumsum(crate::export::Expr::var(xb)),
-                    crate::export::Expr::cumsum(crate::export::Expr::var(yb)),
-                    crate::export::Expr::cumsum(crate::export::Expr::var(zb)),
-                ),
-                8,
-            )
-        };
-
-        let cp_vec4 = |rb: &str, gb: &str, bb: &str, ab: &str| -> crate::export::Expr {
-            crate::export::Expr::divp2(
-                crate::export::Expr::vec4(
-                    crate::export::Expr::cumsum(crate::export::Expr::var(rb)),
-                    crate::export::Expr::cumsum(crate::export::Expr::var(gb)),
-                    crate::export::Expr::cumsum(crate::export::Expr::var(bb)),
-                    crate::export::Expr::cumsum(crate::export::Expr::var(ab)),
-                ),
-                8,
-            )
-        };
-
-        let spline_expr = crate::export::Expr::spline(cp_vec3(&bx, &by, &bz), t_expr.clone());
-        let nspline_expr = crate::export::Expr::spline(cp_vec3(&bnx, &bny, &bnz), t_expr.clone());
-        let cspline_expr =
-            crate::export::Expr::spline(cp_vec4(&bcr, &bcg, &bcb, &bca), t_expr.clone());
-
-        vert_exprs.push(spline_expr);
-        norm_exprs.push(nspline_expr);
-        color_exprs.push(cspline_expr);
-    }
-
-    let vertices = crate::export::Expr::interleave(vert_exprs);
-    let normals = crate::export::Expr::interleave(norm_exprs);
-    let colors = crate::export::Expr::interleave(color_exprs);
-
-    encoder.set_vertices(vertices);
-    encoder.set_normals(normals);
-    encoder.set_colors(colors);
-
-    let n_verts = n_samples * n_splines;
-    let mut indices_i = Vec::new();
-    let mut indices_j = Vec::new();
-    let mut indices_k = Vec::new();
-
-    for i in 0..n_samples - 1 {
-        for s in 0..n_splines {
-            let a = i * n_splines + s;
-            let b = i * n_splines + (s + 1) % n_splines;
-            let c = (i + 1) * n_splines + s;
-            let d = (i + 1) * n_splines + (s + 1) % n_splines;
-
-            indices_i.push(a as i32);
-            indices_j.push(c as i32);
-            indices_k.push(b as i32);
-
-            indices_i.push(b as i32);
-            indices_j.push(c as i32);
-            indices_k.push(d as i32);
+        let mut spine_t = Vec::with_capacity(n_samples);
+        for i in 0..n_samples {
+            spine_t.push(
+                ((i as f32 / (n_samples - 1) as f32) * (ncp - 1) as f32 * t_scale as f32) as i32,
+            );
         }
+        encoder.add_immediate_buffer("spine_t", &spine_t);
+
+        for s in 0..n_splines {
+            let angle = (s as f32 / n_splines as f32) * std::f32::consts::PI * 2.0;
+            let cos_a = angle.cos();
+            let sin_a = angle.sin();
+
+            let cpx: Vec<i32> = cp_r.iter().map(|r| (cos_a * r * 256.0) as i32).collect();
+            let cpy: Vec<i32> = cp_r.iter().map(|r| (sin_a * r * 256.0) as i32).collect();
+            let cpz: Vec<i32> = cp_z.iter().map(|z| (z * 256.0) as i32).collect();
+
+            let cnx: Vec<i32> = cp_r.iter().map(|_| (cos_a * 256.0) as i32).collect();
+            let cny: Vec<i32> = cp_r.iter().map(|_| (sin_a * 256.0) as i32).collect();
+            let cnz: Vec<i32> = vec![0; ncp];
+
+            let ccr: Vec<i32> = cp_z.iter().map(|z| (((z + 0.5) * 256.0) as i32)).collect();
+            let ccg: Vec<i32> = cp_z
+                .iter()
+                .map(|z| ((0.3 + 0.4 * (z + 0.5)) * 256.0) as i32)
+                .collect();
+            let ccb: Vec<i32> = cp_z
+                .iter()
+                .map(|z| ((0.5 + 0.5 * (z + 0.5)) * 256.0) as i32)
+                .collect();
+            let cca: Vec<i32> = vec![256; ncp];
+
+            let delta = |arr: &[i32]| -> Vec<i32> {
+                arr.iter()
+                    .enumerate()
+                    .map(|(i, &v)| if i == 0 { v } else { v - arr[i - 1] })
+                    .collect()
+            };
+
+            encoder.add_delta_buffer(&format!("sp{}_x", s), &delta(&cpx), 2);
+            encoder.add_delta_buffer(&format!("sp{}_y", s), &delta(&cpy), 2);
+            encoder.add_delta_buffer(&format!("sp{}_z", s), &delta(&cpz), 2);
+            encoder.add_immediate_buffer(&format!("sp{}_nx", s), &cnx);
+            encoder.add_immediate_buffer(&format!("sp{}_ny", s), &cny);
+            encoder.add_immediate_buffer(&format!("sp{}_nz", s), &cnz);
+            encoder.add_immediate_buffer(&format!("sp{}_cr", s), &ccr);
+            encoder.add_immediate_buffer(&format!("sp{}_cg", s), &ccg);
+            encoder.add_immediate_buffer(&format!("sp{}_cb", s), &ccb);
+            encoder.add_immediate_buffer(&format!("sp{}_ca", s), &cca);
+        }
+
+        let mut vert_exprs = Vec::new();
+        let mut norm_exprs = Vec::new();
+        let mut color_exprs = Vec::new();
+
+        let t_expr = crate::export::Expr::divp2(crate::export::Expr::var("spine_t"), 10);
+
+        for s in 0..n_splines {
+            let bx = format!("sp{}_x", s);
+            let by = format!("sp{}_y", s);
+            let bz = format!("sp{}_z", s);
+            let bnx = format!("sp{}_nx", s);
+            let bny = format!("sp{}_ny", s);
+            let bnz = format!("sp{}_nz", s);
+            let bcr = format!("sp{}_cr", s);
+            let bcg = format!("sp{}_cg", s);
+            let bcb = format!("sp{}_cb", s);
+            let bca = format!("sp{}_ca", s);
+
+            let cp_vec3 = |xb: &str, yb: &str, zb: &str| -> crate::export::Expr {
+                crate::export::Expr::divp2(
+                    crate::export::Expr::vec3(
+                        crate::export::Expr::cumsum(crate::export::Expr::var(xb)),
+                        crate::export::Expr::cumsum(crate::export::Expr::var(yb)),
+                        crate::export::Expr::cumsum(crate::export::Expr::var(zb)),
+                    ),
+                    8,
+                )
+            };
+
+            let cp_vec4 = |rb: &str, gb: &str, bb: &str, ab: &str| -> crate::export::Expr {
+                crate::export::Expr::divp2(
+                    crate::export::Expr::vec4(
+                        crate::export::Expr::cumsum(crate::export::Expr::var(rb)),
+                        crate::export::Expr::cumsum(crate::export::Expr::var(gb)),
+                        crate::export::Expr::cumsum(crate::export::Expr::var(bb)),
+                        crate::export::Expr::cumsum(crate::export::Expr::var(ab)),
+                    ),
+                    8,
+                )
+            };
+
+            let spline_expr = crate::export::Expr::spline(cp_vec3(&bx, &by, &bz), t_expr.clone());
+            let nspline_expr =
+                crate::export::Expr::spline(cp_vec3(&bnx, &bny, &bnz), t_expr.clone());
+            let cspline_expr =
+                crate::export::Expr::spline(cp_vec4(&bcr, &bcg, &bcb, &bca), t_expr.clone());
+
+            vert_exprs.push(spline_expr);
+            norm_exprs.push(nspline_expr);
+            color_exprs.push(cspline_expr);
+        }
+
+        let vertices = crate::export::Expr::interleave(vert_exprs);
+        let normals = crate::export::Expr::interleave(norm_exprs);
+        let colors = crate::export::Expr::interleave(color_exprs);
+
+        encoder.set_vertices(vertices);
+        encoder.set_normals(normals);
+        encoder.set_colors(colors);
+
+        let n_verts = n_samples * n_splines;
+        let mut indices_i = Vec::new();
+        let mut indices_j = Vec::new();
+        let mut indices_k = Vec::new();
+
+        for i in 0..n_samples - 1 {
+            for s in 0..n_splines {
+                let a = i * n_splines + s;
+                let b = i * n_splines + (s + 1) % n_splines;
+                let c = (i + 1) * n_splines + s;
+                let d = (i + 1) * n_splines + (s + 1) % n_splines;
+
+                indices_i.push(a as i32);
+                indices_j.push(c as i32);
+                indices_k.push(b as i32);
+
+                indices_i.push(b as i32);
+                indices_j.push(c as i32);
+                indices_k.push(d as i32);
+            }
+        }
+
+        let mut delta_i = Vec::new();
+        let mut delta_j = Vec::new();
+        let mut delta_k = Vec::new();
+        let mut prev_i = 0i32;
+        let mut prev_j = 0i32;
+        let mut prev_k = 0i32;
+
+        for t in 0..indices_i.len() {
+            delta_i.push(indices_i[t] - prev_i);
+            delta_j.push(indices_j[t] - prev_j);
+            delta_k.push(indices_k[t] - prev_k);
+            prev_i = indices_i[t];
+            prev_j = indices_j[t];
+            prev_k = indices_k[t];
+        }
+
+        encoder.add_delta_buffer("indices_i", &delta_i, 2);
+        encoder.add_delta_buffer("indices_j", &delta_j, 2);
+        encoder.add_delta_buffer("indices_k", &delta_k, 2);
+
+        let triangles = crate::export::Expr::triangle(
+            crate::export::Expr::cumsum(crate::export::Expr::var("indices_i")),
+            crate::export::Expr::cumsum(crate::export::Expr::var("indices_j")),
+            crate::export::Expr::cumsum(crate::export::Expr::var("indices_k")),
+        );
+        encoder.set_triangles(triangles);
+
+        let debug_geom = crate::DebugGeometry::new();
+        let mut debug_layers = crate::DebugLayers {
+            layers: std::collections::HashMap::new(),
+        };
+        debug_layers.layers.insert(
+            "skeleton".to_string(),
+            encoder.add_debug_layer("skeleton", &debug_geom),
+        );
+        encoder.set_debug(debug_layers);
+
+        embed_viewer(&encoder.to_json())
     }
-
-    let mut delta_i = Vec::new();
-    let mut delta_j = Vec::new();
-    let mut delta_k = Vec::new();
-    let mut prev_i = 0i32;
-    let mut prev_j = 0i32;
-    let mut prev_k = 0i32;
-
-    for t in 0..indices_i.len() {
-        delta_i.push(indices_i[t] - prev_i);
-        delta_j.push(indices_j[t] - prev_j);
-        delta_k.push(indices_k[t] - prev_k);
-        prev_i = indices_i[t];
-        prev_j = indices_j[t];
-        prev_k = indices_k[t];
-    }
-
-    encoder.add_delta_buffer("indices_i", &delta_i, 2);
-    encoder.add_delta_buffer("indices_j", &delta_j, 2);
-    encoder.add_delta_buffer("indices_k", &delta_k, 2);
-
-    let triangles = crate::export::Expr::triangle(
-        crate::export::Expr::cumsum(crate::export::Expr::var("indices_i")),
-        crate::export::Expr::cumsum(crate::export::Expr::var("indices_j")),
-        crate::export::Expr::cumsum(crate::export::Expr::var("indices_k")),
-    );
-    encoder.set_triangles(triangles);
-
-    let debug_geom = crate::DebugGeometry::new();
-    let mut debug_layers = crate::DebugLayers {
-        layers: std::collections::HashMap::new(),
-    };
-    debug_layers.layers.insert(
-        "skeleton".to_string(),
-        encoder.add_debug_layer("skeleton", &debug_geom),
-    );
-    encoder.set_debug(debug_layers);
-
-    encoder.to_json()
 }
 
 #[pymodule]
@@ -617,10 +628,6 @@ fn _tubulin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVolumetricTree>()?;
     m.add_class::<PyGeometryData>()?;
     m.add_class::<PyDebugData>()?;
-    m.add_function(wrap_pyfunction!(build_demo_tree, m)?)?;
-    m.add_function(wrap_pyfunction!(demo_mesh, m)?)?;
-    m.add_function(wrap_pyfunction!(debug_to_json, m)?)?;
-    m.add_function(wrap_pyfunction!(skeleton_to_json, m)?)?;
-    m.add_function(wrap_pyfunction!(debug_data_to_json, m)?)?;
+    m.add_class::<PyDemoMesh>()?;
     Ok(())
 }

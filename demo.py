@@ -6,21 +6,32 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    from tubulin import DemoMesh, grow
+    from tubulin import DemoMesh
 
-    return DemoMesh, grow
+    return (DemoMesh,)
 
 
 @app.cell
 def _(DemoMesh):
-    mesh = DemoMesh()
-    mesh
+    DemoMesh()
     return
 
 
 @app.cell
-def _(grow):
-    grow()
+def _(tubulin):
+    sk = tubulin.Seed().grow_plant().grow_skeleton().grow_strands()
+    return (sk,)
+
+
+@app.cell
+def _(sk):
+    sk
+    return
+
+
+@app.cell
+def _(sk, skeleton_to_json):
+    print(_get_viewer_html(skeleton_to_json(sk)))
     return
 
 
