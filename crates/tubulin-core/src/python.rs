@@ -427,19 +427,6 @@ fn embed_viewer(json_data: &str) -> String {
 }
 
 #[pyfunction]
-pub fn build_demo_tree() -> PyGeometryData {
-    let geometry = crate::GeometryData::build_from_config(
-        &crate::TreeConfig {
-            grow: crate::GrowConfig::default(),
-            strands: crate::StrandsConfig::default(),
-            mesh: crate::MeshConfig::default(),
-        },
-        42,
-    );
-    PyGeometryData(geometry)
-}
-
-#[pyfunction]
 pub fn demo_mesh() -> String {
     let mut encoder = crate::TreeEncoder::new();
 
@@ -620,22 +607,6 @@ pub fn demo_mesh() -> String {
     encoder.set_debug(debug_layers);
 
     encoder.to_json()
-}
-
-#[pyfunction]
-pub fn debug_to_json(debug: &PyDebugData, layer_name: &str) -> String {
-    debug.to_json(layer_name)
-}
-
-#[pyfunction]
-pub fn skeleton_to_json(skeleton: &PyTreeSkeleton) -> String {
-    let debug = skeleton_debug_data(&skeleton.0);
-    debug_to_json_impl(&debug, "skeleton")
-}
-
-#[pyfunction]
-pub fn debug_data_to_json(debug: &PyDebugData) -> String {
-    debug.to_json("debug")
 }
 
 #[pymodule]
