@@ -55,11 +55,6 @@ impl PyTreeSkeleton {
         PyVolumetricTree(volumetric)
     }
 
-    fn debug_data(&self) -> PyDebugData {
-        let debug_geom = skeleton_debug_data(&self.0);
-        PyDebugData(debug_geom)
-    }
-
     fn to_json(&self) -> String {
         let grow_config = crate::GrowConfig::default();
         let strands_config = crate::StrandsConfig::default();
@@ -373,10 +368,7 @@ impl PyGeometryData {
 
     fn _repr_html_(&self) -> String {
         let json = self.to_json(false);
-        format!(
-            r#"<iframe srcdoc="{}" width="100%" height="500" frameborder="0"></iframe>"#,
-            html_escape(&json)
-        )
+        embed_viewer(&json)
     }
 }
 
@@ -397,14 +389,11 @@ impl PyDebugData {
         encoder.set_debug(debug_layers);
         encoder.to_json()
     }
-}
 
-fn html_escape(s: &str) -> String {
-    s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\"", "&quot;")
-        .replace("'", "&#39;")
+    fn _repr_html_(&self) -> String {
+        let json = self.to_json("debug");
+        embed_viewer(&json)
+    }
 }
 
 fn skeleton_debug_data(skeleton: &crate::TreeSkeleton) -> crate::DebugGeometry {
@@ -429,10 +418,11 @@ fn debug_to_json_impl(debug: &crate::DebugGeometry, layer_name: &str) -> String 
 
 fn embed_viewer(json_data: &str) -> String {
     let render_js = include_str!("../../../js/dist/render.js");
-    let escaped = html_escape(json_data);
     format!(
-        r#"<iframe srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{{margin:0}}#main{{width:100%;height:400px;}}</style></head><body><div id='main'></div><script type='module'>{}</script><script type='module'>initTreeViewer({});</script></body></html>" width="100%" height="450" frameborder="0"></iframe>"#,
-        render_js, escaped
+        r#"<div id='main' style='width:100%;height:400px;'></div>
+<script type="module">{}</script>
+<script type="module">initTreeViewer({});</script>"#,
+        render_js, json_data
     )
 }
 
@@ -637,6 +627,17 @@ pub fn debug_to_json(debug: &PyDebugData, layer_name: &str) -> String {
     debug.to_json(layer_name)
 }
 
+#[pyfunction]
+pub fn skeleton_to_json(skeleton: &PyTreeSkeleton) -> String {
+    let debug = skeleton_debug_data(&skeleton.0);
+    debug_to_json_impl(&debug, "skeleton")
+}
+
+#[pyfunction]
+pub fn debug_data_to_json(debug: &PyDebugData) -> String {
+    debug.to_json("debug")
+}
+
 #[pymodule]
 fn _tubulin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySeed>()?;
@@ -648,5 +649,7 @@ fn _tubulin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_demo_tree, m)?)?;
     m.add_function(wrap_pyfunction!(demo_mesh, m)?)?;
     m.add_function(wrap_pyfunction!(debug_to_json, m)?)?;
+    m.add_function(wrap_pyfunction!(skeleton_to_json, m)?)?;
+    m.add_function(wrap_pyfunction!(debug_data_to_json, m)?)?;
     Ok(())
 }
