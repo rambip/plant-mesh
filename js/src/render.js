@@ -177,17 +177,27 @@ function init(geometryData) {
       const starts = layer.lines.starts;
       const ends = layer.lines.ends;
       const colors = layer.lines.colors;
+      const nLines = starts.length / 3;
       
-      const linePositions = new Float32Array(starts.length + ends.length);
-      linePositions.set(starts, 0);
-      linePositions.set(ends, starts.length);
+      const linePositions = new Float32Array((nLines * 2) * 3);
+      for (let i = 0; i < nLines; i++) {
+        const src = i * 3;
+        const dst = i * 6;
+        linePositions[dst] = starts[src];
+        linePositions[dst + 1] = starts[src + 1];
+        linePositions[dst + 2] = starts[src + 2];
+        linePositions[dst + 3] = ends[src];
+        linePositions[dst + 4] = ends[src + 1];
+        linePositions[dst + 5] = ends[src + 2];
+      }
       
       const lineGeo = new THREE.BufferGeometry();
       lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
       
-      const lineColors = colors ? new Float32Array((starts.length / 3) * 2 * 4) : null;
+      const hasLineColors = colors && colors.length > 0;
+      const lineColors = hasLineColors ? new Float32Array(nLines * 2 * 4) : null;
       if (colors) {
-        for (let i = 0; i < starts.length / 3; i++) {
+        for (let i = 0; i < nLines; i++) {
           lineColors[i * 8] = colors[i * 4];
           lineColors[i * 8 + 1] = colors[i * 4 + 1];
           lineColors[i * 8 + 2] = colors[i * 4 + 2];
@@ -201,7 +211,7 @@ function init(geometryData) {
       }
       
       const lineMat = new THREE.LineBasicMaterial({
-        vertexColors: colors !== null,
+        vertexColors: hasLineColors,
       });
       const linesObj = new THREE.LineSegments(lineGeo, lineMat);
       group.add(linesObj);
