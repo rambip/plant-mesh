@@ -26,11 +26,92 @@ function init(geometryData) {
     0.1,
     1000
   );
-  camera.position.z = 2;
+
+  const cameraSettings = {
+    orbitDistance: 2,
+    orbitAngle: 0,
+    sensibility: 1,
+    tilt: 0,
+    z: 0,
+    automaticMode: true,
+  };
+
+  const xAxis = new THREE.Vector3(1, 0, 0);
+  const zAxis = new THREE.Vector3(0, 0, 1);
+  const target = new THREE.Vector3();
+  const rotationZ = new THREE.Quaternion();
+  const rotationX = new THREE.Quaternion();
+  const cameraRotation = new THREE.Quaternion();
+  const cameraForward = new THREE.Vector3();
+
+  function updateCamera(timeSeconds) {
+    const angle = cameraSettings.automaticMode
+      ? 0.5 * timeSeconds
+      : cameraSettings.orbitAngle;
+
+    rotationZ.setFromAxisAngle(zAxis, angle);
+    rotationX.setFromAxisAngle(xAxis, 0.5 * Math.PI + cameraSettings.tilt);
+    cameraRotation.copy(rotationZ).multiply(rotationX);
+
+    camera.quaternion.copy(cameraRotation);
+
+    target.set(0, 0, cameraSettings.z);
+    cameraForward.set(0, 0, -1).applyQuaternion(cameraRotation);
+    camera.position.copy(target).addScaledVector(cameraForward, -cameraSettings.orbitDistance);
+  }
 
   const renderer = new THREE.WebGLRenderer();
   renderer.setSize(container.clientWidth, container.clientHeight);
   container.appendChild(renderer.domElement);
+
+  let pointerDragging = false;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    pointerDragging = true;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    cameraSettings.automaticMode = false;
+    renderer.domElement.setPointerCapture(event.pointerId);
+  });
+
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (!pointerDragging) {
+      return;
+    }
+
+    const dx = event.clientX - lastPointerX;
+    const dy = event.clientY - lastPointerY;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+
+    cameraSettings.z += 0.0005 * dy * cameraSettings.orbitDistance;
+    cameraSettings.orbitAngle -=
+      0.0005 * dx * cameraSettings.orbitDistance * cameraSettings.sensibility;
+  });
+
+  renderer.domElement.addEventListener('pointerup', (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    pointerDragging = false;
+    renderer.domElement.releasePointerCapture(event.pointerId);
+  });
+
+  renderer.domElement.addEventListener('pointercancel', (event) => {
+    pointerDragging = false;
+    renderer.domElement.releasePointerCapture(event.pointerId);
+  });
+
+  renderer.domElement.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    cameraSettings.orbitDistance += 0.001 * event.deltaY;
+    cameraSettings.orbitDistance = Math.max(0.2, cameraSettings.orbitDistance);
+  }, { passive: false });
 
   const ambientLight = new THREE.AmbientLight(0x404040);
   scene.add(ambientLight);
@@ -152,7 +233,7 @@ function init(geometryData) {
 
   function animate() {
     requestAnimationFrame(animate);
-    mesh.rotation.y += 0.01;
+    updateCamera(performance.now() / 1000);
     renderer.render(scene, camera);
   }
 

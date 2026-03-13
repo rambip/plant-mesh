@@ -347,27 +347,19 @@ impl TreeEncoder {
             self.add_immediate_buffer(&cb, &colors_b);
             self.add_immediate_buffer(&ca, &colors_a);
             let starts = Expr::divp2(
-                Expr::vec3(
-                    Expr::cumsum(Expr::var(&sx)),
-                    Expr::cumsum(Expr::var(&sy)),
-                    Expr::cumsum(Expr::var(&sz)),
-                ),
+                Expr::vec3(Expr::var(&sx), Expr::var(&sy), Expr::var(&sz)),
                 8,
             );
             let ends = Expr::divp2(
-                Expr::vec3(
-                    Expr::cumsum(Expr::var(&ex)),
-                    Expr::cumsum(Expr::var(&ey)),
-                    Expr::cumsum(Expr::var(&ez)),
-                ),
+                Expr::vec3(Expr::var(&ex), Expr::var(&ey), Expr::var(&ez)),
                 8,
             );
             let colors = Expr::divp2(
                 Expr::vec4(
-                    Expr::cumsum(Expr::var(&cr)),
-                    Expr::cumsum(Expr::var(&cg)),
-                    Expr::cumsum(Expr::var(&cb)),
-                    Expr::cumsum(Expr::var(&ca)),
+                    Expr::var(&cr),
+                    Expr::var(&cg),
+                    Expr::var(&cb),
+                    Expr::var(&ca),
                 ),
                 8,
             );
@@ -413,19 +405,15 @@ impl TreeEncoder {
             self.add_immediate_buffer(&cb, &colors_b);
             self.add_immediate_buffer(&ca, &colors_a);
             let positions = Expr::divp2(
-                Expr::vec3(
-                    Expr::cumsum(Expr::var(&px)),
-                    Expr::cumsum(Expr::var(&py)),
-                    Expr::cumsum(Expr::var(&pz)),
-                ),
+                Expr::vec3(Expr::var(&px), Expr::var(&py), Expr::var(&pz)),
                 8,
             );
             let colors = Expr::divp2(
                 Expr::vec4(
-                    Expr::cumsum(Expr::var(&cr)),
-                    Expr::cumsum(Expr::var(&cg)),
-                    Expr::cumsum(Expr::var(&cb)),
-                    Expr::cumsum(Expr::var(&ca)),
+                    Expr::var(&cr),
+                    Expr::var(&cg),
+                    Expr::var(&cb),
+                    Expr::var(&ca),
                 ),
                 8,
             );
@@ -483,6 +471,83 @@ fn serialize_expr(expr: &Expr) -> serde_json::Value {
 }
 
 impl TreeEncoder {
+    pub fn add_vec3_components(&mut self, prefix: &str, vectors: &[glam::Vec3], scale: i32) {
+        let (x, y, z) = crate::utils::quantize_vec3_components(vectors, scale);
+        self.add_immediate_buffer(&format!("{}_x", prefix), &x);
+        self.add_immediate_buffer(&format!("{}_y", prefix), &y);
+        self.add_immediate_buffer(&format!("{}_z", prefix), &z);
+    }
+
+    pub fn add_color_components(&mut self, prefix: &str, colors: &[[f32; 4]], scale: i32) {
+        let (r, g, b, a) = crate::utils::quantize_color_components(colors, scale);
+        self.add_immediate_buffer(&format!("{}_r", prefix), &r);
+        self.add_immediate_buffer(&format!("{}_g", prefix), &g);
+        self.add_immediate_buffer(&format!("{}_b", prefix), &b);
+        self.add_immediate_buffer(&format!("{}_a", prefix), &a);
+    }
+
+    /// Creates scaled Vec3 expression from quantized components.
+    ///
+    /// Assumes buffers named `{prefix}_x`, `{prefix}_y`, `{prefix}_z` exist.
+    pub fn make_scaled_vec3(&self, prefix: &str, scale_bits: u32) -> Expr {
+        Expr::divp2(
+            Expr::vec3(
+                Expr::var(&format!("{}_x", prefix)),
+                Expr::var(&format!("{}_y", prefix)),
+                Expr::var(&format!("{}_z", prefix)),
+            ),
+            scale_bits,
+        )
+    }
+
+    /// Creates scaled Vec4 expression from quantized components.
+    ///
+    /// Assumes buffers named `{prefix}_r`, `{prefix}_g`, `{prefix}_b`, `{prefix}_a` exist.
+    pub fn make_scaled_vec4(&self, prefix: &str, scale_bits: u32) -> Expr {
+        Expr::divp2(
+            Expr::vec4(
+                Expr::var(&format!("{}_r", prefix)),
+                Expr::var(&format!("{}_g", prefix)),
+                Expr::var(&format!("{}_b", prefix)),
+                Expr::var(&format!("{}_a", prefix)),
+            ),
+            scale_bits,
+        )
+    }
+
+    /// Helper to add geometry data and return debug geometry layer expression.
+    pub fn add_geometry_with_debug(
+        &mut self,
+        geom: &crate::GeometryData,
+        prefix: &str,
+        scale: i32,
+    ) -> DebugLayer {
+        self.add_vec3_components(&format!("{}_v", prefix), &geom.points, scale);
+        self.add_vec3_components(&format!("{}_n", prefix), &geom.normals, scale);
+        self.add_color_components(&format!("{}_c", prefix), &geom.colors, scale);
+
+        let indices: Vec<i32> = geom.triangles.iter().map(|&i| i as i32).collect();
+        self.add_immediate_buffer(&format!("{}_indices", prefix), &indices);
+
+        let debug_geom = crate::VisualDebug::debug_data(geom);
+        self.add_debug_layer(prefix, &debug_geom)
+    }
+
+    /// Sets standard geometry outputs from component prefixes.
+    ///
+    /// Assumes buffers follow the naming convention: `{v_prefix}_x/y/z`, etc.
+    pub fn set_geometry_outputs(
+        &mut self,
+        v_prefix: &str,
+        n_prefix: &str,
+        c_prefix: &str,
+        scale_bits: u32,
+    ) {
+        self.set_vertices(self.make_scaled_vec3(v_prefix, scale_bits));
+        self.set_normals(self.make_scaled_vec3(n_prefix, scale_bits));
+        self.set_colors(self.make_scaled_vec4(c_prefix, scale_bits));
+    }
+
     pub fn to_json(&self) -> String {
         let mut map = serde_json::Map::new();
         map.insert(

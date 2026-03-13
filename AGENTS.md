@@ -48,7 +48,7 @@ Procedural plant mesh generator for a computer geometry course. Pipeline: grow t
 - **Run demo:** `cargo run -p bevy-demo`
 - **Run example:** `cargo run --example <example_name>`
 - **Compile report:** `typst compile docs/report.typ docs/report.pdf` (requires `typst`)
-- **Python build:** `maturin develop` (from repo root, requires Python venv) — **must run after each core update**
+- **Python build:** `.venv/bin/maturin develop` (from repo root; use the repo-local virtualenv) — **must run after each core update**
 - **Bundle JS viewer:** `bun build js/src/render.js --outdir=js/dist`
 
 ## Python API
