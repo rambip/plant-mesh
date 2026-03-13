@@ -50,7 +50,6 @@ Procedural plant mesh generator for a computer geometry course. Pipeline: grow t
 - **Compile report:** `typst compile docs/report.typ docs/report.pdf` (requires `typst`)
 - **Python build:** `.venv/bin/maturin develop` (from repo root; use the repo-local virtualenv) — **must run after each core update**
 - **Bundle JS viewer for Python package:** `bun build js/src/render.js --outfile=python/tubulin/render.js`
-- **Bundle JS viewer for web demo:** `bun build js/src/render.js --outdir=js/dist`
 
 ## Common Errors (JS / TreeMesh)
 - **Rice padding decoded as values:** missing/ignored buffer `length` makes decoder read trailing padding bits and misalign downstream buffers.

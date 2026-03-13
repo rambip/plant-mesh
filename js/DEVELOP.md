@@ -10,7 +10,7 @@ JavaScript viewer for TreeMesh format (see `GEO_SPEC.md` in project root).
 - `src/generate.js` - Generates geometry.json in TreeMesh format
 - `src/render.js` - Three.js renderer, fetches geometry.json
 - `index.html` - Entry point, shows JSON + 3D view
-- `dist/` - Built files (generated)
+- `../python/tubulin/render.js` - Bundled viewer JS embedded in notebook HTML
 
 ## Commands
 
@@ -19,7 +19,7 @@ JavaScript viewer for TreeMesh format (see `GEO_SPEC.md` in project root).
 bun run js/src/generate.js
 
 # Build render.js (run after any change to render.js or decoder.js)
-bun build js/src/render.js --outdir=js/dist
+bun build js/src/render.js --outfile=python/tubulin/render.js
 
 # Serve (from js directory)
 python3 -m http.server 8081
@@ -49,6 +49,12 @@ See `GEO_SPEC.md` in project root. Key points:
 - `normals` - Buffer<Vec3>, dequantized  
 - `triangles` - Buffer<Int>, flat [i,j,k...]
 
+### Debug Layers
+
+- Each debug layer may include optional `show: true|false`
+- `show` controls initial visibility in the renderer checkbox panel
+- If omitted, renderer defaults the layer to hidden
+
 ## Geometry Generation Tips
 
 1. **Order vertices for compression**: Alternate between circles (bottom→top per segment) so consecutive indices are monotonic
@@ -61,7 +67,7 @@ See `GEO_SPEC.md` in project root. Key points:
 ### `WebGL warning: drawElementsInstanced: Indexed vertex fetch requires N vertices, but attribs only supply M`
 Indices reference vertices that don't exist. Root causes:
 - **Signed index deltas not zigzag-encoded**: Negative deltas passed to `riceEncode` produce garbage via JS bitwise ops on negatives. Fix: zigzag-encode before Rice, zigzag-decode after Rice.
-- **Stale bundle**: `js/dist/render.js` is not rebuilt after editing `src/`. Always run `bun build js/src/render.js --outdir=js/dist` and hard-refresh (Ctrl+Shift+R).
+- **Stale bundle**: `python/tubulin/render.js` is not rebuilt after editing `src/`. Always run `bun build js/src/render.js --outfile=python/tubulin/render.js` and restart the notebook kernel before retesting.
 - **Buffer length not stored**: Without `length` in the JSON buffer metadata, the Rice decoder reads padding bits as extra values, inflating buffer lengths and misaligning cumsum results.
 
 ### `Decode error: Index out of range` / `Negative index`

@@ -278,6 +278,7 @@ The optional `debug` top-level key contains debug visualization layers. Each lay
 ```json
 "debug": {
   "<layer_name>": {
+    "show": <bool>,
     "points": { "positions": <expr>, "colors": <expr> },
     "lines":   { "starts": <expr>, "ends": <expr>, "colors": <expr> }
   }
@@ -288,13 +289,14 @@ The optional `debug` top-level key contains debug visualization layers. Each lay
 
 | Field | Type | Description |
 |---|---|---|
+| `show` | bool | Optional initial visibility hint for this debug layer (default: `false`) |
 | `points.positions` | expr | Expression evaluating to `Buffer<Vec3>` |
 | `points.colors` | expr | Expression evaluating to `Buffer<RGBA>`, flat `[r,g,b,a, ...]` |
 | `lines.starts` | expr | Expression evaluating to `Buffer<Vec3>` |
 | `lines.ends` | expr | Expression evaluating to `Buffer<Vec3>` |
 | `lines.colors` | expr | Expression evaluating to `Buffer<RGBA>`, flat `[r,g,b,a, ...]` |
 
-All fields are optional. The decoder iterates over present keys and renders each layer. The JS viewer creates a checkbox per layer to toggle visibility.
+All fields are optional. The decoder iterates over present keys and renders each layer. The JS viewer creates a checkbox per layer to toggle visibility. If `show` is present, it sets the initial visible/hidden state.
 
 ---
 

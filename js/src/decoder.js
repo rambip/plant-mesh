@@ -521,7 +521,9 @@ class TreeMeshDecoder {
         const layers = {};
         if (!debug) return layers;
         for (const [layerName, layerData] of Object.entries(debug)) {
-            const layer = {};
+            const layer = {
+                show: layerData.show === true,
+            };
 
             if (layerData.points) {
                 const positions = this._eval(layerData.points.positions, scope);

@@ -379,7 +379,9 @@ var require_decoder = __commonJS((exports, module) => {
       if (!debug)
         return layers;
       for (const [layerName, layerData] of Object.entries(debug)) {
-        const layer = {};
+        const layer = {
+          show: layerData.show === true
+        };
         if (layerData.points) {
           const positions = this._eval(layerData.points.positions, scope);
           const colors = layerData.points.colors ? this._eval(layerData.points.colors, scope) : null;
@@ -424,6 +426,8 @@ function init(geometryData) {
     orbitDistance: 2,
     orbitAngle: 0,
     sensibility: 1,
+    targetX: 0,
+    targetY: 0,
     tilt: 0,
     z: 0,
     automaticMode: true
@@ -441,9 +445,35 @@ function init(geometryData) {
     rotationX.setFromAxisAngle(xAxis, 0.5 * Math.PI + cameraSettings.tilt);
     cameraRotation.copy(rotationZ).multiply(rotationX);
     camera.quaternion.copy(cameraRotation);
-    target.set(0, 0, cameraSettings.z);
+    target.set(cameraSettings.targetX, cameraSettings.targetY, cameraSettings.z);
     cameraForward.set(0, 0, -1).applyQuaternion(cameraRotation);
     camera.position.copy(target).addScaledVector(cameraForward, -cameraSettings.orbitDistance);
+  }
+  function expandBoundsFromFlat(bounds, flatPositions) {
+    if (!flatPositions || flatPositions.length < 3) {
+      return;
+    }
+    for (let i = 0;i + 2 < flatPositions.length; i += 3) {
+      bounds.expandByPoint(new THREE.Vector3(flatPositions[i], flatPositions[i + 1], flatPositions[i + 2]));
+    }
+  }
+  function fitInitialCamera(bounds) {
+    if (bounds.isEmpty()) {
+      return;
+    }
+    const size = new THREE.Vector3;
+    const center = new THREE.Vector3;
+    bounds.getSize(size);
+    bounds.getCenter(center);
+    const radius = Math.max(size.length() * 0.5, 0.001);
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov * 0.5) * camera.aspect);
+    const minFov = Math.max(Math.min(vFov, hFov), 0.01);
+    const distance = radius / Math.sin(minFov * 0.5) * 1.15;
+    cameraSettings.orbitDistance = Math.max(distance, 0.2);
+    cameraSettings.targetX = center.x;
+    cameraSettings.targetY = center.y;
+    cameraSettings.z = center.z;
   }
   const renderer = new THREE.WebGLRenderer;
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -485,7 +515,8 @@ function init(geometryData) {
   });
   renderer.domElement.addEventListener("wheel", (event) => {
     event.preventDefault();
-    cameraSettings.orbitDistance += 0.001 * event.deltaY;
+    const distance = Math.max(cameraSettings.orbitDistance, 0.2);
+    cameraSettings.orbitDistance += 0.0011 * event.deltaY * Math.sqrt(distance);
     cameraSettings.orbitDistance = Math.max(0.2, cameraSettings.orbitDistance);
   }, { passive: false });
   const ambientLight = new THREE.AmbientLight(4210752);
@@ -509,14 +540,20 @@ function init(geometryData) {
   });
   const mesh = new THREE.Mesh(threeGeometry, material);
   scene.add(mesh);
+  const initialBounds = new THREE.Box3;
+  const meshPositions = threeGeometry.getAttribute("position");
+  if (meshPositions && meshPositions.count > 0) {
+    initialBounds.setFromBufferAttribute(meshPositions);
+  }
   const debugGroups = {};
   for (const [layerName, layer] of Object.entries(geometry.debugLayers)) {
     const group = new THREE.Group;
-    group.visible = false;
+    group.visible = layer.show === true;
     if (layer.points && layer.points.positions) {
       const positions = layer.points.positions;
       const colors = layer.points.colors;
       const nPoints = positions.length / 3;
+      expandBoundsFromFlat(initialBounds, positions);
       const pointsGeo = new THREE.BufferGeometry;
       pointsGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
       if (colors && colors.length > 0) {
@@ -534,6 +571,8 @@ function init(geometryData) {
       const ends = layer.lines.ends;
       const colors = layer.lines.colors;
       const nLines = starts.length / 3;
+      expandBoundsFromFlat(initialBounds, starts);
+      expandBoundsFromFlat(initialBounds, ends);
       const linePositions = new Float32Array(nLines * 2 * 3);
       for (let i = 0;i < nLines; i++) {
         const src = i * 3;
@@ -571,6 +610,7 @@ function init(geometryData) {
     scene.add(group);
     debugGroups[layerName] = group;
   }
+  fitInitialCamera(initialBounds);
   if (Object.keys(debugGroups).length > 0) {
     const controlsDiv = document.createElement("div");
     controlsDiv.style.cssText = "position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.7);padding:10px;color:white;font-family:sans-serif;";
@@ -579,6 +619,7 @@ function init(geometryData) {
       label.style.cssText = "display:block;margin:5px 0;";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
+      checkbox.checked = debugGroups[layerName].visible;
       checkbox.onchange = (e) => {
         debugGroups[layerName].visible = e.target.checked;
       };

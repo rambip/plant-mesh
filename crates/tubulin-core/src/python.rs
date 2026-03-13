@@ -478,16 +478,6 @@ impl PyDemoMesh {
         );
         encoder.set_triangles(triangles);
 
-        let debug_geom = crate::DebugGeometry::new();
-        let mut debug_layers = crate::DebugLayers {
-            layers: std::collections::HashMap::new(),
-        };
-        debug_layers.layers.insert(
-            "skeleton".to_string(),
-            encoder.add_debug_layer("skeleton", &debug_geom),
-        );
-        encoder.set_debug(debug_layers);
-
         embed_viewer(py, &encoder.to_json())
     }
 }

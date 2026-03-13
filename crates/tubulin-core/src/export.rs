@@ -205,6 +205,8 @@ pub struct DebugLayers {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DebugLayer {
+    #[serde(default)]
+    pub show: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub points: Option<DebugPoints>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -296,6 +298,7 @@ impl TreeEncoder {
         geometry: &crate::DebugGeometry,
     ) -> DebugLayer {
         let mut layer = DebugLayer {
+            show: true,
             points: None,
             lines: None,
         };
@@ -790,6 +793,7 @@ pub fn create_cylinder_mesh() -> String {
     debug_layers.layers.insert(
         "skeleton".to_string(),
         DebugLayer {
+            show: true,
             points: None,
             lines: Some(skeleton_lines),
         },
@@ -956,6 +960,7 @@ mod tests {
         debug_layers.layers.insert(
             "skeleton".to_string(),
             DebugLayer {
+                show: true,
                 points: None,
                 lines: Some(lines),
             },
