@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+        <title>Plants generation</title>
+        <link data-trunk rel="copy-dir" href="../../assets"/>
+        <link data-trunk rel="rust" data-bin="bevy-demo" data-wasm-opt="z"/>
+    </head>
+    <body>
+        <div class="game-container">
+            <div class="lds-dual-ring"></div>
+            <canvas id="bevy">
+                Javascript and support for canvas is required
+            </canvas>
+        </div>
+        <div>
+            <h1>Commands</h1>
+            For now, the commands to interact with the tree are:
+            <ul>
+                <li>Enter: show or hide tree</li>
+                <li>Right Arrow or drag: turn counter-clockwise</li>
+                <li>Left Arrow or drag: turn clockwise</li>
+                <li>Plus or scroll: Zoom in</li>
+                <li>Minus or scroll: Zoom out</li>
+                <li>Down Arrow: tilt camera</li>
+                <li>Up Arrow: tilt camera</li>
+                <li>W: toggle wireframe (mesh triangles)</li>
+                <li>S: toggle strands (threads)</li>
+                <li>G: toggle branch graph (skeleton)</li>
+                <li>C: toggle contours</li>
+                <li>Space: generate a new tree</li>
+                <li>A: enable animation</li>
+            </ul>
+        </div>
+    </body>
+</html>
