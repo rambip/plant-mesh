@@ -49,7 +49,15 @@ Procedural plant mesh generator for a computer geometry course. Pipeline: grow t
 - **Run example:** `cargo run --example <example_name>`
 - **Compile report:** `typst compile docs/report.typ docs/report.pdf` (requires `typst`)
 - **Python build:** `.venv/bin/maturin develop` (from repo root; use the repo-local virtualenv) — **must run after each core update**
-- **Bundle JS viewer:** `bun build js/src/render.js --outdir=js/dist`
+- **Bundle JS viewer for Python package:** `bun build js/src/render.js --outfile=python/tubulin/render.js`
+- **Bundle JS viewer for web demo:** `bun build js/src/render.js --outdir=js/dist`
+
+## Common Errors (JS / TreeMesh)
+- **Rice padding decoded as values:** missing/ignored buffer `length` makes decoder read trailing padding bits and misalign downstream buffers.
+- **Signed deltas without zigzag:** Rice only supports non-negative integers; always zigzag encode before Rice and decode after.
+- **Wrong `cumsum` usage:** apply `cumsum` only to delta-encoded buffers, never to immediate absolute buffers.
+- **Debug line pairing bug in renderer:** line segments must be uploaded as `start_i, end_i` pairs; `[all starts][all ends]` creates false trunk connections.
+- **Stale viewer bundle:** after JS changes, rebuild bundle and hard-refresh before validating geometry bugs.
 
 ## Python API
 

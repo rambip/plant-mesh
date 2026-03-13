@@ -413,6 +413,44 @@ function eval(expr, scope):
 
 ---
 
+## Common Failure Modes (Implementation Notes)
+
+These are non-normative notes from real encoder/decoder integration failures.
+
+### 1) Rice buffer length mismatch from padding bits
+
+**Symptom:** `Buffer "X": expected N values, got M`, downstream `vec3`/`triangle` length mismatch, or out-of-range indices.
+
+**Cause:** Rice payloads are bit-packed and padded to full bytes. If the decoder reads until byte exhaustion instead of a known value count, trailing padding bits can decode into extra integers.
+
+**Recommendation:** include `length` metadata per buffer and stop decoding after `length` values.
+
+### 2) Signed deltas not zigzag-encoded before Rice
+
+**Symptom:** negative or absurdly large decoded indices after `cumsum`, GPU draw/index errors.
+
+**Cause:** Rice coding only supports non-negative integers. Raw negative deltas must not be passed directly to Rice.
+
+**Requirement reminder:** apply zigzag before Rice (`n >= 0 -> 2n`, `n < 0 -> -2n - 1`) and zigzag-decode after Rice.
+
+### 3) `cumsum` applied to absolute (non-delta) buffers
+
+**Symptom:** debug geometry drifting/collapsing toward a trunk/root-like location or exploding values.
+
+**Cause:** `cumsum` is only valid for delta-encoded streams. Applying it to already-absolute coordinates/colors integrates the signal a second time.
+
+**Recommendation:** only use `cumsum` when the corresponding buffer was explicitly delta-encoded by the encoder.
+
+### 4) Segment endpoint pairing errors in debug line rendering
+
+**Symptom:** lines connect unrelated points even when decoded `starts`/`ends` arrays are correct.
+
+**Cause:** renderer uploads line vertices as `[all starts][all ends]` instead of `[start0,end0,start1,end1,...]`.
+
+**Recommendation:** when consuming `debug.<layer>.lines`, pair `starts[i]` with `ends[i]` by index.
+
+---
+
 ## Open Questions / Future Extensions
 
 - **Quantization precision** — `divp2` exponents are currently chosen per-file by the encoder. A future version may standardize them or derive them from bounding box metadata.
