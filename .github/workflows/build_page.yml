@@ -32,13 +32,14 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Build Project
+        working-directory: crates/bevy-demo
         shell: bash
-        run: trunk build --release --public-url "/${{ github.event.repository.name }}/"
+        run: trunk build index.html --release --public-url "/${{ github.event.repository.name }}/"
 
       - name: Upload result
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/
+          path: crates/bevy-demo/dist/
 
   deploy:
     runs-on: ubuntu-latest
