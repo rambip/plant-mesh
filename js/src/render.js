@@ -20,6 +20,58 @@ function init(geometryData) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x222222);
 
+  function showDecodeError(error, inputData) {
+    const previous = document.getElementById('treemesh-decode-error');
+    if (previous) {
+      previous.remove();
+    }
+
+    const panel = document.createElement('div');
+    panel.id = 'treemesh-decode-error';
+    panel.style.cssText = [
+      'position:fixed',
+      'left:12px',
+      'right:12px',
+      'top:12px',
+      'z-index:99999',
+      'max-height:45vh',
+      'overflow:auto',
+      'background:#2b0f12',
+      'border:1px solid #ff5f67',
+      'color:#ffd7d9',
+      'padding:12px',
+      'font:12px/1.45 monospace',
+      'white-space:pre-wrap',
+      'border-radius:8px',
+      'box-shadow:0 6px 24px rgba(0,0,0,0.35)',
+    ].join(';');
+
+    const outputKeys = inputData && inputData.outputs
+      ? Object.keys(inputData.outputs)
+      : [];
+    const bufferCount = inputData && inputData.buffers
+      ? Object.keys(inputData.buffers).length
+      : 0;
+
+    const errorName = error && error.name ? error.name : 'Error';
+    const errorMessage = error && error.message ? error.message : String(error);
+
+    const details = [
+      '[TreeMesh decode failed]',
+      '',
+      `${errorName}: ${errorMessage}`,
+      '',
+      String(error && error.stack ? error.stack : error),
+      '',
+      `treemesh=${inputData && inputData.treemesh ? inputData.treemesh : 'unknown'}`,
+      `buffers=${bufferCount}`,
+      `outputs=${outputKeys.join(', ')}`,
+    ];
+
+    panel.textContent = details.join('\n');
+    document.body.appendChild(panel);
+  }
+
   const camera = new THREE.PerspectiveCamera(
     75,
     container.clientWidth / container.clientHeight,
@@ -157,7 +209,14 @@ function init(geometryData) {
   scene.add(directionalLight);
 
   const treeMeshDecoder = new TreeMeshDecoder();
-  const geometry = treeMeshDecoder.decode(geometryData);
+  let geometry;
+  try {
+    geometry = treeMeshDecoder.decode(geometryData);
+  } catch (error) {
+    console.error('TreeMesh decode failed', error, geometryData);
+    showDecodeError(error, geometryData);
+    return;
+  }
 
   const threeGeometry = new THREE.BufferGeometry();
   threeGeometry.setAttribute(

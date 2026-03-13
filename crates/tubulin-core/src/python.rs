@@ -128,9 +128,10 @@ impl PyVolumetricTree {
         };
         let rng = rand::rngs::StdRng::seed_from_u64(DEFAULT_RNG_SEED);
         let mut debug = None;
-        let geometry = self
+        let mut geometry = self
             .data
             .build_mesh_debug(&config, rng, |x| debug = Some(x));
+        geometry.compute_smooth_normals();
         PyGeometryData {
             data: geometry,
             debug: debug.unwrap(),
@@ -158,13 +159,21 @@ impl PyGeometryData {
         // Add quantized geometry components with custom prefixes for flexibility
         encoder.add_vec3_components("v", &self.data.points, scale);
         encoder.add_vec3_components("n", &self.data.normals, scale);
-        encoder.add_color_components("c", &self.data.colors, scale);
 
         let indices: Vec<i32> = self.data.triangles.iter().map(|&i| i as i32).collect();
         encoder.add_immediate_buffer("indices", &indices);
 
-        // Set outputs using new helper method (scale_bits = 8 for divp2(scale, 8) = scale/256)
-        encoder.set_geometry_outputs("v", "n", "c", 8);
+        // Set required geometry outputs.
+        encoder.set_vertices(encoder.make_scaled_vec3("v", 8));
+        encoder.set_normals(encoder.make_scaled_vec3("n", 8));
+
+        // Colors are optional in the decoder path. Avoid emitting divp2(vec4(...))
+        // when there are no colors, since divp2 on an empty vec4 would fail at runtime.
+        if !self.data.colors.is_empty() {
+            encoder.add_color_components("c", &self.data.colors, scale);
+            encoder.set_colors(encoder.make_scaled_vec4("c", 8));
+        }
+
         encoder.set_triangles(crate::export::Expr::var("indices"));
 
         if include_debug {
