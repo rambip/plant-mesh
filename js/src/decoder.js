@@ -105,14 +105,19 @@ class TreeMeshDecoder {
             }
 
             const nVertices = vertices.length;
-            const maxIndex = Math.max(...triangles);
+            let maxIndex = -Infinity;
+            let minIndex = Infinity;
+            for (let i = 0; i < triangles.length; i++) {
+                const idx = triangles[i];
+                if (idx > maxIndex) maxIndex = idx;
+                if (idx < minIndex) minIndex = idx;
+            }
             if (maxIndex >= nVertices) {
                 throw new Error(
                     `Index out of range: max index ${maxIndex} >= vertex count ${nVertices}. ` +
                         `Likely cause: signed index deltas encoded without zigzag, or cumsum applied to wrong buffer.`,
                 );
             }
-            const minIndex = Math.min(...triangles);
             if (minIndex < 0) {
                 throw new Error(
                     `Negative index ${minIndex} in triangle buffer. ` +
@@ -263,29 +268,78 @@ class TreeMeshDecoder {
 
         const args = expr.args.map((a) => this._eval(a, scope));
 
-        switch (op) {
-            case "cumsum":
-                return this._cumsum(args[0]);
-            case "divp2":
-                return this._divp2(args[0], args[1]);
-            case "vec3":
-                return this._vec3(args[0], args[1], args[2]);
-            case "vec4":
-                return this._vec4(args[0], args[1], args[2], args[3]);
-            case "triangle":
-                return this._triangle(args[0], args[1], args[2]);
-            case "concat":
-                return this._concat(args);
-            case "interleave":
-                return this._interleave(args);
-            case "spline":
-                return this._spline(args[0], args[1]);
-            default:
-                throw new Error(`Unknown operator: ${op}`);
+        const argTypes = args.map((a) => this._describeValue(a));
+
+        try {
+            switch (op) {
+                case "cumsum":
+                    this._assertArgCount(op, args, 1);
+                    return this._cumsum(args[0]);
+                case "divp2":
+                    this._assertArgCount(op, args, 2);
+                    return this._divp2(args[0], args[1]);
+                case "vec3":
+                    this._assertArgCount(op, args, 3);
+                    return this._vec3(args[0], args[1], args[2]);
+                case "vec4":
+                    this._assertArgCount(op, args, 4);
+                    return this._vec4(args[0], args[1], args[2], args[3]);
+                case "triangle":
+                    this._assertArgCount(op, args, 3);
+                    return this._triangle(args[0], args[1], args[2]);
+                case "concat":
+                    return this._concat(args);
+                case "interleave":
+                    return this._interleave(args);
+                case "spline":
+                    this._assertArgCount(op, args, 2);
+                    return this._spline(args[0], args[1]);
+                default:
+                    throw new Error(`Unknown operator: ${op}`);
+            }
+        } catch (e) {
+            const base = e instanceof Error ? e.message : String(e);
+            throw new Error(
+                `Eval failed for op='${op}' argTypes=[${argTypes.join(", ")}] expr=${JSON.stringify(expr).slice(0, 220)}: ${base}`,
+            );
         }
     }
 
+    _assertArgCount(op, args, expected) {
+        if (args.length !== expected) {
+            throw new Error(
+                `Operator '${op}' expected ${expected} args, got ${args.length}`,
+            );
+        }
+    }
+
+    _describeValue(value) {
+        if (value instanceof Int32Array) return `Int32Array(len=${value.length})`;
+        if (value instanceof Float32Array) return `Float32Array(len=${value.length})`;
+        if (Array.isArray(value)) {
+            if (value.length === 0) return "Array(len=0)";
+            const first = value[0];
+            if (
+                typeof first === "object" &&
+                first !== null &&
+                "x" in first &&
+                "y" in first &&
+                "z" in first
+            ) {
+                const isVec4 = "w" in first;
+                return `${isVec4 ? "Vec4" : "Vec3"}Array(len=${value.length})`;
+            }
+            return `Array(len=${value.length}, firstType=${typeof first})`;
+        }
+        return `${typeof value}(${String(value)})`;
+    }
+
     _cumsum(buffer) {
+        if (!(buffer instanceof Int32Array)) {
+            throw new Error(
+                `cumsum expects Int32Array, got ${this._describeValue(buffer)}`,
+            );
+        }
         const result = new Int32Array(buffer.length);
         let sum = 0;
         for (let i = 0; i < buffer.length; i++) {
@@ -296,30 +350,55 @@ class TreeMeshDecoder {
     }
 
     _divp2(buffer, exponent) {
+        if (
+            typeof exponent !== "number" ||
+            !Number.isInteger(exponent) ||
+            exponent < 0
+        ) {
+            throw new Error(
+                `divp2 exponent must be a non-negative integer, got ${this._describeValue(exponent)}`,
+            );
+        }
+
         const divisor = Math.pow(2, exponent);
-        if (buffer instanceof Int32Array) {
+
+        if (buffer instanceof Int32Array || buffer instanceof Float32Array) {
             const result = new Float32Array(buffer.length);
             for (let i = 0; i < buffer.length; i++) {
                 result[i] = buffer[i] / divisor;
             }
             return result;
-        } else if (
-            Array.isArray(buffer) &&
-            buffer.length > 0 &&
-            typeof buffer[0] === "object" &&
-            "x" in buffer[0]
-        ) {
-            return buffer.map((v) => ({
-                x: v.x / divisor,
-                y: v.y / divisor,
-                z: v.z / divisor,
-                w: v.w !== undefined ? v.w / divisor : undefined,
-            }));
         }
-        throw new Error("Unsupported buffer type for divp2");
+
+        if (Array.isArray(buffer)) {
+            if (buffer.length === 0) {
+                return [];
+            }
+            if (
+                typeof buffer[0] === "object" &&
+                buffer[0] !== null &&
+                "x" in buffer[0]
+            ) {
+                return buffer.map((v) => ({
+                    x: v.x / divisor,
+                    y: v.y / divisor,
+                    z: v.z / divisor,
+                    w: v.w !== undefined ? v.w / divisor : undefined,
+                }));
+            }
+        }
+
+        throw new Error(
+            `divp2 expects Int32Array/Float32Array or Vec3/Vec4 array, got ${this._describeValue(buffer)}`,
+        );
     }
 
     _vec3(x, y, z) {
+        if (!x || !y || !z || x.length === undefined || y.length === undefined || z.length === undefined) {
+            throw new Error(
+                `vec3 expects three array-like buffers, got x=${this._describeValue(x)}, y=${this._describeValue(y)}, z=${this._describeValue(z)}`,
+            );
+        }
         if (x.length !== y.length || x.length !== z.length) {
             throw new Error(
                 `vec3 component length mismatch: x=${x.length}, y=${y.length}, z=${z.length}. ` +
@@ -334,6 +413,11 @@ class TreeMeshDecoder {
     }
 
     _vec4(x, y, z, w) {
+        if (!x || !y || !z || !w || x.length === undefined || y.length === undefined || z.length === undefined || w.length === undefined) {
+            throw new Error(
+                `vec4 expects four array-like buffers, got x=${this._describeValue(x)}, y=${this._describeValue(y)}, z=${this._describeValue(z)}, w=${this._describeValue(w)}`,
+            );
+        }
         if (
             x.length !== y.length ||
             x.length !== z.length ||
@@ -352,6 +436,11 @@ class TreeMeshDecoder {
     }
 
     _triangle(i, j, k) {
+        if (!i || !j || !k || i.length === undefined || j.length === undefined || k.length === undefined) {
+            throw new Error(
+                `triangle expects three array-like buffers, got i=${this._describeValue(i)}, j=${this._describeValue(j)}, k=${this._describeValue(k)}`,
+            );
+        }
         if (i.length !== j.length || i.length !== k.length) {
             throw new Error(
                 `triangle index length mismatch: i=${i.length}, j=${j.length}, k=${k.length}. ` +
@@ -449,6 +538,9 @@ class TreeMeshDecoder {
     }
 
     _concat(buffers) {
+        if (!Array.isArray(buffers) || buffers.length === 0) {
+            throw new Error(`concat expects at least one buffer, got ${this._describeValue(buffers)}`);
+        }
         // Sequentially appends buffers of the same type (Int32Array, Float32Array, or Vec3 array).
         if (
             buffers[0] instanceof Int32Array ||
@@ -470,6 +562,9 @@ class TreeMeshDecoder {
     }
 
     _interleave(buffers) {
+        if (!Array.isArray(buffers) || buffers.length === 0) {
+            throw new Error(`interleave expects at least one buffer, got ${this._describeValue(buffers)}`);
+        }
         // Elementwise zip: all buffers must have equal length N.
         // Output length = N * len(buffers), elements alternating.
         const N = buffers[0].length;
