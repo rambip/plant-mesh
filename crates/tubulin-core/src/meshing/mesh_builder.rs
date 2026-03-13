@@ -1,11 +1,9 @@
+use crate::VisualDebug;
 #[cfg(feature = "bevy")]
 use bevy::prelude::Component;
 
 #[cfg(feature = "python")]
-use crate::export::Expr;
-#[cfg(feature = "python")]
 use crate::TreeEncoder;
-use crate::VisualDebug;
 use glam::Vec3;
 #[cfg(feature = "python")]
 use numpy::IntoPyArray;
@@ -202,6 +200,18 @@ impl GeometryData {
         let cb: Vec<i32> = self.colors.iter().map(|c| (c[2] * 255.0) as i32).collect();
         let ca: Vec<i32> = self.colors.iter().map(|c| (c[3] * 255.0) as i32).collect();
 
+        // Add buffers to encoder
+        encoder.add_immediate_buffer("vx", &vx);
+        encoder.add_immediate_buffer("vy", &vy);
+        encoder.add_immediate_buffer("vz", &vz);
+        encoder.add_immediate_buffer("nx", &nx);
+        encoder.add_immediate_buffer("ny", &ny);
+        encoder.add_immediate_buffer("nz", &nz);
+        encoder.add_immediate_buffer("cr", &cr);
+        encoder.add_immediate_buffer("cg", &cg);
+        encoder.add_immediate_buffer("cb", &cb);
+        encoder.add_immediate_buffer("ca", &ca);
+
         let n_triangles = self.triangles.len() / 3;
 
         let mut ix = Vec::with_capacity(n_triangles);
@@ -338,16 +348,4 @@ pub struct MeshConfig {
     pub interior_angle: f32,
     pub spacing: f32,
     pub smoothing_iters: u32,
-}
-
-impl Default for MeshConfig {
-    fn default() -> Self {
-        Self {
-            leaf_size: 0.5,
-            leaf_angle: 0.5,
-            interior_angle: 0.3,
-            spacing: 0.5,
-            smoothing_iters: 2,
-        }
-    }
 }

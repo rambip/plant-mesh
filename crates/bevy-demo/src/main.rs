@@ -13,10 +13,8 @@ use std::f32::consts::PI;
 use bevy::asset::AssetLoader;
 use bevy_gizmos::prelude::Gizmos;
 
+use bevy_demo::{BevyMesh, MeshDebugFlags, Seed, TreeConfig};
 use tubulin_core::DebugGeometry;
-use bevy_demo::{
-    BevyMesh, MeshDebugFlags, Seed, TreeConfig,
-};
 
 #[derive(Copy, Clone, Default, Debug, Resource)]
 pub struct DebugFlags {
@@ -314,22 +312,22 @@ fn draw_tree(
         let plant = Seed::grow_plant(&tree_config.grow, &mut rng_clone);
         let geometry = plant
             .grow_skeleton_debug(|g| debug_collector.skeleton = Some(g))
-            .grow_strands_debug(&tree_config.strands, rng_for_strands, |g| debug_collector.strands = Some(g))
+            .grow_strands_debug(&tree_config.strands, rng_for_strands, |g| {
+                debug_collector.strands = Some(g)
+            })
             .build_mesh_debug(&tree_config.mesh, rng_for_mesh, |_| {});
         let BevyMesh(tree_mesh) = BevyMesh::from_geometry_data(geometry);
 
         let mesh = meshes.add(tree_mesh);
         commands.entity(e).insert(Mesh3d(mesh));
 
-        commands
-            .entity(e)
-            .insert(debug_collector);
+        commands.entity(e).insert(debug_collector);
     }
 }
 
 fn render_debug_geometry(geometry: &DebugGeometry, gizmos: &mut Gizmos) {
-    use bevy_math::Isometry3d;
     use bevy_color::Color;
+    use bevy_math::Isometry3d;
 
     for (start, end, color) in &geometry.lines {
         let c = Color::linear_rgba(color.0[0], color.0[1], color.0[2], color.0[3]);
@@ -351,11 +349,7 @@ fn render_debug_geometry(geometry: &DebugGeometry, gizmos: &mut Gizmos) {
     }
 }
 
-fn visual_debug(
-    query: Query<&DebugCollector>,
-    flags: Res<DebugFlags>,
-    mut gizmos: Gizmos,
-) {
+fn visual_debug(query: Query<&DebugCollector>, flags: Res<DebugFlags>, mut gizmos: Gizmos) {
     for debug in query.iter() {
         if let Some(skeleton) = &debug.skeleton {
             if flags.skeleton {

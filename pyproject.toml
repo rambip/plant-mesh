@@ -25,4 +25,5 @@ features = ["python"]
 [dependency-groups]
 dev = [
     "marimo>=0.20.4",
+    "matplotlib>=3.10.8",
 ]

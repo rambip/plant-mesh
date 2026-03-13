@@ -15,18 +15,6 @@ pub struct StrandsConfig {
     pub particles_per_leaf: usize,
 }
 
-impl Default for StrandsConfig {
-    fn default() -> Self {
-        Self {
-            repulsion: 0.5,
-            interaction_radius: 0.1,
-            n_steps: 10,
-            dt: 0.1,
-            particles_per_leaf: 20,
-        }
-    }
-}
-
 #[derive(Debug)]
 struct HGrid {
     corner_a: Vec2,

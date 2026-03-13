@@ -67,25 +67,6 @@ pub struct GrowConfig {
     pub base_radius: f32,
 }
 
-impl Default for GrowConfig {
-    fn default() -> Self {
-        Self {
-            min_radius: 0.01,
-            max_turn_angle: 0.5,
-            max_zigzag_angle: 0.3,
-            radius_to_branch_ratio: 0.7,
-            branch_variance: 0.5,
-            main_children_radius_factor: 0.8,
-            secondary_children_radius_factor: 0.5,
-            radius_variance: 0.2,
-            birth_coefficient: 2.0,
-            birth_power: 1.5,
-            up_attraction_factor: 0.15,
-            base_radius: 1.0,
-        }
-    }
-}
-
 pub fn grow_tree_basic(
     config: &GrowConfig,
     rng: &mut impl Rng,

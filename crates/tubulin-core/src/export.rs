@@ -182,6 +182,39 @@ fn base64_encode(bytes: &[u8]) -> String {
     result
 }
 
+fn quantize_vec3_components(vectors: &[glam::Vec3], scale: i32) -> (Vec<i32>, Vec<i32>, Vec<i32>) {
+    let mut x = Vec::with_capacity(vectors.len());
+    let mut y = Vec::with_capacity(vectors.len());
+    let mut z = Vec::with_capacity(vectors.len());
+
+    for v in vectors {
+        x.push((v.x * scale as f32) as i32);
+        y.push((v.y * scale as f32) as i32);
+        z.push((v.z * scale as f32) as i32);
+    }
+
+    (x, y, z)
+}
+
+fn quantize_color_components(
+    colors: &[[f32; 4]],
+    scale: i32,
+) -> (Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>) {
+    let mut r = Vec::with_capacity(colors.len());
+    let mut g = Vec::with_capacity(colors.len());
+    let mut b = Vec::with_capacity(colors.len());
+    let mut a = Vec::with_capacity(colors.len());
+
+    for c in colors {
+        r.push((c[0] * scale as f32) as i32);
+        g.push((c[1] * scale as f32) as i32);
+        b.push((c[2] * scale as f32) as i32);
+        a.push((c[3] * scale as f32) as i32);
+    }
+
+    (r, g, b, a)
+}
+
 pub struct TreeEncoder {
     pub buffers: HashMap<String, Buffer>,
     pub outputs: Outputs,
@@ -475,14 +508,14 @@ fn serialize_expr(expr: &Expr) -> serde_json::Value {
 
 impl TreeEncoder {
     pub fn add_vec3_components(&mut self, prefix: &str, vectors: &[glam::Vec3], scale: i32) {
-        let (x, y, z) = crate::utils::quantize_vec3_components(vectors, scale);
+        let (x, y, z) = quantize_vec3_components(vectors, scale);
         self.add_immediate_buffer(&format!("{}_x", prefix), &x);
         self.add_immediate_buffer(&format!("{}_y", prefix), &y);
         self.add_immediate_buffer(&format!("{}_z", prefix), &z);
     }
 
     pub fn add_color_components(&mut self, prefix: &str, colors: &[[f32; 4]], scale: i32) {
-        let (r, g, b, a) = crate::utils::quantize_color_components(colors, scale);
+        let (r, g, b, a) = quantize_color_components(colors, scale);
         self.add_immediate_buffer(&format!("{}_r", prefix), &r);
         self.add_immediate_buffer(&format!("{}_g", prefix), &g);
         self.add_immediate_buffer(&format!("{}_b", prefix), &b);

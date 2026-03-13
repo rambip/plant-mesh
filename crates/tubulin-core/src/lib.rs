@@ -41,7 +41,7 @@ pub struct Circle {
     pub radius: f32,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DebugGeometry {
     pub lines: Vec<(Vec3, Vec3, DebugColor)>,
     pub circles: Vec<(Circle, DebugColor)>,

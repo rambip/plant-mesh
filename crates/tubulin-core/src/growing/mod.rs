@@ -137,6 +137,7 @@ impl PlantNode {
         skeleton
     }
 
+    // TODO: remove
     pub fn grow_skeleton_with_debug(&self) -> (TreeSkeleton, crate::DebugGeometry) {
         let skeleton = self.grow_skeleton();
         let debug_data = TreeSkeletonDebugData {

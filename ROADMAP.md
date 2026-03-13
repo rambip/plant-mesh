@@ -1,278 +1,169 @@
-# Tubulin Python API — Roadmap
+# Tubulin Roadmap
 
-## Goal
+## Direction
 
-Expose the plant mesh pipeline as an inspectable, composable Python API for use in
-educational notebooks. Each pipeline stage is a first-class object: configurable,
-runnable in isolation, and able to emit debug geometry that renders interactively in
-the browser.
+The next phase focuses on making Tubulin pleasant and reliable for Python-first
+users (notebooks, teaching demos, quick experiments) while keeping the Rust core
+as the single source of truth for geometry logic.
 
----
+Priorities:
 
-## Pipeline Overview
-
-```
-Grow  →  Strands  →  Mesh
- ↓           ↓         ↓
-skeleton  strand     surface
-           cloud      mesh
-```
-
-## Export Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Python Builder                           │
-│  Tubulin().grow().strands().mesh().debug().run()               │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ calls Rust pipeline
-┌─────────────────────────────────────────────────────────────────┐
-│                     Rust Pipeline                               │
-│  PlantNode → TreeSkeleton → TrajectoryBuilder → GeometryData   │
-│                                           │                    │
-│                    VisualDebug::debug_data()                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    TreeMeshExporter                             │
-│  - add_buffer() for encoded data                               │
-│  - add_debug_layer(DebugGeometry) → JSON expressions           │
-│  - to_json() → TreeMesh JSON string                            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ passes JSON
-┌─────────────────────────────────────────────────────────────────┐
-│                   Python Wrapper                                │
-│  GeometryData.to_json() → str                                  │
-│  _repr_html_() renders JS viewer with JSON                     │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-Each stage takes the output of the previous one. All stages are lazy: nothing runs
-until `.run()` is called on the pipeline.
+1. Better Python API ergonomics
+2. More inspectable intermediate data
+3. Cleaner Rust/Python boundary (`pyo3` isolation)
+4. Performance improvements across generation + export
+5. Strong documentation and examples
 
 ---
 
-## API Design
+## Product Goals
 
-### Builder pattern
+### G1 — Python API that feels intentional
 
-```python
-from tubulin import Tubulin
+- Pipeline objects should be easy to discover and chain.
+- Method names should match user intent (`grow`, `build_mesh`, `to_json`, `debug`).
+- Configuration should be kwargs-first with stable defaults.
+- Errors should be actionable from notebooks (no cryptic panic surfaces).
 
-tree = (
-    Tubulin()
-    .grow(base_radius=1.0, up_attraction=0.15, branch_variance=0.5)
-    .strands(repulsion=0.5, n_steps=10)
-    .mesh(spacing=0.5, leaf_size=0.5)
-    .run()
-)
+### G2 — Richer access to intermediate data
 
-tree  # renders Three.js viewer inline in the notebook
-```
+- Expose enough structure for learning/debugging without leaking internal clutter.
+- Keep return types numeric and analysis-friendly (`numpy` arrays / small typed wrappers).
+- Make stage outputs self-describing (counts, shapes, debug metadata).
 
-### Stage-level inspection
+### G3 — Robust Rust/Python boundary
 
-Each stage can be run independently, returning a typed intermediate result:
+- Keep all `pyo3` usage in `crates/tubulin-core/src/python.rs`.
+- Core modules (`growing`, `meshing`, `export`) remain `pyo3`-free.
+- Keep conversion/adaptation logic near bindings, not mixed in domain code.
 
-```python
-skeleton    = Tubulin().grow(base_radius=1.0).run()
-strand_cloud = Tubulin().grow(...).strands(...).run()
-```
+### G4 — Faster end-to-end iteration
 
-Intermediate types (`Skeleton`, `StrandCloud`, `TreeMesh`) are real Python objects
-backed by Rust via pyo3. They expose data lazily as numpy arrays:
+- Improve performance for typical notebook loops (generate, inspect, render).
+- Reduce avoidable allocations and redundant recomputation.
+- Keep JSON/viewer paths efficient for large meshes.
 
-```python
-skeleton.points        # np.ndarray, shape (N, 3) — node positions
-skeleton.radii         # np.ndarray, shape (N,)
-strand_cloud.points    # np.ndarray, shape (M, 3)
-mesh.vertices          # np.ndarray, shape (V, 3)
-mesh.triangles         # np.ndarray, shape (T, 3), dtype int
-```
+### G5 — Documentation that teaches and unblocks
 
-Each intermediate type has a `_repr_html_()` that renders it in the notebook with
-the Three.js viewer.
-
-### Debug layers
-
-Call `.debug()` on any stage to include its debug geometry in the final output:
-
-```python
-tree = (
-    Tubulin()
-    .grow(base_radius=1.0).debug()      # emits skeleton layer
-    .strands(repulsion=0.5).debug()     # emits strand cloud layer
-    .mesh(spacing=0.5)
-    .run()
-)
-```
-
-The viewer shows a checkbox per stage: **Skeleton**, **Strands**, **Mesh**. Layers
-not opted into are absent from the payload entirely.
-
----
-
-## TreeMesh JSON Format — Debug Extension
-
-The existing format gains an optional `debug` top-level key. Each stage that ran
-with `.debug()` contributes a named sub-object. All arrays use the existing
-buffer/expr encoding (Rice-encoded, same as `vertices`/`triangles`).
-
-```json
-{
-  "treemesh": "0.1",
-  "spline_convention": "reflect",
-  "buffers": { "...": "..." },
-  "outputs": {
-    "vertices":  "<expr>",
-    "triangles": "<expr>"
-  },
-  "debug": {
-    "skeleton": {
-      "lines":   { "starts": "<expr>", "ends": "<expr>", "colors": "<expr>" },
-      "circles": { "origins": "<expr>", "orientations": "<expr>", "radii": "<expr>", "colors": "<expr>" }
-    },
-    "strands": {
-      "points": { "positions": "<expr>", "colors": "<expr>" }
-    },
-    "mesh": {
-      "lines": { "starts": "<expr>", "ends": "<expr>", "colors": "<expr>" }
-    }
-  }
-}
-```
-
-All `debug` fields are optional. The JS viewer iterates the keys present and creates
-one checkbox per key. No changes needed to the buffer encoding or Rice decoder.
-
----
-
-## Rust Side
-
-### `DebugGeometry` — pure data, no Bevy dependency
-
-```rust
-pub struct DebugFrame { pub origin: Vec3, pub orientation: Quat }
-
-pub struct DebugGeometry {
-    pub lines:   Vec<(Vec3, Vec3, [f32; 4])>,
-    pub circles: Vec<(DebugFrame, f32, [f32; 4])>,
-    pub points:  Vec<(Vec3, [f32; 4])>,
-}
-
-pub trait VisualDebug {
-    fn debug_data(&self) -> DebugGeometry;
-}
-```
-
-The pipeline collects debug output by calling `debug_data()` on each stage,
-producing a `DebugGeometry` which is then passed to `add_debug_layer()` with
-a layer name string. The existing Bevy gizmo rendering becomes a thin adapter.
-
-### Intermediate types exposed via pyo3
-
-`Skeleton`, `StrandCloud`, and `TreeMesh` are wrapped with `#[pyclass]`. Numpy
-arrays are returned via `rust-numpy` (`PyArray`), computed on first access and
-cached. No Bevy types cross the Python boundary.
-
----
-
-## JS Viewer
-
-- Reads `debug` key from the JSON payload if present
-- Creates one `THREE.Group` per layer, toggled by checkbox
-- Lines → `THREE.LineSegments`, circles → `THREE.RingGeometry` oriented by
-  quaternion, points → `THREE.Points`
-- Checkbox state is local (no round-trip to Python needed)
+- Clear API docs with examples at each stage.
+- Up-to-date architecture and format docs.
+- One canonical notebook walkthrough from seed to final mesh.
 
 ---
 
 ## Milestones
 
-### M1 — `DebugGeometry` infrastructure ✓
-- [x] Define `DebugGeometry` and `VisualDebug` trait in `tubulin-core` (no Bevy feature flag)
-- [x] Implement `VisualDebug` for `TreeSkeleton`
-- [x] Adapt Bevy gizmo rendering to consume `DebugGeometry` (thin adapter, no logic change)
-- [x] Serialize `DebugGeometry` into the `debug` key of the TreeMesh JSON
+## M1 — Python API Cleanup
 
-### M2 — Python builder API
-- [x] All Python bindings in `python.rs` (single file, no Python module code)
-- [x] Use newtype patterns: `#[pyclass(name = "X")] pub struct PyX(...)`
-- [x] Use `#[pyo3(signature = (*, ...))]` for methods with config parameters
-- [x] Implement `Default` for config structs
-- [x] `Seed` → `PlantNode` → `Skeleton` → `VolumetricTree` → `TreeMesh` pipeline
-- [x] `Skeleton._repr_html_()` shows debug geometry via bundled JS viewer
+Target: coherent, stable stage API for notebook users.
 
-### M5 — Export integration
-- [x] Add `to_json(include_debug: bool)` method to `GeometryData`
-- [x] Add `to_json(layer_name)` method to `DebugData`
-- [x] Wire pipeline stages → VisualDebug → TreeMeshExporter JSON output
-- [ ] Test full pipeline export
+- [ ] Audit current Python surface and remove naming inconsistencies.
+- [ ] Standardize stage classes and constructor patterns:
+  - `Seed`
+  - `PlantNode`
+  - `Skeleton`
+  - `VolumetricTree`
+  - `TreeMesh`
+  - `DebugData`
+- [ ] Normalize kwargs for stage configuration with explicit defaults.
+- [ ] Add clear repr/help text for each exposed class.
+- [ ] Ensure every stage has predictable `debug()` and/or `to_json()` behavior.
 
-### M3 — JS debug layer rendering ✓
-- [x] Parse `debug` key in JS decoder
-- [x] Render lines, circles, points as Three.js objects
-- [x] Checkbox UI per layer (one per key present in `debug`)
+Deliverable: stable API shape documented with short code snippets.
 
-### M4 — `VisualDebug` for pipeline stages ✓
-- [x] `TreeSkeletonDebugData` (skeleton layer)
-- [x] `TrajectoryBuilder` (strands layer)
-- [x] `GeometryData` (mesh layer)
+## M2 — Expose More Intermediate Data
 
-### M5 — Export integration
-- [ ] Add `to_json(include_debug: bool)` method to `GeometryData`
-- [ ] Wire pipeline stages → VisualDebug → TreeMeshExporter JSON output
-- [ ] Test full pipeline export
+Target: users can inspect internals without patching Rust.
 
-### M6 — Polish
-- [ ] Consistent color conventions across stages
-- [ ] Notebook example demonstrating full pipeline inspection
-- [ ] Docs / docstrings on all public Python API surface
+- [ ] `Skeleton`:
+  - [ ] expose node positions/radii/orientations
+  - [ ] expose parent/children topology in analysis-friendly form
+- [ ] `VolumetricTree`:
+  - [ ] expose trajectory counts and per-node particle mapping
+  - [ ] expose sampled trajectory points for inspection
+- [ ] `TreeMesh`:
+  - [ ] expose vertices, normals, colors, triangles with consistent shapes
+  - [ ] expose lightweight mesh stats (counts, bounds)
+- [ ] Keep API read-only by default to preserve Rust invariants.
+
+Deliverable: notebook users can inspect all major stage outputs directly.
+
+## M3 — pyo3 Boundary Isolation
+
+Target: no `pyo3` usage outside `python.rs`.
+
+- [ ] Remove remaining `#[cfg(feature = "python")]` binding code from core modules.
+- [ ] Move Python-only helper methods into `python.rs` wrappers.
+- [ ] Keep core structs pure Rust + serde + math traits only.
+- [ ] Add CI check/documented convention to prevent pyo3 leakage.
+
+Deliverable: architecture clean split between domain logic and bindings.
+
+## M4 — Performance Pass
+
+Target: noticeably faster notebook workflows.
+
+- [ ] Profile hotspots for representative cases (small/medium/large trees).
+- [ ] Optimize geometry generation path:
+  - [ ] reduce temporary allocations in trajectory/mesh steps
+  - [ ] avoid unnecessary clones across stage transitions
+- [ ] Optimize export path:
+  - [ ] avoid repeated quantization work when unchanged
+  - [ ] minimize JSON assembly overhead where practical
+- [ ] Optimize viewer payload path for large debug layers.
+- [ ] Add benchmark script and record baseline vs improved timings.
+
+Deliverable: measured speedup and documented benchmark results.
+
+## M5 — Docs and Examples
+
+Target: users can succeed without reading Rust internals.
+
+- [ ] Python API guide:
+  - [ ] quickstart
+  - [ ] stage-by-stage walkthrough
+  - [ ] debug visualization usage
+- [ ] Update `ARCHITECTURE.md` and keep it synchronized with implementation.
+- [ ] Keep `GEO_SPEC.md` aligned with encoder/decoder behavior.
+- [ ] Add notebook example(s):
+  - [ ] minimal end-to-end
+  - [ ] intermediate data inspection
+  - [ ] debug-layer exploration
+- [ ] Add troubleshooting section for common decode/render errors.
+
+Deliverable: docs + notebook examples usable by new contributors/students.
 
 ---
 
-## Known Bugs
+## Cross-Cutting Engineering Tasks
 
-- **JS Decode error**: `TypeError: can't access property "length", x is undefined` — occurs when the full tree mesh is rendered in the browser. The JS decoder expects buffers to be present but some path in the evaluation chain returns undefined. Need to add assertions in decoder to catch this early and identify which expression/buffer is missing.
-
----
-
-## Open Questions
-
-- Should `Skeleton.points` include only node positions, or also interpolated spline
-  points? (Affects usefulness for manual numpy analysis.)
-- Default colors per stage, or user-configurable in `.debug(color=...)`?
+- [ ] Improve error quality across Rust ↔ JS ↔ Python boundaries.
+- [ ] Keep viewer bundle workflow explicit and reproducible.
+- [ ] Add regression tests for known decode failure modes.
+- [ ] Track API changes in changelog notes for notebook users.
 
 ---
 
-## Technical Pain Points
+## Definition of Done (for this roadmap)
 
-### P1: Dual-purpose Rust structs for pyo3 ✓
-- **Solved**: Use newtype pattern `pub struct PySeed(crate::Seed)` in `python.rs`
+This roadmap is complete when:
 
-### P2: Cross-boundary types ✓
-- **Solved**: Return `DebugData` as pyclass, generate JSON in Rust via `to_json(layer_name)`
+- Python API is coherent and documented.
+- Intermediate data access covers skeleton, strands, and mesh inspection.
+- `pyo3` usage is isolated to `python.rs`.
+- Performance improvements are benchmarked and measurable.
+- Docs and examples are current and sufficient for first-time users.
 
-### P3: Format strings with self fields
+---
 
-Problem: In `format!()` macros, you can't use `self.field` - need to use positional args or intermediate variables.
+## Out of Scope (for now)
 
-```rust
-// Doesn't work:
-format!("{}", self.field)
+- Major TreeMesh format version bump.
+- Full GUI editor for all generation parameters.
+- Non-notebook frontend redesign.
 
-// Works:
-format!("{}", &self.field)
-format!("{}", self.some_method())
-```
+---
 
-**Solution needed**: Be aware of this limitation when writing pymethods.
+## End-of-Roadmap Cleanup
 
-### P4: Method resolution with cfg features
-
-Problem: When both `#[cfg(feature = "python")]` impl blocks and regular impl blocks define methods with the same name, Rust gets confused about which to use.
-
-**Solution needed**: Use distinct method names for Python vs Rust (e.g., `grow_plant_py`).
+- [ ] Remove `bevy` feature/dependencies from `tubulin-core` by moving Bevy-specific derives/wrappers into `crates/bevy-demo`, so core stays engine-agnostic.
